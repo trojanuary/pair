@@ -262,6 +262,8 @@ svg{display:block}
   font-size:11px;font-weight:700}
 .vis-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:8px;background:var(--surface)}
 .vis-card h4{margin:0 0 8px;text-align:center;font-size:14px}
+.vis-card .ascii{margin:0;padding:12px;background:#0B0F19;color:#E5E7EB;border-radius:8px;overflow-x:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.4;white-space:pre;tab-size:2}
 .vis-card img{width:100%;border-radius:8px;display:block}
 .vis-take{margin:10px 0 0;padding-left:18px}
 .vis-take li{font-size:12.5px;margin:3px 0}
@@ -1450,37 +1452,66 @@ async function askAIAgent(a, question, msg) {
     save(); render(); toast(errHint(e.message), 'err');
   }
 }
+function stripJson(s) { try { return JSON.parse(String(s).replace(/```json|```/g, '').trim()); } catch (e) {} const m = String(s).match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch (e) {} } return null; }
+// Broader document context for a visual (selection + surrounding + cross-document passages).
+function visualContext(a, prompt) {
+  const ctx = buildContext(a);
+  const passages = retrievePassages((prompt || '') + ' ' + (a.selected_text || ''), a.page);
+  let docText = '';
+  if (a.source_type === 'doc' || /\b(paper|document|overall|whole|entire|main results?|summary|summari[sz]e)\b/i.test(prompt || '')) {
+    for (let n = 1; n <= Math.min(numPages, 6); n++) { const t = (pageTextCache[n] && pageTextCache[n].text) || ''; if (t) docText += `\n[p${n}] ${t.replace(/\s+/g, ' ').slice(0, 700)}`; }
+  }
+  return { ctx, passages, docText };
+}
 async function generateVisual(annId, prompt) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
-  if (!state.settings.enableVisuals) { toast('Generated visuals are disabled in Settings.', 'err'); return; }
   const ip = pickImageProvider();
-  const ctx = buildContext(a);
-  const isFigure = a.source_type === 'screenshot' || /figure|plot|graph|spectrum|chart/i.test(a.selected_text || a.caption || '');
-  const msg = { id: uid('m'), actor: 'ai', provider: ip, model: state.settings.models[ip === 'openai' ? 'openaiImage' : 'geminiImage'],
-    type: 'generated_visual', created_at: nowISO(), pending: true, title: 'Generating visual…',
-    image: null, takeaways: [], strip: [], is_conceptual: !isFigure, is_data_extracted: false,
-    approximation_note: isFigure ? 'Visual is an approximate, cleaned recreation — not digitized data.' : '',
+  const canImage = state.settings.enableVisuals && ip;
+  const msg = { id: uid('m'), actor: 'ai', provider: ip || activeProvider(), model: '',
+    type: 'generated_visual', created_at: nowISO(), pending: true, status: 'Planning the visual…', title: 'Visual',
+    kind: null, image: null, ascii: '', takeaways: [], strip: [], caption: '',
     chips: chipsFor(a, { visual: true }) };
   a.messages.push(msg); a.updated_at = nowISO(); save(); render();
-  const imgPrompt = `Clean, minimal, publication-quality explanatory ${isFigure ? 'recreation of the figure' : 'diagram'} for a turbulence paper. ${prompt || ''}. Source excerpt: ${ctx.evidence}. ${ctx.caption || ''}. White background, clear axis labels, legible sans-serif, no clutter, no logos.`;
+  const { ctx, passages, docText } = visualContext(a, prompt);
+  const tp = activeProvider();
+  // 1) Let the model choose the RIGHT format and produce it, grounded in the document.
+  const planSys = [
+    'You turn a reader\'s request into the most useful visual for a document reader. First choose the FORMAT:',
+    '- "ascii": a precise monospace diagram built ONLY from the document — flowchart, pipeline, schematic, tree, comparison table, or a labelled layout. PREFER THIS for structure, process, relationships, comparisons, or "main results/summary", where faithfulness to the document matters. Never invent numbers.',
+    '- "image": a rendered picture — ONLY when a pictorial illustration or concept art genuinely aids intuition (a physical scene, an analogy, an artistic concept). NEVER choose image to depict specific data, plots, tables, equations, or exact results — image models fabricate those.',
+    (canImage ? '' : 'NOTE: image generation is unavailable, so you must use "ascii".'),
+    'Return STRICT JSON only: {"format":"ascii"|"image","title":"<=6 words","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}',
+  ].filter(Boolean).join('\n');
+  const planUser = [
+    `Reader's request: ${prompt || 'Make a helpful visual of this.'}`,
+    ctx.evidence ? `Selected source (page ${ctx.page}${ctx.section ? ', ' + ctx.section : ''}): """${ctx.evidence}"""` : `Location: page ${ctx.page}${ctx.section ? ', ' + ctx.section : ''}`,
+    ctx.caption ? `Nearby caption: ${ctx.caption}` : '',
+    ctx.surrounding ? `Surrounding text: ${ctx.surrounding.slice(0, 700)}` : '',
+    passages.length ? `Other relevant passages:\n${passages.join('\n')}` : '',
+    docText ? `Document excerpts:${docText}` : '',
+  ].filter(Boolean).join('\n\n');
   try {
-    const [img, meta] = await Promise.all([
-      aiImage(ip, imgPrompt),
-      keyFor(activeProvider()) ? aiText(activeProvider(), {
-        system: 'You produce a short JSON object for a visual-summary card. Return ONLY valid JSON.',
-        user: `From this source (page ${ctx.page}${ctx.section ? ', ' + ctx.section : ''}): """${ctx.evidence}""" ${ctx.caption || ''}\nReturn JSON: {"title": "<=6 words", "takeaways": ["3 short bullets"], "strip": ["3-4 short process steps"]}`,
-        image: ctx.image,
-      }).catch(() => null) : null,
-    ]);
-    msg.image = img; msg.pending = false;
-    let parsed = null; if (meta) { try { parsed = JSON.parse(meta.replace(/```json|```/g, '').trim()); } catch {} }
-    msg.title = parsed?.title || (isFigure ? 'Recreated Figure' : 'Visual Summary');
-    msg.takeaways = parsed?.takeaways || [];
-    msg.strip = parsed?.strip || [];
+    const planRaw = await aiText(tp, { system: planSys, user: planUser, image: ctx.image });
+    let plan = stripJson(planRaw) || {};
+    if (!plan.format) plan.format = (canImage && /\b(illustrat|picture|scene|concept art|artistic|imagine|photo)\b/i.test(prompt || '')) ? 'image' : 'ascii';
+    if (plan.format === 'image' && !canImage) plan.format = 'ascii';
+    msg.title = plan.title || (plan.format === 'image' ? 'Generated image' : 'Diagram');
+    msg.takeaways = Array.isArray(plan.takeaways) ? plan.takeaways : [];
+    msg.caption = plan.caption || '';
+    if (plan.format === 'image' && plan.image_prompt) {
+      msg.status = 'Generating image…'; save(); render();
+      try {
+        msg.image = await aiImage(ip, `${plan.image_prompt}. Clean, legible, uncluttered, white background, no logos, no gibberish text.`);
+        msg.kind = 'image'; msg.model = state.settings.models[ip === 'openai' ? 'openaiImage' : 'geminiImage'];
+      } catch (e) { msg.kind = 'ascii'; msg.ascii = plan.ascii || ('Image generation failed: ' + (e.message || e)); }
+    } else {
+      msg.kind = 'ascii'; msg.ascii = plan.ascii || (planRaw || '').slice(0, 1400); msg.model = state.settings.models[tp];
+    }
+    msg.pending = false; msg.status = null;
     a.auto_tags = Array.from(new Set([...(a.auto_tags || []), 'Generated visual']));
     save(); render();
   } catch (e) {
-    msg.pending = false; msg.error = e.message; msg.title = 'Visual generation failed';
+    msg.pending = false; msg.status = null; msg.error = e.message; msg.title = 'Visual generation failed';
     save(); render(); toast(errHint(e.message), 'err');
   }
 }
@@ -1522,11 +1553,17 @@ function submitToNote(annId, rawText) {
   a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(text, a.source_type, 'comment')]));
   a.updated_at = nowISO(); save(); render(); focusThreadCompose();
   const forceAsk = askNextId === a.id; askNextId = null;   // user chose “Ask AI” on this note
-  const wantVisual = /\b(visual|diagram|chart|graph|plot|sketch|infographic)\b/i.test(clean) &&
-                     /(generate|make|create|draw|turn|produce|render|convert|visuali[sz]e|cleaner|summar)/i.test(clean);
   const wantAI = forceAsk || mProvider || /@ai/i.test(text) || /\?\s*$/.test(text) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean);
-  if (wantVisual) generateVisual(a.id, clean);
+  if (isVisualRequest(clean)) generateVisual(a.id, clean);
   else if (wantAI) askAI(a.id, clean || text, mProvider || undefined);
+}
+// Recognize a request to CREATE a visual (image or diagram) — a visual noun + a make/turn-into verb.
+function isVisualRequest(t) {
+  t = t || '';
+  const noun = /\b(image|picture|illustration|figure|visual|diagram|chart|graph|plot|infographic|schematic|flow-?chart|drawing|mind ?map|sketch)\b/i.test(t);
+  const verb = /\b(generate|make|create|draw|produce|render|design|sketch|mock ?up|whip up|visuali[sz]e|turn|convert|give me|summari[sz]e)\b/i.test(t);
+  const asNoun = /\bas an?\s+(image|picture|diagram|chart|graph|figure|schematic|flow-?chart|infographic|sketch|visual|mind ?map)\b/i.test(t);
+  return (noun && verb) || asNoun || /\bvisuali[sz]e\b/i.test(t);
 }
 // Ask a general question about the whole document — no text selection required.
 // Creates a document-level note (no pin/highlight) and routes the question to the AI.
@@ -1622,7 +1659,7 @@ function msgToText(a, m) {
   const who = m.actor === 'ai' ? (PROVIDER_LABEL[m.provider] || 'AI') : actorName(m);
   if (m.type === 'comment') return `${who}: ${m.text || ''}`;
   if (m.type === 'ai_answer') return `${who}: ${m.text || ''}` + (m.chips && m.chips.length ? `\n(${m.chips.join(' · ')})` : '');
-  if (m.type === 'generated_visual') return `${who}: [Generated visual: ${m.title || 'visual'}]` + (m.takeaways && m.takeaways.length ? `\n- ${m.takeaways.join('\n- ')}` : '');
+  if (m.type === 'generated_visual') return `${who}: ${m.title || 'Visual'}${m.image ? ' [image]' : ''}` + (m.ascii ? `\n\n${m.ascii}` : '') + (m.takeaways && m.takeaways.length ? `\n\n- ${m.takeaways.join('\n- ')}` : '');
   return '';
 }
 function noteToText(a) {
@@ -1669,18 +1706,18 @@ function msgCard(a, m, isFirst) {
     }
   }
   if (m.type === 'generated_visual') {
-    body += `<div class="badge-gen">Generated visual</div>`;
-    if (m.pending) body += `<div class="vis-card"><span class="typing">Rendering visual<i></i><i></i><i></i></span></div>`;
+    const isImg = m.kind === 'image' || (!m.kind && m.image);
+    body += `<div class="badge-gen">${isImg ? 'Generated image' : 'Diagram'}</div>`;
+    if (m.pending) body += `<div class="vis-card"><span class="typing">${esc(m.status || 'Working')}<i></i><i></i><i></i></span></div>`;
     else if (m.error) body += `<div class="msg" style="color:#B91C1C">⚠ ${esc(m.error)}</div>`;
     else {
-      body += `<div class="vis-card"><h4>${esc(m.title || 'Visual')}</h4>${m.image ? `<img src="${m.image}">` : ''}`;
+      body += `<div class="vis-card"><h4>${esc(m.title || 'Visual')}</h4>`;
+      if (m.image) body += `<img src="${m.image}">`;
+      else if (m.ascii) body += `<pre class="ascii">${esc(m.ascii)}</pre>`;
       if (m.takeaways?.length) body += `<ul class="vis-take">${m.takeaways.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
-      if (m.strip?.length) body += `<div class="strip">${m.strip.map((s, i) => `<span class="st ${i === m.strip.length - 1 ? 'v' : 'b'}">${esc(s)}</span>${i < m.strip.length - 1 ? '<span class="ar">→</span>' : ''}`).join('')}</div>`;
       body += `</div>`;
-      const chips = m.chips ? m.chips.slice() : chipsFor(a, { visual: true });
-      body += chipRow(chips);
-      if (m.approximation_note) body += `<div style="margin-top:8px"><span class="badge-appx">Approximate</span> <span style="color:#6B7280;font-size:11.5px">${esc(m.approximation_note)}</span></div>`;
-      else body += `<div class="disc">Conceptual visual · not extracted data</div>`;
+      body += chipRow((m.chips ? m.chips.slice() : chipsFor(a, { visual: true })));
+      body += `<div class="disc">${isImg ? 'AI-generated illustration · not extracted data' : 'Text diagram from the document'}${m.model ? ' · ' + esc(m.model) : ''}</div>`;
     }
   }
   return { head, body };

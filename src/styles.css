@@ -254,6 +254,8 @@ svg{display:block}
   font-size:11px;font-weight:700}
 .vis-card{border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:8px;background:var(--surface)}
 .vis-card h4{margin:0 0 8px;text-align:center;font-size:14px}
+.vis-card .ascii{margin:0;padding:12px;background:#0B0F19;color:#E5E7EB;border-radius:8px;overflow-x:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.4;white-space:pre;tab-size:2}
 .vis-card img{width:100%;border-radius:8px;display:block}
 .vis-take{margin:10px 0 0;padding-left:18px}
 .vis-take li{font-size:12.5px;margin:3px 0}
