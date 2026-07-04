@@ -215,7 +215,9 @@ svg{display:block}
 .tag.crit{background:#FEF2F2;color:#B91C1C}.tag.sum{background:#F0FDF4;color:#15803D}
 .tag.act{background:#FFFBEB;color:#B45309}
 /* message hover actions (edit / delete) — replaces the kebab menu */
-.macts{margin-left:8px;display:flex;gap:1px;opacity:0;transition:opacity .12s}
+.card-h .collapse-btn{opacity:.6}
+.card-h .collapse-btn:hover{opacity:1}
+.macts{margin-left:2px;display:flex;gap:1px;opacity:0;transition:opacity .12s}
 .card-h:hover .macts{opacity:1}
 .mact{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--faint)}
 .mact svg{width:15px;height:15px}

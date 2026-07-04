@@ -916,6 +916,17 @@ function submitToNote(annId, rawText) {
   if (wantVisual) generateVisual(a.id, clean);
   else if (wantAI) askAI(a.id, clean || text, mProvider || undefined);
 }
+// Ask a general question about the whole document — no text selection required.
+// Creates a document-level note (no pin/highlight) and routes the question to the AI.
+function askAboutDocument(text) {
+  if (!text || !text.trim() || !pdfDoc) { if (!pdfDoc) toast('Open a document first.', 'err'); return; }
+  const pt = pageTextCache[state.ui.page] || { text: '' };
+  const ann = newAnnotation({ source_type: 'doc', page: state.ui.page, section: sectionForIndex(pt.text, 0), selected_text: '', rects: [] });
+  askNextId = ann.id;                 // force this message to the AI
+  if (state.ui.collapsed) delete state.ui.collapsed[ann.id];
+  selectAnnotation(ann.id, true);
+  submitToNote(ann.id, text);
+}
 
 /* ---------- rendering the notes list ---------- */
 function dayLabel(iso) {
@@ -963,7 +974,7 @@ function tagPills(a) {
   return `<div class="tagrow">${tags.map(t => `<span class="tag ${TAG_CLASS[t] || 'claim'}">${esc(t)}<span class="rm" data-rmtag="${esc(t)}" data-ann="${a.id}">×</span></span>`).join('')}<span class="addtag" data-addtag="${a.id}">+ tag</span></div>`;
 }
 function chipRow(chips) { return `<div class="chips">${(chips || []).map(c => `<span class="chip ${/no external|used web/i.test(c) ? 'dim' : ''}">${esc(c)}</span>`).join('')}</div>`; }
-function srcLabel(a) { return a.source_type === 'screenshot' ? 'Screenshot' : a.source_type === 'free_comment' ? 'Comment' : a.source_type === 'equation' ? 'Equation' : 'Linked text'; }
+function srcLabel(a) { return a.source_type === 'screenshot' ? 'Screenshot' : a.source_type === 'free_comment' ? 'Comment' : a.source_type === 'equation' ? 'Equation' : a.source_type === 'doc' ? 'Question about document' : 'Linked text'; }
 // linked quote — long quotes are clamped to a few lines with a Show more/less toggle so a big
 // selection (e.g. a whole abstract) doesn't dominate the card for a one-line question.
 function quoteBlock(text) {
@@ -974,10 +985,13 @@ function quoteBlock(text) {
 
 const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
-// hover action icons in a message head — edit (comment or AI), plus delete-note on the first row / delete-message on replies
+const ICON_CHEVUP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
+// hover action icons in a message head — collapse (note head), edit (comment or AI), plus delete-note / delete-reply
 function msgActions(a, m, isFirst) {
   const editable = m.type === 'comment' || m.type === 'ai_answer';
-  return `<span class="macts">`
+  // Collapse chevron sits outside .macts so it stays visible; edit/delete reveal on hover.
+  const collapse = isFirst ? `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button>` : '';
+  return collapse + `<span class="macts">`
     + (editable ? `<button class="mact" data-edit="${m.id}" data-ann="${a.id}" title="Edit">${ICON_EDIT}</button>` : '')
     + (isFirst ? `<button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button>`
                : `<button class="mact" data-delmsg="${m.id}" data-ann="${a.id}" title="Delete reply">${ICON_TRASH}</button>`)
@@ -1044,11 +1058,12 @@ function compactCard(a) {
       ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
       <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
     </div></div>`);
-  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu]')) return; selectAnnotation(a.id, true, true); });
+  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu]')) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
   return wrap;
 }
 function annCard(a) {
-  if (a.id !== state.ui.activeId) return [compactCard(a)];  // compact unless selected
+  // Compact unless it's the active note AND not explicitly collapsed by the user.
+  if (a.id !== state.ui.activeId || (state.ui.collapsed && state.ui.collapsed[a.id])) return [compactCard(a)];
   // Expanded: ONE card holds the whole note thread — the question/comment first, then every
   // AI answer / follow-up nested INSIDE it as a reply (so replies read as replies, not siblings).
   let headHtml, firstBody;
@@ -1057,7 +1072,7 @@ function annCard(a) {
     headHtml = mc.head; firstBody = mc.body;
   } else {
     headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span>`
-      + `<span class="macts"><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
+      + `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button><span class="macts"><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
     firstBody = `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>`
       + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? quoteBlock(a.selected_text) : ''));
   }
@@ -1119,6 +1134,7 @@ function render() {
   $$('[data-canceledit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = null; render(); });
   $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
   $$('[data-reask]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveAndReask(b.dataset.ann, b.dataset.reask); });
+  $$('[data-collapse]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); collapseNote(b.dataset.collapse); });
   $$('[data-delnote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteNote(b.dataset.delnote); });
   $$('[data-delmsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteMsg(b.dataset.ann, b.dataset.delmsg); });
   $$('[data-quotemore]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); const q = b.parentElement.querySelector('.linked-quote'); const on = q.classList.toggle('clip'); b.textContent = on ? 'Show more' : 'Show less'; });
@@ -1167,6 +1183,11 @@ function deleteNote(annId) {
   state.annotations = state.annotations.filter(x => x.id !== annId);
   if (state.ui.activeId === annId) state.ui.activeId = null;
   save(); render(); drawHighlights(); drawPins();
+}
+function collapseNote(annId) {
+  state.ui.collapsed = state.ui.collapsed || {};
+  state.ui.collapsed[annId] = true; save(); render();
+  requestAnimationFrame(drawConnector);
 }
 function promptText(annId) { const a = state.annotations.find(x => x.id === annId); const q = a?.messages.filter(m => m.type === 'comment').pop(); return q ? q.text : 'Explain this in context.'; }
 function addTagFlow(annId) {
@@ -1533,8 +1554,17 @@ function wire() {
     else { state.ui.query = ''; $('#notesSearchInput').value = ''; render(); }
   };
   $('#notesSearchInput').addEventListener('input', e => { state.ui.query = e.target.value.trim(); render(); });
-  // Composing now happens inline inside the active note card (wired in render); hide the old bottom bar.
-  const gc = $('#composer'); if (gc) gc.classList.add('hidden');
+  // Bottom composer = ask a NEW question about the whole document (no highlight needed).
+  // Replies/follow-ups to a specific note happen inline inside its card (wired in render).
+  const gc = $('#composer'); if (gc) gc.classList.remove('hidden');
+  const ci = $('#composerInput');
+  if (ci) {
+    ci.placeholder = 'Ask a question about this document… (or highlight text for a focused question)';
+    const sendDoc = () => { const t = ci.value.trim(); if (!t) return; ci.value = ''; ci.style.height = 'auto'; askAboutDocument(t); };
+    $('#composerSend').onclick = sendDoc;
+    ci.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDoc(); } });
+    ci.addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px'; });
+  }
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
   $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
   $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
