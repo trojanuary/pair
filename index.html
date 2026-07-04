@@ -907,54 +907,29 @@ const canImage = p => p === 'openai' || p === 'gemini';
 function activeProvider() { return state.settings.provider; }
 function keyFor(p) { return (state.settings.keys[p] || '').trim(); }
 function pickImageProvider() {
-  const a = activeProvider(); if (canImage(a) && keyFor(a)) return a;
-  if (keyFor('openai')) return 'openai'; if (keyFor('gemini')) return 'gemini'; return null;
+  const a = activeProvider(); if (canImage(a)) return a;   // server may hold the key
+  return 'openai';   // fallback image-capable provider (server key or BYO)
 }
+// AI calls go through the server-side proxy (/api/*): uses the site's env key by default,
+// or the user's BYO key (from Settings) passed through as `userKey`.
 async function aiText(provider, { system, user, image }) {
-  const key = keyFor(provider); if (!key) throw new Error(`No API key set for ${PROVIDER_LABEL[provider]}.`);
-  const m = state.settings.models;
-  if (provider === 'openai') {
-    const content = image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.b64}` } }] : user;
-    const r = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: m.openai, messages: [{ role: 'system', content: system }, { role: 'user', content }], max_tokens: 900 }) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || 'OpenAI error'); return j.choices[0].message.content.trim();
-  }
-  if (provider === 'anthropic') {
-    const content = image ? [{ type: 'text', text: user }, { type: 'image', source: { type: 'base64', media_type: image.mime, data: image.b64 } }] : user;
-    const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: m.anthropic, max_tokens: 900, system, messages: [{ role: 'user', content }] }) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || 'Anthropic error'); return j.content.map(c => c.text || '').join('').trim();
-  }
-  if (provider === 'gemini') {
-    const parts = image ? [{ text: user }, { inline_data: { mime_type: image.mime, data: image.b64 } }] : [{ text: user }];
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m.gemini}:generateContent?key=${key}`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ system_instruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts }] }) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || 'Gemini error');
-    return (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
-  }
-  throw new Error('Unknown provider');
+  const r = await fetch('/api/ai', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, system, user, image, model: state.settings.models[provider], userKey: keyFor(provider) || undefined }),
+  });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || `AI request failed (${r.status})`);
+  return j.text || '';
 }
 async function aiImage(provider, prompt) {
-  const key = keyFor(provider); if (!key) throw new Error(`No API key for ${PROVIDER_LABEL[provider]}.`);
-  const m = state.settings.models;
-  if (provider === 'openai') {
-    const r = await fetch('https://api.openai.com/v1/images/generations', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ model: m.openaiImage, prompt, size: '1024x1024', n: 1 }) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || 'OpenAI image error');
-    return j.data[0].b64_json ? 'data:image/png;base64,' + j.data[0].b64_json : j.data[0].url;
-  }
-  if (provider === 'gemini') {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m.geminiImage}:predict?key=${key}`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1 } }) });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || 'Imagen error');
-    const b = j.predictions?.[0]?.bytesBase64Encoded; if (!b) throw new Error('No image returned'); return 'data:image/png;base64,' + b;
-  }
-  throw new Error(`${PROVIDER_LABEL[provider]} can't generate images. Set an OpenAI or Gemini key.`);
+  const model = provider === 'openai' ? state.settings.models.openaiImage : state.settings.models.geminiImage;
+  const r = await fetch('/api/ai-image', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, prompt, model, userKey: keyFor(provider) || undefined }),
+  });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || `Image request failed (${r.status})`);
+  return j.image;
 }
 function imageEvidence(a) {
   if (a.source_type !== 'screenshot' || !a.screenshot) return null;
@@ -1015,7 +990,6 @@ function chipsFor(a, opts) {
 async function askAI(annId, question, providerOverride) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
   const provider = providerOverride || activeProvider();
-  if (!keyFor(provider)) { openSettings(`Add your ${PROVIDER_LABEL[provider]} API key to ask live questions.`); return; }
   const ctx = buildContext(a);
   const msg = { id: uid('m'), actor: 'ai', provider, model: state.settings.models[provider],
     type: 'ai_answer', text: '', created_at: nowISO(), pending: true,
@@ -1047,7 +1021,6 @@ async function generateVisual(annId, prompt) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
   if (!state.settings.enableVisuals) { toast('Generated visuals are disabled in Settings.', 'err'); return; }
   const ip = pickImageProvider();
-  if (!ip) { openSettings('Add an OpenAI or Gemini API key to generate visuals.'); return; }
   const ctx = buildContext(a);
   const isFigure = a.source_type === 'screenshot' || /figure|plot|graph|spectrum|chart/i.test(a.selected_text || a.caption || '');
   const msg = { id: uid('m'), actor: 'ai', provider: ip, model: state.settings.models[ip === 'openai' ? 'openaiImage' : 'geminiImage'],
@@ -1079,7 +1052,8 @@ async function generateVisual(annId, prompt) {
   }
 }
 function errHint(m) {
-  if (/failed to fetch|networkerror|load failed/i.test(m)) return 'Network/CORS blocked the API call. Open the downloaded HTML file directly in your browser (live AI is blocked inside embedded previews).';
+  if (/failed to fetch|networkerror|load failed/i.test(m)) return 'Could not reach the AI endpoint (/api/ai). This works on the deployed site; when opening the file locally without the server, add a key in Settings or run it via the deployment.';
+  if (/no .*key available/i.test(m)) return m + ' (Settings → paste a key to use your own.)';
   return m;
 }
 
@@ -1329,7 +1303,7 @@ function openSettings(note) {
     <h3>Settings <span class="icon-btn" id="mClose">✕</span></h3>
     <div class="body">
       ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">Bring your own API key. Mark one provider as <b>Default</b> for the composer — you can still target any inline with @gpt / @claude / @gemini.</div>
+      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. Optionally paste your <b>own</b> key below to use your account (BYO override). Mark one provider as <b>Default</b> for the composer; target any inline with @gpt / @claude / @gemini.</div>
       <div class="field">
         <div class="lbl-row"><label>OpenAI API key</label><button type="button" class="def-radio ${s.provider === 'openai' ? 'on' : ''}" data-def="openai"><span class="rdot"></span>Default</button></div>
         <input id="kOpenai" type="password" placeholder="sk-…" value="${esc(s.keys.openai)}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px" id="mOpenai" value="${esc(s.models.openai)}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px" id="mOpenaiImg" value="${esc(s.models.openaiImage)}"></div>
@@ -1349,7 +1323,7 @@ function openSettings(note) {
         <div class="chk"><div class="sw ${s.enableWeb ? 'on' : ''}" id="tgWeb"><i></i></div> Allow external web search (changes provenance to “Used web search”)</div>
         <div class="chk"><div class="sw ${s.enablePython ? 'on' : ''}" id="tgPy"><i></i></div> Enable Python tool use (stub)</div>
       </div>
-      <div class="hint">Keys are stored only in your browser (localStorage). For live calls, open the downloaded file directly — embedded previews block cross-site API requests.</div>
+      <div class="hint">Your own keys (if entered) are stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's keys are used and never exposed to the browser.</div>
     </div>
     <div class="foot"><button class="btn ghost" id="mCancel">Close</button><button class="btn primary" id="mSave">Save</button></div>
   </div></div>`);
@@ -1684,8 +1658,6 @@ async function boot() {
   // Pre-cache all page text in the background so AI context retrieval + document search
   // can draw on the whole document (not just visited pages).
   if (pdfOk) setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 1200);
-  if (!keyFor(state.settings.provider) && !keyFor('openai') && !keyFor('anthropic') && !keyFor('gemini'))
-    setTimeout(() => toast('Tip: add an API key in Settings to make “Ask AI” and “Generate visual” live.'), 900);
 }
 document.addEventListener('DOMContentLoaded', boot);
 })();

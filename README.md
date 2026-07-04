@@ -6,61 +6,58 @@ Not "chat with PDF" — a source‑linked research notebook.
 
 > **Read deeply. Ask AI in context. Generate visual explanations. Export evidence‑linked notes.**
 
-Open‑source, single‑user, **bring‑your‑own‑API‑key** (OpenAI / Anthropic / Google). It runs
-entirely in the browser — no server, no build step.
+Static frontend + a tiny **server‑side AI proxy** (Vercel serverless functions). Runs in the
+browser; AI calls go through `/api/ai` so provider keys stay **server‑side**, with an optional
+per‑user **bring‑your‑own‑key** override.
 
-## ▶️ Live demo
-
-Once GitHub Pages is enabled for this repo (Settings → Pages → *Deploy from a branch* → `main` / root):
-
-**https://trojanuary.github.io/pair/**
-
-Or just open `index.html` locally (double‑click it). It's a single self‑contained file with
-PDF.js and a sample turbulence paper bundled in, so it works offline too.
-
-### Configure AI (optional)
-Click the **⚙ gear** (bottom‑left) → paste a key for OpenAI, Anthropic, or Google and mark one
-**Default**. Then, in a note, just type naturally — end with `?` or mention `@gpt` / `@claude` /
-`@gemini` to ask, or say "make a visual…" to generate one. Keys are stored only in your browser.
-
-## What it does
-
-- **Reader** — open the bundled sample or your own PDF; page nav, zoom, search, text selection,
-  highlighting, and drag‑to‑capture **screenshot regions**.
-- **Source‑linking** — every highlight/screenshot gets a numbered **anchor pin** with a connector
-  line to its note; click a pin ↔ jump to the note. Annotations store the quote + surrounding
-  context so they can be re‑attached if the PDF changes.
-- **Notes** — actor model (human vs AI), threads, **auto‑tagging**, filters, resolve, and
-  **provenance chips** (`Page 7 · Section 2.3 · Used highlighted text · No external sources`).
-- **Ask AI in context** — sends the selected text/screenshot + page + section + surrounding text +
-  nearby caption + related passages from the same document; answers carry provenance chips.
-- **Generated visuals** — image‑model cards (chart/diagram) kept linked to the source and labelled
-  *approximate* when recreating a figure.
-- **Export** — a clean review packet (print‑to‑PDF) with actor avatars and source chips.
-
-## Repository layout
+## Architecture
 
 | Path | What |
 |---|---|
-| `index.html` | The app — a single self‑contained file (this is what Pages serves). |
-| `src/` | Modular source: `index.html`, `styles.css`, `app.js`, bundled `pdf.min.js` + `pdf.worker.min.js`, `pdf-data.js` |
-| `build.js` | Inlines `src/` into the single‑file `index.html` (`node build.js`). |
-| `make_sample_pdf.py` | Regenerates the bundled Computer‑Modern sample paper (`reportlab` + `matplotlib`). |
+| `index.html` | The app — a single self‑contained file (PDF.js + sample paper bundled). |
+| `api/ai.js` | Serverless proxy for text/vision (OpenAI / Anthropic / Gemini). |
+| `api/ai-image.js` | Serverless proxy for image generation (OpenAI / Gemini). |
+| `src/` | Modular source (`app.js`, `styles.css`, `index.html`, bundled PDF.js, `pdf-data.js`). |
+| `build.js` | Inlines `src/` into `index.html` (`node build.js`). |
+| `make_sample_pdf.py` | Regenerates the bundled sample paper (reportlab + matplotlib). |
 
-## Build
+The proxy uses the site's env key by default; if a user pastes their own key in **Settings**, it's
+sent per‑request as an override and never stored server‑side.
+
+## Deploy (Vercel — GitHub → Web pipeline)
+
+1. Vercel → **Add New → Project → Import `trojanuary/pair`**. Framework preset: **Other**
+   (zero build — static files + `/api` functions).
+2. Add **Environment Variables** (any subset — a provider only works if its key is set, or if the
+   user brings their own):
+   - `OPENAI_API_KEY`
+   - `ANTHROPIC_API_KEY`
+   - `GEMINI_API_KEY`
+   - *(optional model overrides handled client‑side in Settings)*
+3. **Deploy.** Every push to `main` auto‑deploys; each PR gets a preview URL.
+
+No build step, no dependencies to install (functions use the built‑in `fetch`, Node 20).
+
+## Use
+
+Open the deployed URL (or `index.html` locally). Open the sample or your own PDF, highlight text or
+capture a figure, then in a note just type naturally — end with `?` or mention `@gpt` / `@claude` /
+`@gemini` to ask, or say "make a visual…" to generate one. Answers carry provenance chips
+(`Page 7 · Section 2.3 · Used highlighted text · No external sources`). Notes persist in your
+browser (localStorage + IndexedDB).
+
+## Build locally
 
 ```bash
-node build.js        # regenerate index.html from src/
-python3 make_sample_pdf.py   # regenerate the sample paper (writes sample-paper.pdf)
+node build.js                # regenerate index.html from src/
+python3 make_sample_pdf.py   # regenerate the sample paper
 ```
 
 ## Roadmap
 
-- **Next.js + server‑side AI proxy** so keys live server‑side instead of the browser, plus real
-  asset storage and multi‑document search. (This needs a server host — Vercel or Cloudflare — since
-  GitHub Pages is static‑only.)
-- Cross‑document library search; collaboration via the actor model.
+- Migrate the frontend to Next.js/React (same `/api` proxy).
+- Optional Supabase backend for accounts, cross‑device sync, and server‑side asset storage.
 
 ## License
 
-Code: MIT. The bundled sample document (`sample-paper.pdf`) is released under CC BY 4.0.
+Code: MIT. Bundled sample document: CC BY 4.0.
