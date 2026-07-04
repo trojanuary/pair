@@ -1476,9 +1476,10 @@ async function generateVisual(annId, prompt) {
   const tp = activeProvider();
   // 1) Let the model choose the RIGHT format and produce it, grounded in the document.
   const planSys = [
-    'You turn a reader\'s request into the most useful visual for a document reader. First choose the FORMAT:',
-    '- "ascii": a precise monospace diagram built ONLY from the document — flowchart, pipeline, schematic, tree, comparison table, or a labelled layout. PREFER THIS for structure, process, relationships, comparisons, or "main results/summary", where faithfulness to the document matters. Never invent numbers.',
-    '- "image": a rendered picture — ONLY when a pictorial illustration or concept art genuinely aids intuition (a physical scene, an analogy, an artistic concept). NEVER choose image to depict specific data, plots, tables, equations, or exact results — image models fabricate those.',
+    'You turn a reader\'s request into the most useful visual for a document reader. First choose the FORMAT — use your judgment; the reader saying "image" does NOT force an image.',
+    '- "ascii": a precise monospace diagram built ONLY from the document — flowchart, pipeline, schematic, tree, comparison table, or a labelled layout. PREFER THIS for structure, process, relationships, comparisons, or the document\'s findings/results/summary, where faithfulness matters. Never invent numbers.',
+    '- "image": a rendered picture — ONLY when a pictorial illustration or concept/analogy genuinely aids intuition (a physical scene, a metaphor, an artistic concept). NEVER choose image to depict a paper\'s data, plots, tables, equations, findings, or "main results" — image models fabricate those.',
+    'Tie-breaker: if the request concerns the document\'s results, findings, data, structure, process, or a summary, choose "ascii" EVEN IF the reader said "image/picture" (explain nothing; just pick ascii). Choose "image" only for genuinely pictorial/illustrative asks.',
     (canImage ? '' : 'NOTE: image generation is unavailable, so you must use "ascii".'),
     'Return STRICT JSON only: {"format":"ascii"|"image","title":"<=6 words","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}',
   ].filter(Boolean).join('\n');
