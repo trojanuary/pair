@@ -891,6 +891,20 @@ function errHint(m) {
   if (/no .*key available/i.test(m)) return m + ' (Settings → paste a key to use your own.)';
   return m;
 }
+// Live-highlight @gpt/@claude/@gemini/@ai mentions in a composer textarea by mirroring its text
+// into a backdrop div (the textarea itself is transparent-text with a visible caret).
+function attachMentions(ta) {
+  if (!ta || ta._menWired) return;
+  const box = ta.closest('.men-box'); if (!box) return;
+  const hl = box.querySelector('.men-hl'); if (!hl) return;
+  const cs = getComputedStyle(ta);
+  ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'textIndent', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'].forEach(p => { hl.style[p] = cs[p]; });
+  hl.style.borderStyle = 'solid'; hl.style.borderColor = 'transparent';
+  const sync = () => { hl.innerHTML = esc(ta.value).replace(/@(gpt|claude|gemini|ai)\b/ig, m => `<span class="men">${m}</span>`) + '\n'; hl.scrollTop = ta.scrollTop; };
+  ta.addEventListener('input', sync);
+  ta.addEventListener('scroll', () => { hl.scrollTop = ta.scrollTop; });
+  ta._menWired = true; sync();
+}
 
 /* ---------- composer ---------- */
 // Focus the inline composer that lives inside the active note card.
@@ -941,9 +955,13 @@ const timeLabel = iso => new Date(iso).toLocaleTimeString(undefined, { hour: 'nu
 function passesFilter(a) {
   if (!inActiveDoc(a)) return false;
   if (state.ui.query) {
-    const q = state.ui.query.toLowerCase();
-    const hay = [a.selected_text, a.section, a.caption, ...(a.auto_tags || []), ...(a.manual_tags || []), ...a.messages.map(m => m.text || m.title || '')].join(' ').toLowerCase();
-    if (!hay.includes(q)) return false;
+    const hay = [a.selected_text, a.section, a.caption, srcLabel(a), 'page ' + a.page,
+      ...(a.auto_tags || []), ...(a.manual_tags || []),
+      ...a.messages.map(m => (m.text || m.title || '') + ' ' + (m.actor === 'ai' ? (PROVIDER_LABEL[m.provider] || 'AI') : ''))
+    ].join(' ').toLowerCase();
+    // every whitespace-separated term must appear (so "energy cascade" matches even if not adjacent)
+    const terms = state.ui.query.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.every(t => hay.includes(t))) return false;
   }
   const f = state.ui.filter;
   if (f === 'unresolved') return !a.resolved;
@@ -1088,7 +1106,7 @@ function compactCard(a) {
       ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
       <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
     </div></div>`);
-  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu]')) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
+  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],button')) return; if (window.getSelection && String(window.getSelection()).trim()) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
   return wrap;
 }
 function annCard(a) {
@@ -1114,14 +1132,18 @@ function annCard(a) {
   }
   // Inline thread composer — reply / ask a follow-up right inside the note (no detached bottom bar).
   const compose = `<div class="thread-compose">
-    <textarea class="tc-input" rows="1" placeholder="Reply, ask a follow-up, or @gpt · @claude · @gemini…"></textarea>
+    <div class="men-box"><div class="men-hl" aria-hidden="true"></div><textarea class="tc-input men-input" rows="1" placeholder="Reply, ask a follow-up, or @gpt · @claude · @gemini…"></textarea></div>
     <button class="tc-send" title="Send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button>
   </div>`;
   const wrap = el(`<div class="card sel ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${headHtml}<div class="card-b">${firstBody}${tagPills(a)}</div>
     ${replies ? `<div class="replies">${replies}</div>` : ''}
     ${compose}</div>`);
-  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],[data-edit],[data-delnote],[data-delmsg],[data-quotemore],.thread-compose,button,a,textarea')) return; selectAnnotation(a.id, false); });
+  wrap.addEventListener('click', ev => {
+    if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],[data-edit],[data-delnote],[data-delmsg],[data-quotemore],.thread-compose,button,a,textarea')) return;
+    if (window.getSelection && String(window.getSelection()).trim()) return;   // let the user select/copy text without re-rendering
+    selectAnnotation(a.id, false);
+  });
   return [wrap];
 }
 function mdLite(t) {
@@ -1144,7 +1166,10 @@ function render() {
   let anns = state.annotations.filter(passesFilter);
   anns.sort((x, y) => state.ui.sort === 'page' ? (x.page - y.page || x.anchor - y.anchor) : (new Date(x.created_at) - new Date(y.created_at)));
   if (!anns.length) {
-    list.appendChild(el(`<div class="empty">No notes yet.<br>Select text or capture a figure in the document to create a source-linked note.</div>`));
+    const emptyMsg = state.ui.query
+      ? `No notes match “${esc(state.ui.query)}”.`
+      : (state.ui.filter !== 'all' ? 'No notes match this filter.' : 'No notes yet.<br>Select text or capture a figure in the document to create a source-linked note.');
+    list.appendChild(el(`<div class="empty">${emptyMsg}</div>`));
   } else {
     let lastDay = null;
     anns.forEach(a => {
@@ -1180,11 +1205,12 @@ function render() {
     ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
     ta.addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px'; });
     ta.addEventListener('click', e => e.stopPropagation());
+    attachMentions(ta);
   }
   if (state.ui.autoscroll && state.ui.activeId) { list.scrollTop = scrollTop; scrollNoteIntoView(state.ui.activeId, false); }
   else list.scrollTop = scrollTop;
   // restore inline composer draft + focus
-  if (draft && box) { const ta = box.querySelector('.tc-input'); ta.value = draft.v; ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; if (draft.focused) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(draft.caret, draft.caret); } }
+  if (draft && box) { const ta = box.querySelector('.tc-input'); ta.value = draft.v; ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; ta.dispatchEvent(new Event('input')); if (draft.focused) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(draft.caret, draft.caret); } }
   requestAnimationFrame(drawConnector);
 }
 function saveMsgEdit(annId, msgId) {
@@ -1592,10 +1618,12 @@ function wire() {
   const ci = $('#composerInput');
   if (ci) {
     ci.placeholder = 'Ask a question about this document… (or highlight text for a focused question)';
-    const sendDoc = () => { const t = ci.value.trim(); if (!t) return; ci.value = ''; ci.style.height = 'auto'; askAboutDocument(t); };
+    const hl = $('#composerHL');
+    const sendDoc = () => { const t = ci.value.trim(); if (!t) return; ci.value = ''; ci.style.height = 'auto'; if (hl) hl.innerHTML = '\n'; askAboutDocument(t); };
     $('#composerSend').onclick = sendDoc;
     ci.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendDoc(); } });
     ci.addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px'; });
+    attachMentions(ci);
   }
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
   $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
