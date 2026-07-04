@@ -1494,10 +1494,12 @@ async function generateVisual(annId, prompt) {
   const tp = activeProvider();
   // 1) Let the model choose the RIGHT format and produce it, grounded in the document.
   const planSys = [
-    'You turn a reader\'s request into the most useful visual for a document reader. First choose the FORMAT by what the reader actually wants:',
-    '- "image": a rendered picture — choose for ILLUSTRATIONS, concept art, physical scenes, analogies, cartoons, or intuitive/artistic depictions of an idea or phenomenon (e.g. "illustrate eddies breaking into smaller eddies", "draw the experimental setup", "picture of a hairpin vortex"). Words like illustrate/illustration/picture/drawing/draw/artistic/concept/scene/cartoon strongly indicate image. It is fine for an image to depict a PROCESS conceptually.',
-    '- "ascii": a precise monospace diagram (flowchart, pipeline, tree, comparison table, labelled layout) built ONLY from the document. Choose for the paper\'s DATA, results, numbers, tables, equations, findings, or a faithful structural/flow summary of its content — where an image would fabricate specifics.',
-    'Tie-breaker: choose "ascii" ONLY when the request is to depict the paper\'s specific data/results/findings/numbers/summary. For genuinely pictorial or conceptual illustrations, choose "image" — even if the concept involves a process, and even though image models can\'t render exact data. When the reader explicitly says "illustrate/illustration/picture/draw", default to image unless they clearly want the paper\'s numeric results.',
+    'You turn a reader\'s request into the most useful visual. Choose the FORMAT ("ascii" = monospace text diagram built only from the document; "image" = an AI-rendered picture) using this PRIORITY ORDER:',
+    '1) If the request depicts the paper\'s RESULTS, findings, data, numbers, statistics, a table, comparisons, equations, or a "summary of results" → "ascii". This wins EVEN IF the reader wrote "image" or "picture" (an image would fabricate the specifics). Example: "create an image of the main results" → ascii.',
+    '2) Else if the reader says diagram / flowchart / schematic / chart / pipeline / tree / table → "ascii".',
+    '3) Else if the reader asks to illustrate / draw / sketch / picture a phenomenon, physical scene, mechanism, object, analogy, or concept → "image". Examples: "illustrate eddies breaking into smaller eddies" → image; "draw the experimental setup" → image; "picture of a hairpin vortex" → image.',
+    '4) If ambiguous → "ascii".',
+    'For "ascii" build a faithful monospace diagram from the document (never invent numbers). For "image" write a vivid image_prompt.',
     (canImage ? '' : 'NOTE: image generation is unavailable, so you must use "ascii".'),
     'Return STRICT JSON only: {"format":"ascii"|"image","title":"<=6 words","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}',
   ].filter(Boolean).join('\n');
