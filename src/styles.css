@@ -14,7 +14,7 @@
   --left-w:250px; --right-w:384px;
 }
 *{box-sizing:border-box}
-html,body{height:100%}
+html,body{height:100%;overflow:clip}
 body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg);
   font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
 button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -24,13 +24,14 @@ svg{display:block}
 
 /* ---------- App shell ---------- */
 #app{display:grid;grid-template-columns:var(--left-w) 1fr var(--right-w);
-  height:100vh;overflow:hidden;transition:grid-template-columns .18s ease}
+  grid-template-rows:minmax(0,1fr);
+  height:100vh;overflow:clip;transition:grid-template-columns .18s ease}
 #app.collapse-left{--left-w:0px}
 #app.collapse-right{--right-w:0px}
 
 /* ---------- Left sidebar ---------- */
 #sidebar{background:var(--surface);border-right:1px solid var(--line);
-  display:flex;flex-direction:column;min-width:0;overflow:hidden}
+  display:flex;flex-direction:column;min-width:0;overflow:clip}
 .sb-top{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 6px}
 .brand{width:34px;height:34px;border-radius:9px;background:#0B0F19;color:#fff;
   display:grid;place-items:center;font-weight:800;font-size:18px;letter-spacing:-1px}
@@ -58,13 +59,18 @@ svg{display:block}
 .tree .indent-1{padding-left:20px}
 .tree .indent-2{padding-left:36px}
 .tree .indent-3{padding-left:50px}
+.doc-row .doc-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-row .doc-del{flex:0 0 auto;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;
+  color:var(--faint);font-size:15px;line-height:1;opacity:0;transition:opacity .12s}
+.doc-row:hover .doc-del{opacity:1}
+.doc-row .doc-del:hover{background:var(--surface-2);color:var(--danger,#DC2626)}
 .doc-dot{width:15px;height:18px;flex:0 0 auto}
 .sb-storage{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line-2);color:var(--muted);font-size:12px}
 .bar{height:6px;border-radius:99px;background:var(--line);margin:7px 0;overflow:hidden}
 .bar>i{display:block;height:100%;width:42%;background:var(--blue);border-radius:99px}
 
 /* ---------- Center reader ---------- */
-#reader{display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+#reader{display:flex;flex-direction:column;min-width:0;background:var(--bg);overflow:clip}
 .rd-top{height:60px;flex:0 0 auto;display:flex;align-items:center;gap:12px;
   padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);position:relative}
 .rd-group{display:flex;align-items:center;gap:6px;border:1px solid var(--line);
@@ -92,9 +98,9 @@ svg{display:block}
 .textLayer ::selection{background:rgba(37,99,235,.28)}
 .textLayer .search-hit{background:rgba(245,158,11,.38);border-radius:2px}
 .overlay{position:absolute;left:0;top:0;pointer-events:none;z-index:3}
-.hl-rect{position:absolute;border-radius:2px;pointer-events:auto;cursor:pointer;mix-blend-mode:multiply}
-.hl-rect.text{background:var(--hl-blue)}
-.hl-rect.yellow{background:var(--hl-yellow)}
+.hl-rect{position:absolute;border-radius:2px;pointer-events:auto;cursor:pointer}
+.hl-rect.text{background:rgba(37,99,235,.20)}
+.hl-rect.yellow{background:rgba(250,204,21,.45)}
 .hl-rect.box{background:transparent;border:1.5px solid var(--blue);border-radius:6px}
 .hl-rect.figbox{background:transparent;border:1.5px dashed var(--blue);border-radius:6px}
 .pin{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--blue);
@@ -114,7 +120,7 @@ svg{display:block}
 
 /* ---------- Right notes panel ---------- */
 #notes{background:var(--surface);border-left:1px solid var(--line);display:flex;
-  flex-direction:column;min-width:0;overflow:hidden}
+  flex-direction:column;min-width:0;overflow:clip}
 .nt-top{padding:16px 16px 10px;display:flex;align-items:center;justify-content:space-between}
 .nt-top h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.3px}
 .nt-tophdr{display:flex;align-items:center;gap:6px;color:var(--muted)}

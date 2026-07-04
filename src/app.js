@@ -44,13 +44,25 @@ function defaultState() {
       actorName: 'You', actorInitials: 'YO',
     },
     annotations: [],
+    docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
     ui: { page: 1, zoom: 1.15, tool: 'cursor', filter: 'all', autoscroll: true, sort: 'time',
-          collapseLeft: false, collapseRight: false, activeId: null },
+          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample' },
     seeded: false,
   };
 }
-let state = loadState() || defaultState();
+let state = migrateState(loadState()) || defaultState();
 function loadState() { try { return JSON.parse(localStorage.getItem(LS)); } catch { return null; } }
+// Bring older saved state up to the multi-document model.
+function migrateState(s) {
+  if (!s) return null;
+  if (!s.ui) s.ui = {};
+  if (!Array.isArray(s.docs) || !s.docs.length) s.docs = [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }];
+  if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() });
+  if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
+  // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
+  (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
+  return s;
+}
 
 /* ---- asset store: large base64 images live in IndexedDB (big quota), NOT localStorage.
    This keeps the persisted JSON tiny so the ~5MB localStorage limit is never the bottleneck. */
@@ -66,6 +78,7 @@ function idbOpen() {
   });
 }
 function idbPut(key, val) { try { if (_idb) _idb.transaction('assets', 'readwrite').objectStore('assets').put(val, key); } catch (e) {} }
+function idbDel(key) { try { if (_idb) _idb.transaction('assets', 'readwrite').objectStore('assets').delete(key); } catch (e) {} }
 function idbGet(key) {
   return new Promise(res => {
     try {
@@ -107,6 +120,65 @@ const pageTextCache = {};               // pageNum -> {text, items, viewport}
 let rendering = false, renderQueued = null;
 
 function b64ToBytes(b64) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
+
+/* ---------- documents (real multi-doc library) ----------
+   Sample PDF ships inline; user-opened PDFs persist as bytes in IndexedDB (key `pdf:<id>`)
+   with a runtime cache so switching is instant. Notes are scoped per document id. */
+const _docBytes = {};                         // id -> Uint8Array (runtime cache)
+function docIdOf(a) { const d = a && a.doc; return (!d || d === 'Turbulence_review.pdf') ? 'sample' : d; }
+function inActiveDoc(a) { return docIdOf(a) === state.ui.activeDoc; }
+function activeDoc() { return state.docs.find(d => d.id === state.ui.activeDoc) || state.docs[0]; }
+async function loadDocBytes(id) {
+  const doc = state.docs.find(d => d.id === id); if (!doc) return null;
+  if (doc.kind === 'sample') return b64ToBytes(window.SAMPLE_PDF_B64);
+  if (!_docBytes[id]) { const v = await idbGet('pdf:' + id); if (v) _docBytes[id] = (v instanceof Uint8Array) ? v : new Uint8Array(v); }
+  return _docBytes[id] ? _docBytes[id].slice() : null;   // hand PDF.js a copy so the cache can't be detached
+}
+async function switchDoc(id) {
+  if (id === state.ui.activeDoc) { renderTree(); return; }
+  const doc = state.docs.find(d => d.id === id); if (!doc) { toast('Document not found.', 'err'); return; }
+  state.ui.activeDoc = id; state.ui.activeId = null; state.ui.page = 1;
+  Object.keys(pageTextCache).forEach(k => delete pageTextCache[k]);
+  save(); renderTree(); render();
+  const bytes = await loadDocBytes(id);
+  if (!bytes) { showReaderFallback('Could not load “' + doc.name + '”. Re-open it with New.'); return; }
+  try { await initPdf(bytes); } catch (e) { showReaderFallback('Could not open “' + doc.name + '” — it may not be a valid PDF.'); return; }
+  render(); drawHighlights(); drawPins();
+  setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 500);
+}
+async function openPdfFile(f) {
+  if (!f) return;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  const id = uid('doc'), name = f.name || 'Document.pdf';
+  _docBytes[id] = buf; idbPut('pdf:' + id, buf);
+  state.docs.push({ id, name, kind: 'user', addedAt: nowISO() });
+  save();
+  await switchDoc(id);
+  toast('Opened ' + name + ' — highlight text or capture a figure to start.');
+}
+function deleteDoc(id) {
+  const doc = state.docs.find(d => d.id === id); if (!doc || doc.kind === 'sample') return;
+  const n = state.annotations.filter(a => docIdOf(a) === id).length;
+  if (!confirm('Remove “' + doc.name + '”' + (n ? ' and its ' + n + ' note' + (n === 1 ? '' : 's') : '') + '?')) return;
+  state.docs = state.docs.filter(d => d.id !== id);
+  state.annotations = state.annotations.filter(a => docIdOf(a) !== id);
+  idbDel('pdf:' + id); delete _docBytes[id];
+  if (state.ui.activeDoc === id) { state.ui.activeDoc = 'sample'; save(); switchDoc('sample'); }
+  else { save(); renderTree(); render(); }
+}
+function renderTree() {
+  const list = $('#docList'); if (!list) return; list.innerHTML = '';
+  state.docs.forEach(d => {
+    const active = d.id === state.ui.activeDoc;
+    const row = el(`<div class="tree-row indent-2 doc-row ${active ? 'active' : ''}" data-doc="${d.id}" title="${esc(d.name)}">
+      <span class="fic" style="color:${active ? '#DC2626' : 'currentColor'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></span>
+      <span class="doc-name">${esc(d.name)}</span>
+      ${d.kind === 'user' ? `<button class="doc-del" data-del="${d.id}" title="Remove document">×</button>` : ''}</div>`);
+    row.addEventListener('click', e => { if (e.target.closest('[data-del]')) return; switchDoc(d.id); });
+    list.appendChild(row);
+  });
+  $$('[data-del]', list).forEach(b => b.onclick = e => { e.stopPropagation(); deleteDoc(b.dataset.del); });
+}
 
 function setupWorker() {
   try {
@@ -225,7 +297,7 @@ function onTextSelect() {
 function newAnnotation(a) {
   const n = state.annotations.length + 1;
   const ann = Object.assign({
-    id: uid('ann'), doc: 'Turbulence_review.pdf', page: state.ui.page, section: '',
+    id: uid('ann'), doc: state.ui.activeDoc, page: state.ui.page, section: '',
     source_type: 'text', selected_text: '', prefix: '', suffix: '', rects: [],
     screenshot: null, caption: '', anchor: n, thread: uid('thr'), messages: [],
     auto_tags: [], manual_tags: [], resolved: false, created_at: nowISO(), updated_at: nowISO(),
@@ -300,10 +372,17 @@ async function captureRegion(l, t, w, h) {
 }
 
 /* ---------- highlights + pins + connector ---------- */
+// Number the active document's notes by reading order (page, then vertical position) so
+// pins on the page and cards in the list stay 1..N top-to-bottom, per document.
+function renumber() {
+  state.annotations.filter(inActiveDoc)
+    .sort((a, b) => (a.page - b.page) || (((a.rects && a.rects[0] || {}).y || 0) - ((b.rects && b.rects[0] || {}).y || 0)))
+    .forEach((a, i) => { a.anchor = i + 1; });
+}
 function drawHighlights() {
   const ov = $('#overlay'); if (!ov) return; ov.innerHTML = ''; if (!viewport) return;
   ov.style.width = viewport.width + 'px'; ov.style.height = viewport.height + 'px';
-  state.annotations.filter(a => a.page === state.ui.page).forEach(a => {
+  state.annotations.filter(a => inActiveDoc(a) && a.page === state.ui.page).forEach(a => {
     if (a.source_type === 'free_comment') return;   // point comments show only a pin, no highlight box
     (a.rects || []).forEach(rc => {
       const cls = a.source_type === 'screenshot' ? 'figbox' : (a.hlColor === 'box' ? 'box' : (a.hlColor === 'yellow' ? 'yellow' : 'text'));
@@ -318,7 +397,7 @@ function drawHighlights() {
 function drawPins() {
   const pins = $('#pins'); if (!pins) return; pins.innerHTML = ''; if (!viewport) return;
   pins.style.width = viewport.width + 'px'; pins.style.height = viewport.height + 'px';
-  state.annotations.filter(a => a.page === state.ui.page && a.rects && a.rects.length).forEach(a => {
+  state.annotations.filter(a => inActiveDoc(a) && a.page === state.ui.page && a.rects && a.rects.length).forEach(a => {
     const rc = a.rects[0];
     const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}">${a.anchor}</div>`);
     p.style.left = (rc.x + rc.w) * viewport.width + 'px';
@@ -542,7 +621,7 @@ function errHint(m) {
 }
 
 /* ---------- composer ---------- */
-function focusComposer() { const c = $('#composerInput'); focusComposerCtx(); setTimeout(() => c.focus(), 60); }
+function focusComposer() { const c = $('#composerInput'); focusComposerCtx(); setTimeout(() => c.focus({ preventScroll: true }), 60); }
 function focusComposerCtx() {
   const a = state.annotations.find(x => x.id === state.ui.activeId);
   const ctx = $('#composerCtx'), input = $('#composerInput'), send = $('#composerSend');
@@ -580,6 +659,7 @@ function dayLabel(iso) {
 }
 const timeLabel = iso => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 function passesFilter(a) {
+  if (!inActiveDoc(a)) return false;
   if (state.ui.query) {
     const q = state.ui.query.toLowerCase();
     const hay = [a.selected_text, a.section, a.caption, ...(a.auto_tags || []), ...(a.manual_tags || []), ...a.messages.map(m => m.text || m.title || '')].join(' ').toLowerCase();
@@ -702,6 +782,7 @@ function mdLite(t) {
 
 function render() {
   // notes list
+  renumber();
   const list = $('#notesList'); const scrollTop = list.scrollTop;
   list.innerHTML = '';
   let anns = state.annotations.filter(passesFilter);
@@ -716,7 +797,8 @@ function render() {
     });
   }
   const fLabel = (FILTERS.find(f => f[0] === state.ui.filter) || [])[1];
-  $('#notesCount').textContent = state.annotations.length + (state.annotations.length === 1 ? ' note' : ' notes') + (state.ui.filter !== 'all' ? ' · ' + fLabel : '');
+  const docCount = state.annotations.filter(inActiveDoc).length;
+  $('#notesCount').textContent = docCount + (docCount === 1 ? ' note' : ' notes') + (state.ui.filter !== 'all' ? ' · ' + fLabel : '');
   // wire dynamic controls (actions are driven from the composer text; card just has tags + ⋯ menu)
   $$('[data-rmtag]', list).forEach(b => b.onclick = () => { const a = state.annotations.find(x => x.id === b.dataset.ann); a.auto_tags = (a.auto_tags || []).filter(t => t !== b.dataset.rmtag); a.manual_tags = (a.manual_tags || []).filter(t => t !== b.dataset.rmtag); save(); render(); });
   $$('[data-addtag]', list).forEach(b => b.onclick = () => addTagFlow(b.dataset.addtag));
@@ -875,8 +957,8 @@ function openExport() {
 function buildSheet() {
   const sheet = $('#exSheet'); if (!sheet) return;
   const inc = exState.include, compact = exState.layout === 'compact';
-  let html = `<h2>Research_Notes.pdf</h2><div class="dt">Exported on ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>`;
-  const anns = state.annotations.slice().sort((a, b) => a.page - b.page || a.anchor - b.anchor);
+  let html = `<h2>${esc(activeDoc().name)}</h2><div class="dt">Exported on ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</div>`;
+  const anns = state.annotations.filter(inActiveDoc).sort((a, b) => a.page - b.page || a.anchor - b.anchor);
   let n = 0;
   anns.forEach(a => {
     const hasShot = a.source_type === 'screenshot';
@@ -1046,11 +1128,8 @@ function wire() {
   $('#btnCollapseLeft').onclick = toggleLeft; $('#btnToggleLeft').onclick = toggleLeft;
   $('#btnCollapseRight').onclick = toggleRight; $('#btnToggleRight').onclick = toggleRight;
   $('#btnSettings').onclick = () => openSettings();
-  $$('.tree-row[data-doc]').forEach(r => r.onclick = () => toast('This prototype ships one sample document. Use “New” to open your own PDF.'));
   $('#newBtn').onclick = () => $('#fileInput').click();
-  $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) return; const buf = new Uint8Array(await f.arrayBuffer());
-    state.annotations = []; state.ui.activeId = null; state.ui.page = 1; Object.keys(pageTextCache).forEach(k => delete pageTextCache[k]);
-    await initPdf(buf); render(); toast('Opened ' + f.name + '. Highlight text or capture a figure to start.'); };
+  $('#fileInput').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; try { await openPdfFile(f); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
   // reader top
   $('#pagePrev').onclick = () => renderPage(state.ui.page - 1);
   $('#pageNext').onclick = () => renderPage(state.ui.page + 1);
@@ -1077,7 +1156,7 @@ function wire() {
   $('#btnSearch').onclick = () => { const q = prompt('Search inside document:'); if (q) runSearch(q.trim()); };
   $('#btnExportTop').onclick = openExport;
   // selection popover
-  document.addEventListener('mouseup', e => { if (e.target.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
+  document.addEventListener('mouseup', e => { const t = e.target; if (t && t.nodeType === 1 && t.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
   $('#spHi').onclick = () => createFromSelection('yellow');
   $('#spNote').onclick = () => createFromSelection('text');
   $('#spAsk').onclick = () => createFromSelection('ask');
@@ -1127,12 +1206,16 @@ async function boot() {
   $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%';
   await idbOpen(); await rehydrateAssets();   // restore any offloaded screenshot/visual images
   wire(); setTool(state.ui.tool || 'cursor');
+  // Resolve the active document's bytes (sample inline, or a user PDF from IndexedDB).
+  let startBytes = await loadDocBytes(state.ui.activeDoc);
+  if (!startBytes) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
+  renderTree();
   let pdfOk = true;
   try {
     // Race against a timeout: in a sandboxed preview the worker can hang instead of
     // erroring, which would otherwise block seeding + the whole UI.
     await Promise.race([
-      initPdf(b64ToBytes(window.SAMPLE_PDF_B64)),
+      initPdf(startBytes),
       new Promise((_, rej) => setTimeout(() => rej(new Error('PDF engine did not start — likely a sandboxed preview. Open the downloaded file directly.')), 7000)),
     ]);
   } catch (e) { pdfOk = false; showReaderFallback(e && e.message); }
