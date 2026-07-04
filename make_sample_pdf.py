@@ -75,6 +75,10 @@ CMB = fm.findfont(fm.FontProperties(family="cmb10"))
 pdfmetrics.registerFont(TTFont("CMR", CM))
 pdfmetrics.registerFont(TTFont("CMB", CMB))
 pdfmetrics.registerFontFamily("CMR", normal="CMR", bold="CMB", italic="CMR", boldItalic="CMB")
+# Serif math font with full Greek / superscript / operator coverage — renders math as REAL,
+# selectable text (so highlighting a line that contains math actually captures the math).
+MATHF = fm.findfont(fm.FontProperties(family="DejaVu Serif"))
+pdfmetrics.registerFont(TTFont("MATH", MATHF))
 
 body = ParagraphStyle("body", fontName="CMR", fontSize=10.5, leading=15.2, alignment=TA_JUSTIFY, spaceAfter=7)
 h1 = ParagraphStyle("h1", fontName="CMB", fontSize=14, leading=18, spaceBefore=13, spaceAfter=6)
@@ -90,15 +94,34 @@ def cm_safe(s):
     for a,b in _MAP.items(): s=s.replace(a,b)
     return s
 def esc(s): return cm_safe(s).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+def escx(s): return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")   # keep unicode (for math)
+
+# ---- LaTeX -> Unicode (selectable math) ----
+import re as _re
+_SUP={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','+':'⁺','-':'⁻','(':'⁽',')':'⁾','n':'ⁿ','i':'ⁱ','=':'⁼'}
+_SUB={'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉','+':'₊','-':'₋','(':'₍',')':'₎'}
+_GREEK={r'\varepsilon':'ε',r'\epsilon':'ε',r'\alpha':'α',r'\beta':'β',r'\gamma':'γ',r'\delta':'δ',r'\eta':'η',r'\zeta':'ζ',r'\nu':'ν',r'\mu':'μ',r'\rho':'ρ',r'\sigma':'σ',r'\tau':'τ',r'\phi':'φ',r'\kappa':'κ',r'\lambda':'λ',r'\pi':'π',r'\theta':'θ'}
+_OPS={r'\longrightarrow':' ⟶ ',r'\rightarrow':' → ',r'\leftarrow':' ← ',r'\leftrightarrow':' ↔ ',r'\Rightarrow':' ⇒ ',r'\propto':' ∝ ',r'\approx':' ≈ ',r'\sim':' ∼ ',r'\times':'×',r'\cdot':'·',r'\pm':'±',r'\leq':'≤',r'\geq':'≥',r'\to':' → ',r'\infty':'∞',r'\exp':'exp',r'\ll':'≪',r'\gg':'≫',r'\langle':'⟨',r'\rangle':'⟩',r'\left':'',r'\right':'',r'\quad':'  ',r'\,':' ',r'\;':' ',r'\ ':' ',r'\!':''}
+def _grp(s, table): return ''.join(table[c] for c in s) if all(c in table for c in s) else None
+def tex2uni(e):
+    e=_re.sub(r'\\(?:mathrm|mathit|mathbf|mathsf|mathcal|text|operatorname)\s*\{([^}]*)\}', r'\1', e)  # text macros -> content
+    for k,v in _GREEK.items(): e=e.replace(k,v)
+    for k,v in _OPS.items(): e=e.replace(k,v)
+    e=_re.sub(r'\^\{([^}]*)\}', lambda m:(_grp(m.group(1),_SUP) or ('^('+m.group(1)+')')), e)
+    e=_re.sub(r'_\{([^}]*)\}',  lambda m:(_grp(m.group(1),_SUB) or ('_'+m.group(1))), e)
+    e=_re.sub(r'\^(\w)', lambda m:_SUP.get(m.group(1),'^'+m.group(1)), e)
+    e=_re.sub(r'_(\w)',  lambda m:_SUB.get(m.group(1),'_'+m.group(1)), e)
+    e=e.replace('{','').replace('}','').replace('\\','')
+    e=e.replace('-','−')
+    return e
 
 def RT(s):
-    """Turn a string with $...$ math into reportlab markup: math -> CM image, text -> cmr10."""
+    """Turn a string with $...$ math into reportlab markup: math -> selectable MATH-font text."""
     out=[]; i=0
     while i < len(s):
         if s[i]=="$":
             j=s.index("$", i+1); expr=s[i+1:j]
-            p,w,h=math_img(expr, fs=10.5)
-            out.append(f'<img src="{p}" width="{w:.1f}" height="{h:.1f}" valign="-1.5"/>')
+            out.append(f'<font name="MATH" size="10">{escx(tex2uni(expr))}</font>')
             i=j+1
         else:
             j=s.find("$", i); j = len(s) if j<0 else j
@@ -107,10 +130,12 @@ def RT(s):
 def P(s, style=body): return Paragraph(RT(s), style)
 
 def eq(expr, num, fs=13):
-    p,w,h=math_img(expr, fs=fs)
-    t=Table([[Image(p,width=w,height=h), Paragraph(num, ParagraphStyle("n",parent=body,alignment=2))]],
+    # Display equation as centered, SELECTABLE Unicode text (not an image) so it can be captured.
+    eqp = Paragraph(f'<font name="MATH" size="12.5">{escx(tex2uni(expr))}</font>',
+                    ParagraphStyle("eqm", parent=body, alignment=TA_CENTER, spaceBefore=0, spaceAfter=0))
+    t=Table([[eqp, Paragraph(num, ParagraphStyle("n",parent=body,alignment=2))]],
             colWidths=[5.5*inch,0.7*inch])
-    t.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
+    t.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6)]))
     return t
 
 S=[]

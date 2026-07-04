@@ -171,21 +171,47 @@ svg{display:block}
   font-size:11px;font-weight:700;display:grid;place-items:center}
 .linked-quote{border-left:3px solid var(--line);background:var(--surface-2);border-radius:0 8px 8px 0;
   padding:8px 11px;color:var(--ink-2);font-size:13px;margin:9px 0 4px;font-family:var(--serif)}
+.quote-wrap{margin:9px 0 4px}.quote-wrap .linked-quote{margin:0}
+.linked-quote.clip{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.quote-more{margin-top:5px;color:var(--blue);font-weight:600;font-size:11.5px;font-family:var(--sans)}
+.quote-more:hover{text-decoration:underline}
 .shot-thumb{margin:9px 0 4px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
 .shot-thumb img{display:block;width:100%}
-.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
-.chip{border:1px solid var(--line);border-radius:8px;padding:4px 9px;color:var(--ink-2);
-  font-size:11.5px;font-weight:600;background:var(--surface)}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.chip{border:1px solid var(--line);border-radius:7px;padding:2px 8px;color:var(--ink-2);
+  font-size:10.5px;font-weight:600;background:var(--surface);max-width:100%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .chip.dim{color:var(--muted)}
 .disc{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11.5px;margin-top:9px}
-.tagrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.tag{border-radius:7px;padding:3px 8px;font-size:11px;font-weight:700;letter-spacing:.02em}
+.tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.tag{border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:600;letter-spacing:.01em}
 .tag.q{background:#EFF6FF;color:#1D4ED8}.tag.claim{background:#F1F5F9;color:#334155}
 .tag.def{background:#ECFDF5;color:#047857}.tag.eq{background:#FFF7ED;color:#C2410C}
 .tag.fig{background:#F5F3FF;color:#6D28D9}.tag.shot{background:#ECFEFF;color:#0E7490}
 .tag.vis{background:#FDF4FF;color:#A21CAF}.tag.conf{background:#FEF2F2;color:#B91C1C}
 .tag.crit{background:#FEF2F2;color:#B91C1C}.tag.sum{background:#F0FDF4;color:#15803D}
 .tag.act{background:#FFFBEB;color:#B45309}
+/* message hover actions (edit / delete) — replaces the kebab menu */
+.macts{margin-left:8px;display:flex;gap:1px;opacity:0;transition:opacity .12s}
+.card-h:hover .macts{opacity:1}
+.mact{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--faint)}
+.mact svg{width:15px;height:15px}
+.mact:hover{background:var(--surface-2);color:var(--ink)}
+.mact[data-delnote]:hover,.mact[data-delmsg]:hover{color:#DC2626}
+/* inline edit box for comments and AI answers */
+.edit-wrap{margin-top:8px}
+.edit-input{width:100%;border:1px solid var(--blue);border-radius:9px;padding:8px 10px;font-size:13.5px;line-height:1.5;resize:vertical;min-height:62px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit}
+.edit-actions{display:flex;gap:8px;margin-top:8px}
+.eb-save{background:var(--blue);color:#fff;border-radius:8px;padding:6px 14px;font-weight:600;font-size:12.5px}
+.eb-cancel{color:var(--muted);border-radius:8px;padding:6px 12px;font-weight:600;font-size:12.5px}
+.eb-cancel:hover{background:var(--surface-2)}
+/* inline thread composer inside the active note card */
+.thread-compose{display:flex;align-items:flex-end;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--surface-2)}
+.tc-input{flex:1;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:13px;line-height:1.45;resize:none;max-height:120px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit}
+.tc-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak)}
+.tc-send{width:34px;height:34px;flex:0 0 auto;border-radius:9px;background:var(--blue);color:#fff;display:grid;place-items:center}
+.tc-send svg{width:17px;height:17px}
+.tc-send:hover{filter:brightness(1.06)}
 .tag .rm{margin-left:5px;opacity:.5;cursor:pointer}
 .addtag{border:1px dashed var(--line);border-radius:7px;padding:2px 7px;color:var(--muted);font-size:11px}
 .badge-appx{background:#FFFBEB;color:#B45309;border:1px solid #FDE68A;border-radius:7px;

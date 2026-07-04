@@ -314,14 +314,10 @@ function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
   });
   window.getSelection().removeAllRanges();
   $('#selPop').classList.add('hidden');
-  selectAnnotation(ann.id, true);
-  render(); drawHighlights(); drawPins();
-  // Leave the composer EMPTY and focused so the user can immediately type. For "Ask AI" we
-  // also flag this note so their next message is routed to the AI even without a trailing "?".
+  // For "Ask AI", flag this note so the user's next message routes to the AI even without a "?".
   askNextId = (kind === 'ask') ? ann.id : null;
-  const inp = $('#composerInput'); inp.value = '';
-  if (kind === 'ask') inp.placeholder = 'Ask the AI about this selection…';
-  focusComposer();
+  selectAnnotation(ann.id, true);   // expands the note; its inline composer auto-focuses
+  drawHighlights(); drawPins();
   pendingSel = null;
 }
 
@@ -447,24 +443,17 @@ function selectAnnotation(id, scrollCard, scrollPage) {
   render(); drawPins();
   if (scrollCard) scrollNoteIntoView(id, true);
   requestAnimationFrame(drawConnector);
-  focusComposerCtx();
+  focusThreadCompose();
 }
 
 /* ---------- auto-tagging (heuristic; swappable for a model call) ---------- */
 function autoTag(text, srcType, msgType) {
-  const t = (text || '').toLowerCase(); const tags = new Set();
-  if (msgType === 'generated_visual') tags.add('Generated visual');
-  if (srcType === 'screenshot') tags.add('Screenshot');
-  if (/\?\s*$/.test(text || '') || /^(what|why|how|can you|does|is |are |explain|derive)/.test(t)) tags.add('Question');
-  if (/=|∝|∼|\bequation\b|k\^|E\(k\)/.test(text || '')) tags.add('Equation');
-  if (/\bfigure\b|\bplot\b|\bgraph\b|\bspectrum\b/.test(t)) tags.add('Figure');
-  if (/is defined as|refers to|is called|denotes|means /.test(t)) tags.add('Definition');
-  if (/confus|unclear|don'?t (get|understand)/.test(t)) tags.add('Confusion');
-  if (/wrong|however|but |disagree|doubt|questionable|flaw/.test(t)) tags.add('Critique');
-  if (/todo|action|follow up|need to|check /.test(t)) tags.add('Action item');
-  if (/summar|key takeaway|in short|tl;dr/.test(t)) tags.add('Summary');
-  if (!tags.size) tags.add('Claim');
-  return [...tags];
+  // Keep this minimal — at most one tag, only on a clear signal. (Users add their own via “+ tag”.)
+  const t = (text || '').trim();
+  if (msgType === 'generated_visual') return ['Generated visual'];
+  if (srcType === 'screenshot') return ['Screenshot'];
+  if (/\?\s*$/.test(t) || /^(what|why|how|can you|does|is |are |explain|derive|summar|prove|compare)/i.test(t)) return ['Question'];
+  return [];
 }
 const TAG_CLASS = { 'Question': 'q', 'Claim': 'claim', 'Definition': 'def', 'Equation': 'eq',
   'Figure': 'fig', 'Screenshot': 'shot', 'Generated visual': 'vis', 'Confusion': 'conf',
@@ -626,30 +615,22 @@ function errHint(m) {
 }
 
 /* ---------- composer ---------- */
-function focusComposer() {
-  const c = $('#composerInput'); focusComposerCtx();
-  const go = () => { try { c.focus({ preventScroll: true }); } catch (e) { c.focus(); } };
-  go(); requestAnimationFrame(go); setTimeout(go, 60);   // land focus reliably across re-renders
+// Focus the inline composer that lives inside the active note card.
+function focusThreadCompose() {
+  const go = () => { const ta = document.querySelector('.card.sel .tc-input'); if (!ta) return; try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } };
+  go(); requestAnimationFrame(go); setTimeout(go, 60);
 }
-function focusComposerCtx() {
-  const a = state.annotations.find(x => x.id === state.ui.activeId);
-  const ctx = $('#composerCtx'), input = $('#composerInput'), send = $('#composerSend');
-  if (a) { ctx.classList.remove('hidden');
-    ctx.innerHTML = `<span class="qn">${a.anchor}</span> Replying to ${a.source_type === 'screenshot' ? 'screenshot' : 'linked text'} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}`;
-    input.placeholder = 'Ask with @gpt / @claude / @gemini, say “make a visual…”, or add a note'; input.disabled = false; send.disabled = false;
-  } else { ctx.classList.add('hidden'); input.placeholder = 'Select text or a figure to start a note…'; }
-}
-function sendComposer() {
-  const input = $('#composerInput'); const text = input.value.trim();
-  const a = state.annotations.find(x => x.id === state.ui.activeId);
+const focusComposer = focusThreadCompose;   // back-compat alias for existing callers
+// Add the user's message to a note and route it (visual request / question / @mention / “Ask AI”).
+function submitToNote(annId, rawText) {
+  const text = (rawText || '').trim();
+  const a = state.annotations.find(x => x.id === annId);
   if (!text || !a) return;
-  input.value = '';
   const mProvider = /@claude/i.test(text) ? 'anthropic' : /@gpt/i.test(text) ? 'openai' : /@gemini/i.test(text) ? 'gemini' : null;
   const clean = text.replace(/@(ai|gpt|claude|gemini)/ig, '').trim();
   a.messages.push({ id: uid('m'), actor: 'you', type: 'comment', text: clean || text, created_at: nowISO() });
   a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(text, a.source_type, 'comment')]));
-  a.updated_at = nowISO(); save(); render();
-  // Route from the text itself: a visual request -> generateVisual; otherwise a question/@mention -> askAI.
+  a.updated_at = nowISO(); save(); render(); focusThreadCompose();
   const forceAsk = askNextId === a.id; askNextId = null;   // user chose “Ask AI” on this note
   const wantVisual = /\b(visual|diagram|chart|graph|plot|sketch|infographic)\b/i.test(clean) &&
                      /(generate|make|create|draw|turn|produce|render|convert|visuali[sz]e|cleaner|summar)/i.test(clean);
@@ -705,19 +686,43 @@ function tagPills(a) {
 }
 function chipRow(chips) { return `<div class="chips">${(chips || []).map(c => `<span class="chip ${/no external|used web/i.test(c) ? 'dim' : ''}">${esc(c)}</span>`).join('')}</div>`; }
 function srcLabel(a) { return a.source_type === 'screenshot' ? 'Screenshot' : a.source_type === 'free_comment' ? 'Comment' : a.source_type === 'equation' ? 'Equation' : 'Linked text'; }
+// linked quote — long quotes are clamped to a few lines with a Show more/less toggle so a big
+// selection (e.g. a whole abstract) doesn't dominate the card for a one-line question.
+function quoteBlock(text) {
+  const long = (text || '').length > 150;
+  if (!long) return `<div class="linked-quote">${esc(text)}</div>`;
+  return `<div class="quote-wrap"><div class="linked-quote clip">${esc(text)}</div><button class="quote-more" data-quotemore="1">Show more</button></div>`;
+}
 
+const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
+// hover action icons in a message head — edit (comment or AI), plus delete-note on the first row / delete-message on replies
+function msgActions(a, m, isFirst) {
+  const editable = m.type === 'comment' || m.type === 'ai_answer';
+  return `<span class="macts">`
+    + (editable ? `<button class="mact" data-edit="${m.id}" data-ann="${a.id}" title="Edit">${ICON_EDIT}</button>` : '')
+    + (isFirst ? `<button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button>`
+               : `<button class="mact" data-delmsg="${m.id}" data-ann="${a.id}" title="Delete reply">${ICON_TRASH}</button>`)
+    + `</span>`;
+}
+function editBox(a, m) {
+  return `<div class="edit-wrap"><textarea class="edit-input" data-editing="${m.id}" data-ann="${a.id}">${esc(m.text || '')}</textarea>`
+    + `<div class="edit-actions"><button class="eb-save" data-savemsg="${m.id}" data-ann="${a.id}">Save</button><button class="eb-cancel" data-canceledit="1">Cancel</button></div></div>`;
+}
 function msgCard(a, m, isFirst) {
-  const head = `<div class="card-h">${actorAvatar(m)}<span class="who">${esc(actorName(m))}</span><span class="when">${timeLabel(m.created_at)}</span><span class="kebab" data-menu="${m.id}" data-ann="${a.id}">⋯</span></div>`;
+  const head = `<div class="card-h">${actorAvatar(m)}<span class="who">${esc(actorName(m))}</span><span class="when">${timeLabel(m.created_at)}</span>${msgActions(a, m, isFirst)}</div>`;
+  const editing = state.ui.editing === m.id;
   let body = '';
   if (isFirst) {
     body += `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>`;
     if (a.source_type === 'screenshot' && a.screenshot) body += `<div class="shot-thumb"><img src="${a.screenshot}"></div>`;
-    else if (a.selected_text) body += `<div class="linked-quote">${esc(a.selected_text)}</div>`;
+    else if (a.selected_text) body += quoteBlock(a.selected_text);
   }
-  if (m.type === 'comment') body += `<div class="msg">${m.text ? esc(m.text).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`) : ''}</div>`;
+  if (m.type === 'comment') body += editing ? editBox(a, m) : `<div class="msg">${m.text ? esc(m.text).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`) : ''}</div>`;
   if (m.type === 'ai_answer') {
     if (m.pending) body += `<div class="msg"><span class="typing">Thinking<i></i><i></i><i></i></span></div>`;
     else if (m.error) body += `<div class="msg" style="color:#B91C1C">⚠ ${esc(m.error)}</div>`;
+    else if (editing) body += editBox(a, m);
     else { body += `<div class="msg">${mdLite(m.text)}</div>` + chipRow(m.chips) + `<div class="disc">ⓘ AI-generated answer${m.model ? ' · ' + esc(m.model) : ''}</div>`; }
   }
   if (m.type === 'generated_visual') {
@@ -750,8 +755,7 @@ function compactCard(a) {
   const wrap = el(`<div class="card compact ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${!a.resolved ? '<span class="unread-dot"></span>' : ''}
     <div class="card-h"><span style="width:22px;height:22px;border-radius:50%;background:${badge};color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto">${a.anchor}</span>
-      <span class="who">${label}</span><span class="when">${when}</span>
-      <span class="kebab" data-menu="c" data-ann="${a.id}">⋯</span></div>
+      <span class="who">${label}</span><span class="when">${when}</span></div>
     <div class="card-b">
       ${preview ? `<div class="msg clamp">${esc(preview).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`)}</div>` : ''}
       ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
@@ -769,9 +773,10 @@ function annCard(a) {
     const mc = msgCard(a, a.messages[0], true);
     headHtml = mc.head; firstBody = mc.body;
   } else {
-    headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span></div>`;
+    headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span>`
+      + `<span class="macts"><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
     firstBody = `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>`
-      + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? `<div class="linked-quote">${esc(a.selected_text)}</div>` : ''));
+      + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? quoteBlock(a.selected_text) : ''));
   }
   let replies = '';
   for (let i = 1; i < a.messages.length; i++) {
@@ -779,10 +784,16 @@ function annCard(a) {
     const { head, body } = msgCard(a, m, false);
     replies += `<div class="reply ${m.actor === 'ai' ? 'ai' : ''}" data-msg="${m.id}">${head}<div class="reply-b">${body}</div></div>`;
   }
+  // Inline thread composer — reply / ask a follow-up right inside the note (no detached bottom bar).
+  const compose = `<div class="thread-compose">
+    <textarea class="tc-input" rows="1" placeholder="Reply, ask a follow-up, or @gpt · @claude · @gemini…"></textarea>
+    <button class="tc-send" title="Send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button>
+  </div>`;
   const wrap = el(`<div class="card sel ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${headHtml}<div class="card-b">${firstBody}${tagPills(a)}</div>
-    ${replies ? `<div class="replies">${replies}</div>` : ''}</div>`);
-  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],button,a')) return; selectAnnotation(a.id, false); });
+    ${replies ? `<div class="replies">${replies}</div>` : ''}
+    ${compose}</div>`);
+  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],[data-edit],[data-delnote],[data-delmsg],[data-quotemore],.thread-compose,button,a,textarea')) return; selectAnnotation(a.id, false); });
   return [wrap];
 }
 function mdLite(t) {
@@ -796,6 +807,9 @@ function render() {
   // notes list
   renumber();
   const list = $('#notesList'); const scrollTop = list.scrollTop;
+  // preserve the inline composer's in-progress text + focus across re-renders (e.g. while the AI replies)
+  const prevTa = list.querySelector('.card.sel .tc-input');
+  const draft = prevTa ? { v: prevTa.value, focused: document.activeElement === prevTa, caret: prevTa.selectionStart } : null;
   list.innerHTML = '';
   let anns = state.annotations.filter(passesFilter);
   anns.sort((x, y) => state.ui.sort === 'page' ? (x.page - y.page || x.anchor - y.anchor) : (new Date(x.created_at) - new Date(y.created_at)));
@@ -811,14 +825,49 @@ function render() {
   const fLabel = (FILTERS.find(f => f[0] === state.ui.filter) || [])[1];
   const docCount = state.annotations.filter(inActiveDoc).length;
   $('#notesCount').textContent = docCount + (docCount === 1 ? ' note' : ' notes') + (state.ui.filter !== 'all' ? ' · ' + fLabel : '');
-  // wire dynamic controls (actions are driven from the composer text; card just has tags + ⋯ menu)
-  $$('[data-rmtag]', list).forEach(b => b.onclick = () => { const a = state.annotations.find(x => x.id === b.dataset.ann); a.auto_tags = (a.auto_tags || []).filter(t => t !== b.dataset.rmtag); a.manual_tags = (a.manual_tags || []).filter(t => t !== b.dataset.rmtag); save(); render(); });
-  $$('[data-addtag]', list).forEach(b => b.onclick = () => addTagFlow(b.dataset.addtag));
+  // wire dynamic controls
+  $$('[data-rmtag]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); const a = state.annotations.find(x => x.id === b.dataset.ann); a.auto_tags = (a.auto_tags || []).filter(t => t !== b.dataset.rmtag); a.manual_tags = (a.manual_tags || []).filter(t => t !== b.dataset.rmtag); save(); render(); });
+  $$('[data-addtag]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); addTagFlow(b.dataset.addtag); });
   $$('[data-menu]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); annMenu(b.dataset.ann, b.dataset.menu, b); });
+  // edit / delete / quote controls
+  $$('[data-edit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = b.dataset.edit; render(); const ta = list.querySelector('.edit-input'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } });
+  $$('[data-canceledit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = null; render(); });
+  $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
+  $$('[data-delnote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteNote(b.dataset.delnote); });
+  $$('[data-delmsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteMsg(b.dataset.ann, b.dataset.delmsg); });
+  $$('[data-quotemore]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); const q = b.parentElement.querySelector('.linked-quote'); const on = q.classList.toggle('clip'); b.textContent = on ? 'Show more' : 'Show less'; });
+  $$('.edit-input', list).forEach(ta => ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveMsgEdit(ta.dataset.ann, ta.dataset.editing); } if (e.key === 'Escape') { state.ui.editing = null; render(); } }));
+  // inline thread composer (reply / follow-up), lives inside the active card
+  const box = list.querySelector('.card.sel .thread-compose');
+  if (box) {
+    const ta = box.querySelector('.tc-input'), send = box.querySelector('.tc-send');
+    const submit = () => { const t = ta.value.trim(); if (!t) return; ta.value = ''; ta.style.height = 'auto'; submitToNote(state.ui.activeId, t); };
+    send.onclick = (e) => { e.stopPropagation(); submit(); };
+    ta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
+    ta.addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px'; });
+    ta.addEventListener('click', e => e.stopPropagation());
+  }
   if (state.ui.autoscroll && state.ui.activeId) { list.scrollTop = scrollTop; scrollNoteIntoView(state.ui.activeId, false); }
   else list.scrollTop = scrollTop;
-  focusComposerCtx();
+  // restore inline composer draft + focus
+  if (draft && box) { const ta = box.querySelector('.tc-input'); ta.value = draft.v; ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; if (draft.focused) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(draft.caret, draft.caret); } }
   requestAnimationFrame(drawConnector);
+}
+function saveMsgEdit(annId, msgId) {
+  const a = state.annotations.find(x => x.id === annId); if (!a) return;
+  const m = a.messages.find(x => x.id === msgId); if (!m) return;
+  const ta = document.querySelector(`.edit-input[data-editing="${msgId}"]`); if (ta) m.text = ta.value.trim();
+  m.edited = true; a.updated_at = nowISO(); state.ui.editing = null; save(); render();
+}
+function deleteMsg(annId, msgId) {
+  const a = state.annotations.find(x => x.id === annId); if (!a) return;
+  a.messages = a.messages.filter(m => m.id !== msgId); a.updated_at = nowISO(); save(); render();
+}
+function deleteNote(annId) {
+  if (!confirm('Delete this note and its thread?')) return;
+  state.annotations = state.annotations.filter(x => x.id !== annId);
+  if (state.ui.activeId === annId) state.ui.activeId = null;
+  save(); render(); drawHighlights(); drawPins();
 }
 function promptText(annId) { const a = state.annotations.find(x => x.id === annId); const q = a?.messages.filter(m => m.type === 'comment').pop(); return q ? q.text : 'Explain this in context.'; }
 function addTagFlow(annId) {
@@ -1182,9 +1231,8 @@ function wire() {
     else { state.ui.query = ''; $('#notesSearchInput').value = ''; render(); }
   };
   $('#notesSearchInput').addEventListener('input', e => { state.ui.query = e.target.value.trim(); render(); });
-  $('#composerSend').onclick = sendComposer;
-  $('#composerInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendComposer(); } });
-  $('#composerInput').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px'; });
+  // Composing now happens inline inside the active note card (wired in render); hide the old bottom bar.
+  const gc = $('#composer'); if (gc) gc.classList.add('hidden');
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
   $('#rdScroll').addEventListener('scroll', () => requestAnimationFrame(drawConnector));
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
