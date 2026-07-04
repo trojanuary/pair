@@ -417,8 +417,13 @@ function drawConnector() {
   const card = $(`.card[data-ann="${a.id}"]`);
   if (!pin || !card) return;
   const pr = pin.getBoundingClientRect(), cr = card.getBoundingClientRect();
-  if (cr.top > window.innerHeight || cr.bottom < 0) return;
-  const x1 = pr.right, y1 = pr.top + pr.height / 2, x2 = cr.left, y2 = cr.top + 22;
+  // Clip to the notes list's visible band so the line tracks the card as the panel scrolls
+  // (and disappears when the card is scrolled out of view behind the header/footer).
+  const list = $('#notesList');
+  const lb = list ? list.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+  if (cr.bottom < lb.top + 4 || cr.top > lb.bottom - 4) return;   // card fully out of the list viewport
+  const x1 = pr.right, y1 = pr.top + pr.height / 2, x2 = cr.left;
+  const y2 = Math.max(lb.top + 6, Math.min(lb.bottom - 6, cr.top + 22));   // anchor clamped into the visible band
   const mx = (x1 + x2) / 2;
   const NS = 'http://www.w3.org/2000/svg';
   const path = document.createElementNS(NS, 'path');
@@ -1235,6 +1240,7 @@ function wire() {
   const gc = $('#composer'); if (gc) gc.classList.add('hidden');
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
   $('#rdScroll').addEventListener('scroll', () => requestAnimationFrame(drawConnector));
+  $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
   initCaptureMask();
 }
