@@ -2,7 +2,9 @@
 // Uses the site's env key by default, or a user-supplied BYO key passed in the request.
 // No npm deps — global fetch (Node 18+).
 const ENV = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY' };
-const DEFAULT_MODEL = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022', gemini: 'gemini-1.5-pro' };
+const DEFAULT_MODEL = { openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash' };
+// GPT-5+/o-series reasoning models use max_completion_tokens (not max_tokens).
+const capTokens = (m, n) => (/^(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n } : { max_tokens: n });
 
 async function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -10,27 +12,36 @@ async function readBody(req) {
   return await new Promise(r => { let d = ''; req.on('data', c => (d += c)); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
 }
 
+async function openaiChat(key, body) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body),
+  });
+  return { r, j: await r.json() };
+}
 // ---- OpenAI (chat completions; swaps to a web-search model when web is on and there's no image) ----
 async function openaiCall(key, { system, user, image, model, web }) {
   const content = image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.b64}` } }] : user;
   const useSearch = web && !image;
-  const body = { model: useSearch ? 'gpt-4o-search-preview' : (model || DEFAULT_MODEL.openai),
-    messages: [{ role: 'system', content: system }, { role: 'user', content }], max_tokens: 900 };
+  const m = useSearch ? 'gpt-4o-search-preview' : (model || DEFAULT_MODEL.openai);
+  const body = { model: m, messages: [{ role: 'system', content: system }, { role: 'user', content }], ...capTokens(m, 900) };
   if (useSearch) body.web_search_options = {};
-  let r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body),
-  });
-  let j = await r.json();
-  // Resilience: if the search-preview model isn't available on this account, retry once without web search.
+  let { r, j } = await openaiChat(key, body);
+  // Resilience: if the search-preview model isn't available, retry once without web search.
   if (!r.ok && useSearch) {
-    const b2 = { model: model || DEFAULT_MODEL.openai, messages: body.messages, max_tokens: 900 };
-    r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(b2),
-    });
-    j = await r.json();
+    const bm = model || DEFAULT_MODEL.openai;
+    ({ r, j } = await openaiChat(key, { model: bm, messages: [{ role: 'system', content: system }, { role: 'user', content }], ...capTokens(bm, 900) }));
   }
   if (!r.ok) throw new Error(j.error?.message || 'OpenAI error');
   return (j.choices?.[0]?.message?.content || '').trim();
+}
+// ---- OpenAI agent step: one turn of a tool-calling ReAct loop. Returns {content, tool_calls}. ----
+async function openaiAgentStep(key, { messages, tools, model }) {
+  const m = model || DEFAULT_MODEL.openai;
+  const body = { model: m, messages, tools, tool_choice: 'auto', parallel_tool_calls: false, ...capTokens(m, 1100) };
+  const { r, j } = await openaiChat(key, body);
+  if (!r.ok) throw new Error(j.error?.message || 'OpenAI error');
+  const msg = j.choices?.[0]?.message || {};
+  return { content: (msg.content || '').trim(), tool_calls: msg.tool_calls || null };
 }
 
 // ---- Anthropic (adds the server-side web_search tool when web is on) ----
@@ -61,9 +72,16 @@ async function geminiCall(key, { system, user, image, model, web }) {
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   try {
-    const { provider = 'openai', system = '', user = '', image = null, model, userKey, web = false } = await readBody(req);
+    const body = await readBody(req);
+    const { provider = 'openai', mode, messages, tools, model, userKey } = body;
     const key = (userKey && String(userKey).trim()) || process.env[ENV[provider]];
     if (!key) return res.status(400).json({ error: `No ${provider} key available. Add your own key in Settings, or ask the site owner to set ${ENV[provider] || 'the API key'}.` });
+    // Agent mode: one ReAct step (OpenAI tool-calling). Returns {content, tool_calls}.
+    if (mode === 'agent' && Array.isArray(messages)) {
+      const step = await openaiAgentStep(key, { messages, tools, model });
+      return res.status(200).json(step);
+    }
+    const { system = '', user = '', image = null, web = false } = body;
     const args = { system, user, image, model, web };
     let text = '';
     if (provider === 'openai') text = await openaiCall(key, args);

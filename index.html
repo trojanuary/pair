@@ -200,6 +200,15 @@ svg{display:block}
   text-overflow:ellipsis;white-space:nowrap}
 .chip.dim{color:var(--muted)}
 .disc{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11.5px;margin-top:9px}
+/* collapsed sources/provenance disclosure under an AI answer */
+.prov{margin-top:9px}
+.prov>summary{list-style:none;cursor:pointer;color:var(--faint);font-size:11.5px;display:inline-flex;align-items:center;gap:5px;user-select:none}
+.prov>summary::-webkit-details-marker{display:none}
+.prov>summary .disc-i{opacity:.8}
+.prov>summary .prov-more{color:var(--blue);font-weight:600}
+.prov[open]>summary .prov-more{color:var(--muted);font-weight:500}
+.prov>summary:hover .prov-more{text-decoration:underline}
+.prov .chips{margin-top:8px}
 .tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
 .tag{border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:600;letter-spacing:.01em}
 .tag.q{background:#EFF6FF;color:#1D4ED8}.tag.claim{background:#F1F5F9;color:#334155}
@@ -220,6 +229,8 @@ svg{display:block}
 .edit-input{width:100%;border:1px solid var(--blue);border-radius:9px;padding:8px 10px;font-size:13.5px;line-height:1.5;resize:vertical;min-height:62px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit}
 .edit-actions{display:flex;gap:8px;margin-top:8px}
 .eb-save{background:var(--blue);color:#fff;border-radius:8px;padding:6px 14px;font-weight:600;font-size:12.5px}
+.eb-reask{background:var(--violet-weak);color:var(--violet);border-radius:8px;padding:6px 12px;font-weight:600;font-size:12.5px}
+.eb-reask:hover{filter:brightness(.97)}
 .eb-cancel{color:var(--muted);border-radius:8px;padding:6px 12px;font-weight:600;font-size:12.5px}
 .eb-cancel:hover{background:var(--surface-2)}
 /* inline thread composer inside the active note card */
@@ -334,12 +345,23 @@ svg{display:block}
 .ex-resp{margin-top:12px}
 
 @media print{
+  @page{margin:12mm}
   body{background:#fff}
   #app,#exportView .ex-top,#exportView .ex-opts,#connectors,#toasts{display:none !important}
   #exportView{position:static}.ex-body{display:block}
   .ex-preview{padding:0;overflow:visible}
-  .ex-sheet{box-shadow:none;border:0;border-radius:0;max-width:none;padding:0}
-  .ex-item{break-inside:avoid}
+  .ex-sheet{box-shadow:none;border:0;border-radius:0;max-width:none;padding:0;font-size:9.5px;line-height:1.4}
+  .ex-item{break-inside:avoid;padding:12px 0;gap:16px}
+  /* smaller type for the printed evidence packet */
+  .ex-sheet h2{font-size:15px}
+  .ex-sheet .dt{font-size:9px;padding-bottom:10px}
+  .ex-loc{font-size:10.5px;margin-bottom:8px}
+  .ex-num{width:16px;height:16px;font-size:9px;margin-right:6px}
+  .ex-sub{font-size:8.5px;margin-bottom:4px}
+  .ex-quote{font-size:9px;padding:8px 10px}
+  .ex-resp,.ex-comment .who{font-size:9.5px}
+  .ex-sheet .msg,.ex-sheet .disc{font-size:9.5px}
+  .ex-sheet .chip,.ex-sheet .tag{font-size:8px;padding:1px 6px}
 }
 /* ---- reader fallback (shown when PDF engine can't start, e.g. sandboxed preview) ---- */
 #readerFallback{display:flex;justify-content:center;padding:56px 24px}
@@ -589,7 +611,7 @@ const ACTORS = {
 };
 const PROVIDER_LABEL = { openai: 'GPT', anthropic: 'Claude', gemini: 'Gemini' };
 const DEFAULT_MODELS = {
-  openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022', gemini: 'gemini-1.5-pro',
+  openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash',
   openaiImage: 'gpt-image-1', geminiImage: 'imagen-3.0-generate-002',
 };
 function defaultState() {
@@ -618,6 +640,11 @@ function migrateState(s) {
   if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() });
   if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
   if (!s.ui.libView) s.ui.libView = 'home';
+  // upgrade anyone still on the previous default models to the current generation
+  if (s.settings && s.settings.models) {
+    const OLD = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022', gemini: 'gemini-1.5-pro' };
+    for (const k of ['openai', 'anthropic', 'gemini']) if (s.settings.models[k] === OLD[k]) s.settings.models[k] = DEFAULT_MODELS[k];
+  }
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
   (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
   return s;
@@ -1162,11 +1189,13 @@ function chipsFor(a, opts) {
 async function askAI(annId, question, providerOverride) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
   const provider = providerOverride || activeProvider();
-  const ctx = buildContext(a);
   const msg = { id: uid('m'), actor: 'ai', provider, model: state.settings.models[provider],
     type: 'ai_answer', text: '', created_at: nowISO(), pending: true,
     chips: chipsFor(a), external: state.settings.enableWeb, tools: [] };
   a.messages.push(msg); a.updated_at = nowISO(); save(); render();
+  // OpenAI text notes use the agentic ReAct loop (it can pull more of the document as needed).
+  if (provider === 'openai' && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg); return; }
+  const ctx = buildContext(a);
   const passages = retrievePassages(question, a.page);
   const system = [
     `You are a precise reading assistant embedded in a source-linked research workspace, answering about the SELECTED SOURCE and its surrounding context from the SAME document.`,
@@ -1196,6 +1225,123 @@ async function askAI(annId, question, providerOverride) {
     save(); render();
   } catch (e) {
     msg.pending = false; msg.text = ''; msg.error = e.message;
+    save(); render(); toast(errHint(e.message), 'err');
+  }
+}
+/* ---------- agentic ReAct loop (OpenAI): the model gathers exactly the context it needs ---------- */
+async function ensureText(p) { try { const e = await ensurePageText(p); if (e && e.text) return e.text.replace(/\s+/g, ' ').trim(); } catch (x) {} return (pageTextCache[p] && pageTextCache[p].text || '').replace(/\s+/g, ' ').trim(); }
+async function agentSearch(query) {
+  const terms = [...new Set((String(query).toLowerCase().match(/[a-z0-9]{3,}/g) || []))].slice(0, 6);
+  if (!terms.length) return 'No search terms.';
+  const hits = [];
+  for (let p = 1; p <= numPages; p++) {
+    const text = await ensureText(p); if (!text) continue; const low = text.toLowerCase();
+    for (const t of terms) { const i = low.indexOf(t); if (i >= 0) { hits.push(`(page ${p}) …${text.slice(Math.max(0, i - 90), i + 160).trim()}…`); break; } }
+    if (hits.length >= 8) break;
+  }
+  return hits.length ? hits.join('\n') : `No matches for "${query}".`;
+}
+async function agentOutline() {
+  const out = [];
+  for (let p = 1; p <= numPages; p++) {
+    const text = await ensureText(p);
+    (text.match(/(?:^|\s)(\d+(?:\.\d+)*)\s+([A-Z][A-Za-z][^.]{2,60})/g) || []).slice(0, 3).forEach(h => out.push(`p${p}: ${h.trim()}`));
+  }
+  return out.length ? out.slice(0, 40).join('\n') : 'No clear section headings detected.';
+}
+async function agentWeb(query) {
+  try {
+    const r = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'openai', web: true, system: 'Search the web and answer concisely with source links.', user: String(query), userKey: keyFor('openai') || undefined }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error || 'web search failed');
+    return j.text || '(no web results)';
+  } catch (e) { return 'Web search error: ' + (e.message || e); }
+}
+function agentTools() {
+  const t = [
+    { type: 'function', function: { name: 'read_selection_context', description: "Re-read the reader's highlighted selection plus the text immediately around it on its page.", parameters: { type: 'object', properties: {} } } },
+    { type: 'function', function: { name: 'read_page', description: 'Read the full text of a specific page (use for the previous/next section or a referenced page).', parameters: { type: 'object', properties: { page: { type: 'integer', description: '1-based page number' } }, required: ['page'] } } },
+    { type: 'function', function: { name: 'search_document', description: 'Keyword-search the whole document; returns matching snippets with page numbers.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+    { type: 'function', function: { name: 'document_outline', description: 'List detected section headings with their page numbers to navigate the paper.', parameters: { type: 'object', properties: {} } } },
+    { type: 'function', function: { name: 'read_full_document', description: 'Read the entire document text (use for whole-paper summaries; may be truncated if very long).', parameters: { type: 'object', properties: {} } } },
+  ];
+  if (state.settings.enableWeb) t.push({ type: 'function', function: { name: 'web_search', description: 'Search the public web for facts beyond this document. Returns text with source links.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } });
+  return t;
+}
+const TOOL_LABEL = { read_selection_context: 'Re-reading the selection…', read_page: 'Reading a page…', search_document: 'Searching the document…', document_outline: 'Scanning the outline…', read_full_document: 'Reading the full paper…', web_search: 'Searching the web…' };
+async function runAgentTool(a, name, args) {
+  try {
+    if (name === 'read_selection_context') { const c = buildContext(a); return `Selected (page ${c.page}${c.section ? ', ' + c.section : ''}): "${c.evidence}"\n\nSurrounding text: ${c.surrounding || '(none)'}`; }
+    if (name === 'read_page') { const p = clamp(parseInt(args.page) || a.page, 1, numPages); return `Page ${p}:\n${(await ensureText(p)).slice(0, 4500)}`; }
+    if (name === 'search_document') return await agentSearch(args.query || '');
+    if (name === 'document_outline') return await agentOutline();
+    if (name === 'read_full_document') { let out = ''; for (let n = 1; n <= numPages; n++) { out += `\n\n[Page ${n}]\n` + await ensureText(n); if (out.length > 48000) { out += '\n\n[…truncated…]'; break; } } return out.slice(0, 50000); }
+    if (name === 'web_search') return await agentWeb(args.query || '');
+  } catch (e) { return 'Tool error: ' + (e.message || e); }
+  return 'Unknown tool: ' + name;
+}
+async function aiAgentStep(model, messages, tools) {
+  const r = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: 'openai', mode: 'agent', model, messages, tools, userKey: keyFor('openai') || undefined }) });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || `Agent step failed (${r.status})`);
+  return j;
+}
+function agentChips(a, used) {
+  const chips = [`Page ${a.page}`];
+  if (a.section) chips.push(a.section.replace(/^(\d+(\.\d+)*)\s+/, m => 'Section ' + m.trim() + ' ').trim());
+  if (used.has('read_full_document')) chips.push('Read full paper');
+  if (used.has('search_document')) chips.push('Searched document');
+  if (used.has('read_page') || used.has('document_outline')) chips.push('Read related pages');
+  chips.push(a.source_type === 'screenshot' ? 'Used screenshot' : 'Used highlighted text');
+  chips.push(used.has('web_search') ? 'Used web search' : 'No external sources');
+  return chips;
+}
+async function askAIAgent(a, question, msg) {
+  const model = state.settings.models.openai || 'gpt-5.4';
+  const c = buildContext(a);
+  const system = [
+    `You are a precise research assistant embedded in a source-linked reading workspace, answering about the document the reader is viewing.`,
+    `You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page (e.g. the previous/next section), search the document, get the outline, read the whole paper, ${state.settings.enableWeb ? 'or search the web' : ''}. Use them when the selection alone is not enough — e.g. to summarize the whole paper, verify a claim elsewhere, or pull an adjacent section. Prefer the smallest sufficient context; call tools only as needed, then answer.`,
+    `Answer style: lead with the direct answer, be concise (no preamble or fluff), and ground claims in the document.`,
+  ].join('\n');
+  const messages = [
+    { role: 'system', content: system },
+    { role: 'user', content: [
+      `The reader selected this passage on page ${c.page}${c.section ? `, ${c.section}` : ''}:`,
+      `"""${c.evidence || '(no text)'}"""`,
+      c.surrounding ? `Immediate surrounding text: ${c.surrounding.slice(0, 700)}` : '',
+      c.thread ? `Conversation so far on this note:\n${c.thread}` : '',
+      `The document has ${numPages} pages. Reader's question: ${question}`,
+    ].filter(Boolean).join('\n\n') },
+  ];
+  const tools = agentTools(); const used = new Set();
+  try {
+    let last = '';
+    for (let i = 0; i < 5; i++) {
+      msg.status = i === 0 ? 'Thinking…' : 'Gathering context…'; save(); render();
+      const step = await aiAgentStep(model, messages, tools);
+      last = step.content || last;
+      if (step.tool_calls && step.tool_calls.length) {
+        messages.push({ role: 'assistant', content: step.content || '', tool_calls: step.tool_calls });
+        for (const tc of step.tool_calls) {
+          let args = {}; try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
+          used.add(tc.function.name);
+          msg.status = TOOL_LABEL[tc.function.name] || 'Working…'; save(); render();
+          const result = await runAgentTool(a, tc.function.name, args);
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result).slice(0, 50000) });
+        }
+        continue;
+      }
+      msg.text = step.content || last || '(no answer)'; msg.pending = false; msg.status = null;
+      msg.chips = agentChips(a, used);
+      a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(question, a.source_type, 'ai_answer')]));
+      save(); render(); return;
+    }
+    msg.text = last || 'I gathered context but could not finalize an answer — try rephrasing.'; msg.pending = false; msg.status = null; msg.chips = agentChips(a, used);
+    save(); render();
+  } catch (e) {
+    msg.pending = false; msg.status = null; msg.text = ''; msg.error = e.message;
     save(); render(); toast(errHint(e.message), 'err');
   }
 }
@@ -1331,8 +1477,9 @@ function msgActions(a, m, isFirst) {
     + `</span>`;
 }
 function editBox(a, m) {
+  const reask = m.actor === 'you' ? `<button class="eb-reask" data-reask="${m.id}" data-ann="${a.id}">Save &amp; re-ask AI</button>` : '';
   return `<div class="edit-wrap"><textarea class="edit-input" data-editing="${m.id}" data-ann="${a.id}">${esc(m.text || '')}</textarea>`
-    + `<div class="edit-actions"><button class="eb-save" data-savemsg="${m.id}" data-ann="${a.id}">Save</button><button class="eb-cancel" data-canceledit="1">Cancel</button></div></div>`;
+    + `<div class="edit-actions"><button class="eb-save" data-savemsg="${m.id}" data-ann="${a.id}">Save</button>${reask}<button class="eb-cancel" data-canceledit="1">Cancel</button></div></div>`;
 }
 function msgCard(a, m, isFirst) {
   const head = `<div class="card-h">${actorAvatar(m)}<span class="who">${esc(actorName(m))}</span><span class="when">${timeLabel(m.created_at)}</span>${msgActions(a, m, isFirst)}</div>`;
@@ -1345,10 +1492,14 @@ function msgCard(a, m, isFirst) {
   }
   if (m.type === 'comment') body += editing ? editBox(a, m) : `<div class="msg">${m.text ? esc(m.text).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`) : ''}</div>`;
   if (m.type === 'ai_answer') {
-    if (m.pending) body += `<div class="msg"><span class="typing">Thinking<i></i><i></i><i></i></span></div>`;
+    if (m.pending) body += `<div class="msg"><span class="typing">${esc(m.status || 'Thinking')}<i></i><i></i><i></i></span></div>`;
     else if (m.error) body += `<div class="msg" style="color:#B91C1C">⚠ ${esc(m.error)}</div>`;
     else if (editing) body += editBox(a, m);
-    else { body += `<div class="msg">${mdLite(m.text)}</div>` + chipRow(m.chips) + `<div class="disc">ⓘ AI-generated answer${m.model ? ' · ' + esc(m.model) : ''}</div>`; }
+    else {
+      // Answer first; provenance chips are tucked into a collapsed “sources” disclosure.
+      body += `<div class="msg">${mdLite(m.text)}</div>`
+        + `<details class="prov"><summary><span class="disc-i">ⓘ</span> AI-generated${m.model ? ' · ' + esc(m.model) : ''}<span class="prov-more"> · sources</span></summary>${chipRow(m.chips)}</details>`;
+    }
   }
   if (m.type === 'generated_visual') {
     body += `<div class="badge-gen">Generated visual</div>`;
@@ -1460,6 +1611,7 @@ function render() {
   $$('[data-edit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = b.dataset.edit; render(); const ta = list.querySelector('.edit-input'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } });
   $$('[data-canceledit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = null; render(); });
   $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
+  $$('[data-reask]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveAndReask(b.dataset.ann, b.dataset.reask); });
   $$('[data-delnote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteNote(b.dataset.delnote); });
   $$('[data-delmsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteMsg(b.dataset.ann, b.dataset.delmsg); });
   $$('[data-quotemore]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); const q = b.parentElement.querySelector('.linked-quote'); const on = q.classList.toggle('clip'); b.textContent = on ? 'Show more' : 'Show less'; });
@@ -1485,6 +1637,19 @@ function saveMsgEdit(annId, msgId) {
   const m = a.messages.find(x => x.id === msgId); if (!m) return;
   const ta = document.querySelector(`.edit-input[data-editing="${msgId}"]`); if (ta) m.text = ta.value.trim();
   m.edited = true; a.updated_at = nowISO(); state.ui.editing = null; save(); render();
+}
+// Edit the user's question AND re-run the AI: drop the stale answer(s) right after it, then re-ask.
+function saveAndReask(annId, msgId) {
+  const a = state.annotations.find(x => x.id === annId); if (!a) return;
+  const m = a.messages.find(x => x.id === msgId); if (!m) return;
+  const ta = document.querySelector(`.edit-input[data-editing="${msgId}"]`);
+  const newText = ta ? ta.value.trim() : (m.text || ''); if (!newText) return;
+  m.text = newText; m.edited = true;
+  const idx = a.messages.findIndex(x => x.id === msgId);
+  while (idx + 1 < a.messages.length && a.messages[idx + 1].actor === 'ai') a.messages.splice(idx + 1, 1);
+  state.ui.editing = null; a.updated_at = nowISO(); save(); render();
+  const prov = /@claude/i.test(newText) ? 'anthropic' : /@gpt/i.test(newText) ? 'openai' : /@gemini/i.test(newText) ? 'gemini' : undefined;
+  askAI(annId, newText.replace(/@(ai|gpt|claude|gemini)/ig, '').trim() || newText, prov);
 }
 function deleteMsg(annId, msgId) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;

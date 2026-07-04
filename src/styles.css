@@ -192,6 +192,15 @@ svg{display:block}
   text-overflow:ellipsis;white-space:nowrap}
 .chip.dim{color:var(--muted)}
 .disc{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11.5px;margin-top:9px}
+/* collapsed sources/provenance disclosure under an AI answer */
+.prov{margin-top:9px}
+.prov>summary{list-style:none;cursor:pointer;color:var(--faint);font-size:11.5px;display:inline-flex;align-items:center;gap:5px;user-select:none}
+.prov>summary::-webkit-details-marker{display:none}
+.prov>summary .disc-i{opacity:.8}
+.prov>summary .prov-more{color:var(--blue);font-weight:600}
+.prov[open]>summary .prov-more{color:var(--muted);font-weight:500}
+.prov>summary:hover .prov-more{text-decoration:underline}
+.prov .chips{margin-top:8px}
 .tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
 .tag{border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:600;letter-spacing:.01em}
 .tag.q{background:#EFF6FF;color:#1D4ED8}.tag.claim{background:#F1F5F9;color:#334155}
@@ -212,6 +221,8 @@ svg{display:block}
 .edit-input{width:100%;border:1px solid var(--blue);border-radius:9px;padding:8px 10px;font-size:13.5px;line-height:1.5;resize:vertical;min-height:62px;background:var(--surface);color:var(--ink);outline:none;font-family:inherit}
 .edit-actions{display:flex;gap:8px;margin-top:8px}
 .eb-save{background:var(--blue);color:#fff;border-radius:8px;padding:6px 14px;font-weight:600;font-size:12.5px}
+.eb-reask{background:var(--violet-weak);color:var(--violet);border-radius:8px;padding:6px 12px;font-weight:600;font-size:12.5px}
+.eb-reask:hover{filter:brightness(.97)}
 .eb-cancel{color:var(--muted);border-radius:8px;padding:6px 12px;font-weight:600;font-size:12.5px}
 .eb-cancel:hover{background:var(--surface-2)}
 /* inline thread composer inside the active note card */
@@ -326,12 +337,23 @@ svg{display:block}
 .ex-resp{margin-top:12px}
 
 @media print{
+  @page{margin:12mm}
   body{background:#fff}
   #app,#exportView .ex-top,#exportView .ex-opts,#connectors,#toasts{display:none !important}
   #exportView{position:static}.ex-body{display:block}
   .ex-preview{padding:0;overflow:visible}
-  .ex-sheet{box-shadow:none;border:0;border-radius:0;max-width:none;padding:0}
-  .ex-item{break-inside:avoid}
+  .ex-sheet{box-shadow:none;border:0;border-radius:0;max-width:none;padding:0;font-size:9.5px;line-height:1.4}
+  .ex-item{break-inside:avoid;padding:12px 0;gap:16px}
+  /* smaller type for the printed evidence packet */
+  .ex-sheet h2{font-size:15px}
+  .ex-sheet .dt{font-size:9px;padding-bottom:10px}
+  .ex-loc{font-size:10.5px;margin-bottom:8px}
+  .ex-num{width:16px;height:16px;font-size:9px;margin-right:6px}
+  .ex-sub{font-size:8.5px;margin-bottom:4px}
+  .ex-quote{font-size:9px;padding:8px 10px}
+  .ex-resp,.ex-comment .who{font-size:9.5px}
+  .ex-sheet .msg,.ex-sheet .disc{font-size:9.5px}
+  .ex-sheet .chip,.ex-sheet .tag{font-size:8px;padding:1px 6px}
 }
 /* ---- reader fallback (shown when PDF engine can't start, e.g. sandboxed preview) ---- */
 #readerFallback{display:flex;justify-content:center;padding:56px 24px}
