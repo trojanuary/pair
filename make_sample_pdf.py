@@ -269,9 +269,9 @@ par("In homogeneous, isotropic turbulence, the energy spectrum E(k) exhibits a c
 S.append(eq(r"E(k) = C_K\,\varepsilon^{2/3}\,k^{-5/3},", "(3)"))
 par("where $\\varepsilon$ is the mean energy dissipation rate per unit mass.")
 S.append(Image(FIG, width=4.25*inch, height=2.74*inch))
-S.append(P("<b>Figure 3:</b> Schematic of the turbulence kinetic energy spectrum. The spectrum shows three distinct "
+S.append(Paragraph("<b>Figure 3:</b> " + RT("Schematic of the turbulence kinetic energy spectrum. The spectrum shows three distinct "
     "regions: the energy-containing range at low wavenumbers, the inertial subrange where $E(k)\\propto k^{-5/3}$, "
-    "and the dissipation range at high wavenumbers.", cap))
+    "and the dissipation range at high wavenumbers."), cap))
 par("The inertial subrange spans wavenumbers for which energy is transferred conservatively from large to small "
     "scales without loss. Deviations from $-5/3$ scaling occur near the boundaries of this range.")
 
@@ -338,8 +338,8 @@ par("Reynolds-averaged Navier-Stokes (RANS) methods model the entire spectrum of
     "stresses and remain the workhorse of industrial computational fluid dynamics. Hybrid approaches blend LES in "
     "separated regions with RANS near walls.")
 S.append(Image(FIG2, width=4.5*inch, height=2.55*inch))
-S.append(P("<b>Figure 6:</b> Illustrative resolved fluctuating velocity for DNS, LES, and RANS treatments of the "
-    "same flow; higher-fidelity methods resolve more of the spectrum.", cap))
+S.append(Paragraph("<b>Figure 6:</b> " + RT("Illustrative resolved fluctuating velocity for DNS, LES, and RANS treatments of the "
+    "same flow; higher-fidelity methods resolve more of the spectrum."), cap))
 H2("6.1","Validation Against the Spectrum")
 par("A standard validation exercise is to compute the energy spectrum from a simulation and compare its slope over "
     "the inertial subrange against the $-5/3$ reference. Departures indicate insufficient resolution, excessive "

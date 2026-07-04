@@ -46,7 +46,7 @@ function defaultState() {
     annotations: [],
     docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
     ui: { page: 1, zoom: 1.15, tool: 'cursor', filter: 'all', autoscroll: true, sort: 'time',
-          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample', libView: 'home' },
+          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample', libView: 'home', continuous: false },
     seeded: false,
   };
 }
@@ -256,7 +256,9 @@ async function initPdf(bytes) {
   pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
   numPages = pdfDoc.numPages;
   $('#pageTotal').textContent = '/ ' + numPages;
-  await renderPage(clamp(state.ui.page, 1, numPages));
+  teardownContinuous();
+  await renderPage(clamp(state.ui.page, 1, numPages));   // renders single elements (also seeds `viewport`)
+  if (state.ui.continuous) await buildContinuous();
 }
 
 async function renderPage(n) {
@@ -295,6 +297,76 @@ async function renderPage(n) {
   requestAnimationFrame(drawConnector);
 }
 
+/* ---------- continuous (scroll-through-all-pages) mode ---------- */
+let _contIO = null;
+function contHost(create) {
+  let h = $('#contPages');
+  if (!h && create) { h = el('<div id="contPages"></div>'); $('#rdScroll').insertBefore(h, $('#pageWrap')); }
+  return h;
+}
+async function renderInto(n, pg) {
+  if (!pdfDoc || !pg || pg._rendering) return; pg._rendering = true;
+  try {
+    const page = await pdfDoc.getPage(n);
+    const vp = page.getViewport({ scale: state.ui.zoom });
+    const canvas = pg.querySelector('canvas'), ctx = canvas.getContext('2d');
+    canvas.width = Math.floor(vp.width * outputScale); canvas.height = Math.floor(vp.height * outputScale);
+    canvas.style.width = vp.width + 'px'; canvas.style.height = vp.height + 'px';
+    pg.style.width = vp.width + 'px'; pg.style.height = vp.height + 'px'; pg.style.minHeight = '';
+    await page.render({ canvasContext: ctx, viewport: vp, transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null }).promise;
+    const tl = pg.querySelector('.textLayer'); tl.innerHTML = ''; tl.style.width = vp.width + 'px'; tl.style.height = vp.height + 'px'; tl.style.setProperty('--scale-factor', state.ui.zoom);
+    const tc = await page.getTextContent();
+    await pdfjsLib.renderTextLayer({ textContent: tc, container: tl, viewport: vp, textDivs: [] }).promise;
+    pageTextCache[n] = { text: tc.items.map(i => i.str).join(' '), items: tc.items, vp };
+    pg._vp = vp; pg._rendered = true;
+    drawHighlights(); drawPins();
+  } catch (e) { /* leave placeholder */ } finally { pg._rendering = false; }
+}
+async function buildContinuous() {
+  if (!pdfDoc) return;
+  const _pw = $('#pageWrap'); if (_pw) _pw.style.display = 'none';
+  const _fb = $('#readerFallback'); if (_fb) _fb.remove();
+  const host = contHost(true); host.innerHTML = ''; if (_contIO) { _contIO.disconnect(); _contIO = null; }
+  const est = viewport ? viewport.height : 900;
+  for (let n = 1; n <= numPages; n++) {
+    const pg = el(`<div class="pg" data-page="${n}"><canvas></canvas><div class="textLayer"></div><div class="overlay"></div><div class="overlay pins"></div></div>`);
+    pg.style.minHeight = est + 'px';
+    host.appendChild(pg);
+  }
+  _contIO = new IntersectionObserver(ents => ents.forEach(e => { if (e.isIntersecting && !e.target._rendered) renderInto(+e.target.dataset.page, e.target); }),
+    { root: $('#rdScroll'), rootMargin: '1000px 0px' });
+  $$('#contPages .pg').forEach(pg => _contIO.observe(pg));
+  const first = clamp(state.ui.page, 1, numPages);
+  await renderInto(first, $(`#contPages .pg[data-page="${first}"]`));
+  scrollToPage(first, false);
+}
+function teardownContinuous() {
+  if (_contIO) { _contIO.disconnect(); _contIO = null; }
+  const h = $('#contPages'); if (h) h.remove();
+}
+function scrollToPage(n, smooth) {
+  const rd = $('#rdScroll'), pg = $(`#contPages .pg[data-page="${n}"]`); if (!rd || !pg) return;
+  rd.scrollTop += pg.getBoundingClientRect().top - rd.getBoundingClientRect().top - 12;
+}
+function currentContinuousPage() {
+  const rd = $('#rdScroll'); if (!rd) return state.ui.page; const mid = rd.getBoundingClientRect().top + rd.clientHeight * 0.35;
+  let best = state.ui.page, bestD = Infinity;
+  $$('#contPages .pg').forEach(pg => { const r = pg.getBoundingClientRect(); const d = Math.abs(r.top - mid); if (r.bottom > rd.getBoundingClientRect().top && d < bestD) { bestD = d; best = +pg.dataset.page; } });
+  return best;
+}
+async function setContinuous(on) {
+  state.ui.continuous = on; save();
+  const btn = $('#btnContinuous'); if (btn) btn.classList.toggle('active', on);
+  if (on) { if (state.ui.tool === 'shot') setTool('cursor'); await buildContinuous(); }
+  else { teardownContinuous(); const _pw = $('#pageWrap'); if (_pw) _pw.style.display = ''; await renderPage(state.ui.page); }
+  drawHighlights(); drawPins();
+}
+async function gotoPage(n) {
+  n = clamp(n, 1, numPages); state.ui.page = n; $('#pageInput').value = n;
+  if (state.ui.continuous) { const pg = $(`#contPages .pg[data-page="${n}"]`); if (pg && !pg._rendered) await renderInto(n, pg); scrollToPage(n, true); requestAnimationFrame(drawConnector); }
+  else await renderPage(n);
+}
+
 /* ---------- source resolution (quote -> page/rects) ---------- */
 async function ensurePageText(n) {
   if (pageTextCache[n]) return pageTextCache[n];
@@ -328,19 +400,24 @@ function onTextSelect() {
   const text = sel && sel.toString().trim();
   const pop = $('#selPop');
   if (!text || text.length < 2) { pop.classList.add('hidden'); return; }
-  const tl = $('#textLayer'); const tlBox = tl.getBoundingClientRect();
   const range = sel.getRangeAt(0);
-  if (!tl.contains(range.commonAncestorContainer)) { pop.classList.add('hidden'); return; }
+  // Find the text layer that holds this selection (single mode: #textLayer; continuous: a .pg .textLayer)
+  let node = range.commonAncestorContainer; node = node.nodeType === 1 ? node : node.parentElement;
+  const tl = node && node.closest ? node.closest('.textLayer') : null;
+  if (!tl) { pop.classList.add('hidden'); return; }
+  const pgEl = tl.closest('.pg');
+  const selPage = pgEl ? +pgEl.dataset.page : state.ui.page;
+  const tlBox = tl.getBoundingClientRect();
   const rects = [...range.getClientRects()].filter(r => r.width > 1 && r.height > 1).map(r => ({
     x: (r.left - tlBox.left) / tlBox.width, y: (r.top - tlBox.top) / tlBox.height,
     w: r.width / tlBox.width, h: r.height / tlBox.height,
   }));
   if (!rects.length) { pop.classList.add('hidden'); return; }
-  const pt = pageTextCache[state.ui.page] || { text: '' };
+  const pt = pageTextCache[selPage] || { text: '' };
   const idx = pt.text.replace(/\s+/g, ' ').toLowerCase().indexOf(text.replace(/\s+/g, ' ').slice(0, 30).toLowerCase());
   const cleanText = pt.text.replace(/\s+/g, ' ');
   pendingSel = {
-    text, rects, page: state.ui.page,
+    text, rects, page: selPage,
     prefix: idx > 0 ? cleanText.slice(Math.max(0, idx - 32), idx) : '',
     suffix: idx >= 0 ? cleanText.slice(idx + text.length, idx + text.length + 32) : '',
     section: sectionForIndex(pt.text, idx < 0 ? 0 : idx),
@@ -381,6 +458,7 @@ function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
 /* ---------- screenshot capture ---------- */
 let cap = null;
 function setTool(t) {
+  if (t === 'shot' && state.ui.continuous) { toast('Switch to single-page view to capture a figure.'); return; }
   state.ui.tool = t; save();
   $$('.tool').forEach(b => b.classList.remove('active', 'hl', 'shot'));
   const map = { cursor: '#toolCursor', text: '#toolText', highlight: '#toolHi', comment: '#toolComment', shot: '#toolShot' };
@@ -437,40 +515,49 @@ function renumber() {
     .sort((a, b) => (a.page - b.page) || (((a.rects && a.rects[0] || {}).y || 0) - ((b.rects && b.rects[0] || {}).y || 0)))
     .forEach((a, i) => { a.anchor = i + 1; });
 }
+// The set of on-page render targets for the current mode: single page (#overlay/#pins) or,
+// in continuous mode, every rendered .pg wrapper. Keeps highlights/pins/selection unified.
+function pageWrappers() {
+  if (state.ui.continuous) {
+    return $$('#contPages .pg').filter(pg => pg._vp).map(pg => ({ page: +pg.dataset.page, vp: pg._vp, overlay: pg.querySelector('.overlay'), pins: pg.querySelector('.pins') }));
+  }
+  if (!viewport) return [];
+  return [{ page: state.ui.page, vp: viewport, overlay: $('#overlay'), pins: $('#pins') }];
+}
 function drawHighlights() {
-  const ov = $('#overlay'); if (!ov) return; ov.innerHTML = ''; if (!viewport) return;
-  ov.style.width = viewport.width + 'px'; ov.style.height = viewport.height + 'px';
-  state.annotations.filter(a => inActiveDoc(a) && a.page === state.ui.page).forEach(a => {
-    if (a.source_type === 'free_comment') return;   // point comments show only a pin, no highlight box
-    (a.rects || []).forEach(rc => {
-      const cls = a.source_type === 'screenshot' ? 'figbox' : (a.hlColor === 'box' ? 'box' : (a.hlColor === 'yellow' ? 'yellow' : 'text'));
-      const d = el(`<div class="hl-rect ${cls}"></div>`);
-      Object.assign(d.style, { left: rc.x * viewport.width + 'px', top: rc.y * viewport.height + 'px',
-        width: rc.w * viewport.width + 'px', height: rc.h * viewport.height + 'px' });
-      d.onclick = () => selectAnnotation(a.id, true);
-      ov.appendChild(d);
+  pageWrappers().forEach(w => {
+    const ov = w.overlay; if (!ov) return; ov.innerHTML = ''; ov.style.width = w.vp.width + 'px'; ov.style.height = w.vp.height + 'px';
+    state.annotations.filter(a => inActiveDoc(a) && a.page === w.page).forEach(a => {
+      if (a.source_type === 'free_comment') return;   // point comments show only a pin, no highlight box
+      (a.rects || []).forEach(rc => {
+        const cls = a.source_type === 'screenshot' ? 'figbox' : (a.hlColor === 'box' ? 'box' : (a.hlColor === 'yellow' ? 'yellow' : 'text'));
+        const d = el(`<div class="hl-rect ${cls}"></div>`);
+        Object.assign(d.style, { left: rc.x * w.vp.width + 'px', top: rc.y * w.vp.height + 'px', width: rc.w * w.vp.width + 'px', height: rc.h * w.vp.height + 'px' });
+        d.onclick = () => selectAnnotation(a.id, true);
+        ov.appendChild(d);
+      });
     });
   });
 }
 function drawPins() {
-  const pins = $('#pins'); if (!pins) return; pins.innerHTML = ''; if (!viewport) return;
-  pins.style.width = viewport.width + 'px'; pins.style.height = viewport.height + 'px';
-  state.annotations.filter(a => inActiveDoc(a) && a.page === state.ui.page && a.rects && a.rects.length).forEach(a => {
-    const rc = a.rects[0];
-    const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}">${a.anchor}</div>`);
-    p.style.left = (rc.x + rc.w) * viewport.width + 'px';
-    p.style.top = rc.y * viewport.height + 'px';
-    p.onclick = () => selectAnnotation(a.id, false, true);
-    pins.appendChild(p);
+  pageWrappers().forEach(w => {
+    const pins = w.pins; if (!pins) return; pins.innerHTML = ''; pins.style.width = w.vp.width + 'px'; pins.style.height = w.vp.height + 'px';
+    state.annotations.filter(a => inActiveDoc(a) && a.page === w.page && a.rects && a.rects.length).forEach(a => {
+      const rc = a.rects[0];
+      const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}" data-ann="${a.id}">${a.anchor}</div>`);
+      p.style.left = (rc.x + rc.w) * w.vp.width + 'px';
+      p.style.top = rc.y * w.vp.height + 'px';
+      p.onclick = () => selectAnnotation(a.id, false, true);
+      pins.appendChild(p);
+    });
   });
   drawConnector();
 }
 function drawConnector() {
   const svg = $('#connectors'); if (!svg) return; while (svg.firstChild) svg.removeChild(svg.firstChild);
-  const pinsEl = $('#pins'); if (!pinsEl) return;
   const a = state.annotations.find(x => x.id === state.ui.activeId);
-  if (!a || a.page !== state.ui.page) return;
-  const pin = [...pinsEl.children].find(p => p.textContent == String(a.anchor));
+  if (!a) return;
+  const pin = document.querySelector(`#rdScroll .pin[data-ann="${a.id}"]`);
   const card = $(`.card[data-ann="${a.id}"]`);
   if (!pin || !card) return;
   const pr = pin.getBoundingClientRect(), cr = card.getBoundingClientRect();
@@ -1405,9 +1492,11 @@ function wire() {
   $('#fileInput').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; try { await openPdfFile(f); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
   $$('.nav-item[data-view]').forEach(n => n.onclick = () => { state.ui.libView = n.dataset.view; save(); renderTree(); });
   // reader top
-  $('#pagePrev').onclick = () => renderPage(state.ui.page - 1);
-  $('#pageNext').onclick = () => renderPage(state.ui.page + 1);
-  $('#pageInput').onchange = e => renderPage(parseInt(e.target.value) || 1);
+  $('#pagePrev').onclick = () => gotoPage(state.ui.page - 1);
+  $('#pageNext').onclick = () => gotoPage(state.ui.page + 1);
+  $('#pageInput').onchange = e => gotoPage(parseInt(e.target.value) || 1);
+  $('#btnContinuous').onclick = () => setContinuous(!state.ui.continuous);
+  $('#btnContinuous').classList.toggle('active', !!state.ui.continuous);
   $('#zoomIn').onclick = () => { state.ui.zoom = clamp(state.ui.zoom + 0.15, 0.5, 3); updateZoom(); };
   $('#zoomOut').onclick = () => { state.ui.zoom = clamp(state.ui.zoom - 0.15, 0.5, 3); updateZoom(); };
   $('#toolCursor').onclick = () => setTool('cursor');
@@ -1447,12 +1536,12 @@ function wire() {
   // Composing now happens inline inside the active note card (wired in render); hide the old bottom bar.
   const gc = $('#composer'); if (gc) gc.classList.add('hidden');
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
-  $('#rdScroll').addEventListener('scroll', () => requestAnimationFrame(drawConnector));
+  $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
   $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
   initCaptureMask();
 }
-function updateZoom() { $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%'; renderPage(state.ui.page); save(); }
+function updateZoom() { $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%'; save(); if (state.ui.continuous) buildContinuous(); else renderPage(state.ui.page); }
 function showReaderFallback(msg) {
   // Keep #pageWrap (and its #overlay/#pins nodes) intact — just hide it and show a
   // sibling message. Destroying #pageWrap here previously nulled #overlay/#pins and
@@ -1494,7 +1583,7 @@ async function boot() {
     ]);
   } catch (e) { pdfOk = false; showReaderFallback(e && e.message); }
   if (!state.seeded && !state.annotations.length) { try { await seed(); } catch (e) { console.warn('seed failed', e); } }
-  if (pdfOk) { await renderPage(state.ui.page); }
+  if (pdfOk && !state.ui.continuous) { await renderPage(state.ui.page); }
   render(); drawHighlights(); drawPins();
   // Pre-cache all page text in the background so AI context retrieval + document search
   // can draw on the whole document (not just visited pages).
