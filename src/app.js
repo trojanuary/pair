@@ -42,6 +42,7 @@ function defaultState() {
       keys: { openai: '', anthropic: '', gemini: '' },
       enableVisuals: true, enableWeb: true, enablePython: true,
       actorName: 'You', actorInitials: 'YO',
+      google: { clientId: '', apiKey: '' },
     },
     annotations: [],
     docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
@@ -62,6 +63,7 @@ function migrateState(s) {
   if (!s.ui.libView) s.ui.libView = 'home';
   // one-time: turn all tools on by default (respects later manual changes via the flag)
   if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings.enablePython = true; s.settings._toolsDefaulted = true; }
+  if (s.settings && !s.settings.google) s.settings.google = { clientId: '', apiKey: '' };
   // upgrade anyone still on the previous default models to the current generation
   if (s.settings && s.settings.models) {
     const OLD = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022', gemini: 'gemini-1.5-pro' };
@@ -155,16 +157,101 @@ async function switchDoc(id) {
   render(); drawHighlights(); drawPins();
   setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 500);
 }
-async function openPdfFile(f) {
-  if (!f) return;
-  const buf = new Uint8Array(await f.arrayBuffer());
-  const id = uid('doc'), name = f.name || 'Document.pdf';
+// Add PDF bytes as a new document and open it. `extra` merges into the doc record
+// (e.g. { kind:'drive', driveId } for Google Drive files).
+async function openPdfBytes(buf, name, extra) {
+  const id = uid('doc');
   _docBytes[id] = buf; idbPut('pdf:' + id, buf);
-  state.docs.push({ id, name, kind: 'user', addedAt: nowISO(), lastOpened: nowISO() });
+  state.docs.push(Object.assign({ id, name: name || 'Document.pdf', kind: 'user', addedAt: nowISO(), lastOpened: nowISO() }, extra || {}));
   state.ui.libView = 'home'; save();
   await switchDoc(id);
   updateStorage();
-  toast('Opened ' + name + ' — highlight text or capture a figure to start.');
+  toast('Opened ' + (name || 'document') + ' — highlight text or capture a figure to start.');
+  return id;
+}
+async function openPdfFile(f) {
+  if (!f) return;
+  const buf = new Uint8Array(await f.arrayBuffer());
+  await openPdfBytes(buf, f.name || 'Document.pdf', { kind: 'user' });
+}
+
+/* ---------- Google Drive integration (client-side: GIS OAuth token + Google Picker) ----------
+   Open PDFs straight from Drive and save an evidence-notes JSON back. Uses the least-privilege
+   drive.file scope: the app only ever sees files the user explicitly picks or that it creates.
+   Requires a Google OAuth Web Client ID + browser API key (set in Settings → Google Drive). */
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+let _gapiPickerReady = false, _driveToken = null, _driveTokenExp = 0;
+function loadScriptOnce(src) {
+  return new Promise((res, rej) => {
+    if ([...document.scripts].some(s => s.src === src)) return res();
+    const el = document.createElement('script'); el.src = src; el.async = true; el.defer = true;
+    el.onload = () => res(); el.onerror = () => rej(new Error('Failed to load ' + src));
+    document.head.appendChild(el);
+  });
+}
+function googleCfg() { return (state.settings && state.settings.google) || {}; }
+function driveConfigured() { const g = googleCfg(); return !!(g.clientId && g.apiKey); }
+async function ensureGoogle() {
+  if (!driveConfigured()) { toast('Add your Google Client ID + API key in Settings → Google Drive first.', 'err'); openSettings(); return false; }
+  await loadScriptOnce('https://accounts.google.com/gsi/client');
+  await loadScriptOnce('https://apis.google.com/js/api.js');
+  if (!(window.google && google.accounts && google.accounts.oauth2)) throw new Error('Google Identity failed to load (check your network / ad-blocker).');
+  if (!_gapiPickerReady) { await new Promise((res, rej) => window.gapi.load('picker', { callback: res, onerror: () => rej(new Error('Google Picker failed to load')) })); _gapiPickerReady = true; }
+  return true;
+}
+function getDriveToken(interactive) {
+  return new Promise((res, rej) => {
+    if (_driveToken && Date.now() < _driveTokenExp - 60000) return res(_driveToken);
+    try {
+      const tc = google.accounts.oauth2.initTokenClient({
+        client_id: googleCfg().clientId, scope: GDRIVE_SCOPE,
+        callback: (resp) => { if (resp && resp.error) return rej(new Error(resp.error)); _driveToken = resp.access_token; _driveTokenExp = Date.now() + ((resp.expires_in || 3600) * 1000); res(_driveToken); },
+        error_callback: (e) => rej(new Error((e && (e.type || e.message)) || 'Google sign-in was cancelled')),
+      });
+      tc.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+    } catch (e) { rej(e); }
+  });
+}
+async function openFromDrive() {
+  try {
+    if (!(await ensureGoogle())) return;
+    const token = await getDriveToken(true);
+    const view = new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/pdf').setMode(google.picker.DocsViewMode.LIST);
+    new google.picker.PickerBuilder()
+      .addView(view).setOAuthToken(token).setDeveloperKey(googleCfg().apiKey)
+      .setTitle('Open a PDF from Google Drive')
+      .setCallback(async (data) => {
+        if (!data || data.action !== google.picker.Action.PICKED) return;
+        const d = data.docs && data.docs[0]; if (!d) return;
+        toast('Downloading “' + (d.name || 'file') + '” from Drive…');
+        try {
+          const r = await fetch('https://www.googleapis.com/drive/v3/files/' + d.id + '?alt=media&supportsAllDrives=true', { headers: { Authorization: 'Bearer ' + token } });
+          if (!r.ok) throw new Error('download failed (' + r.status + ')');
+          const buf = new Uint8Array(await r.arrayBuffer());
+          await openPdfBytes(buf, d.name || 'Drive.pdf', { kind: 'drive', driveId: d.id });
+        } catch (e) { toast('Could not open from Drive: ' + (e.message || e), 'err'); }
+      }).build().setVisible(true);
+  } catch (e) { toast('Google Drive: ' + (e.message || e), 'err'); }
+}
+async function saveNotesToDrive() {
+  const mine = state.annotations.filter(inActiveDoc);
+  if (!mine.length) { toast('No notes to save for this document yet.', 'err'); return; }
+  try {
+    if (!(await ensureGoogle())) return;
+    const token = await getDriveToken(false);
+    const doc = activeDoc();
+    const payload = { document: doc.name, exportedAt: nowISO(), noteCount: mine.length,
+      notes: mine.map(a => ({ page: a.page, section: a.section, type: a.source_type, quote: a.selected_text || undefined,
+        tags: [...(a.auto_tags || []), ...(a.manual_tags || [])],
+        messages: (a.messages || []).map(m => ({ who: m.actor === 'ai' ? (PROVIDER_LABEL[m.provider] || 'AI') : actorName(m), type: m.type, text: m.text || m.title || '', chips: m.chips })) })) };
+    const name = (doc.name || 'document').replace(/\.pdf$/i, '') + ' — notes.json';
+    const boundary = 'brdr_' + uid('b');
+    const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, mimeType: 'application/json' })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload, null, 2)}\r\n--${boundary}--`;
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + boundary }, body });
+    if (!r.ok) throw new Error('upload failed (' + r.status + ')');
+    toast('Saved “' + name + '” to your Google Drive.');
+  } catch (e) { toast('Save to Drive failed: ' + (e.message || e), 'err'); }
 }
 function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
 function trashDoc(id) {   // soft delete -> Trash view
@@ -1354,6 +1441,9 @@ function openNotesMenu(anchor) {
     { label: 'Mark all resolved', onClick: () => { state.annotations.forEach(a => a.resolved = true); save(); render(); } },
     { label: 'Mark all unresolved', onClick: () => { state.annotations.forEach(a => a.resolved = false); save(); render(); } },
     { sep: true },
+    { label: 'Save notes to Google Drive', onClick: () => saveNotesToDrive() },
+    { label: 'Export annotations (PDF)…', onClick: () => openExport() },
+    { sep: true },
     { label: 'Clear all notes', onClick: () => { if (confirm('Delete all notes?')) { state.annotations = []; state.ui.activeId = null; save(); render(); drawHighlights(); drawPins(); } } },
   ]);
 }
@@ -1385,6 +1475,11 @@ function openSettings(note) {
         <div class="chk"><div class="sw ${s.enableWeb ? 'on' : ''}" id="tgWeb"><i></i></div> Allow external web search (changes provenance to “Used web search”)</div>
         <div class="chk"><div class="sw ${s.enablePython ? 'on' : ''}" id="tgPy"><i></i></div> Enable Python tool use (stub)</div>
       </div>
+      <div class="field"><label>Google Drive (open &amp; save PDFs)</label>
+        <input id="gClientId" placeholder="OAuth Client ID (…apps.googleusercontent.com)" value="${esc((s.google || {}).clientId || '')}">
+        <input id="gApiKey" type="password" placeholder="Browser API key (AIza…)" value="${esc((s.google || {}).apiKey || '')}" style="margin-top:8px">
+        <div class="hint">Create a Google Cloud project → enable the <b>Google Drive API</b> + <b>Google Picker API</b> → make an <b>OAuth Web Client ID</b> (add this site to Authorized JavaScript origins) and a <b>browser API key</b>. Uses the least‑privilege <code>drive.file</code> scope — the app only sees PDFs you pick. Keys stay in this browser.</div>
+      </div>
       <div class="hint">Your own keys (if entered) are stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's keys are used and never exposed to the browser.</div>
     </div>
     <div class="foot"><button class="btn ghost" id="mCancel">Close</button><button class="btn primary" id="mSave">Save</button></div>
@@ -1409,6 +1504,7 @@ function openSettings(note) {
     s.enableVisuals = $('#tgVis', m).classList.contains('on');
     s.enableWeb = $('#tgWeb', m).classList.contains('on');
     s.enablePython = $('#tgPy', m).classList.contains('on');
+    s.google = { clientId: $('#gClientId', m).value.trim(), apiKey: $('#gApiKey', m).value.trim() };
     save(); close(); render(); toast('Settings saved.');
   };
 }
@@ -1626,6 +1722,7 @@ function wire() {
   $('#btnSettings').onclick = () => openSettings();
   $('#newBtn').onclick = () => $('#fileInput').click();
   $('#fileInput').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; try { await openPdfFile(f); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
+  { const db = $('#driveBtn'); if (db) db.onclick = () => openFromDrive(); }
   $$('.nav-item[data-view]').forEach(n => n.onclick = () => { state.ui.libView = n.dataset.view; save(); renderTree(); });
   // reader top
   $('#pagePrev').onclick = () => gotoPage(state.ui.page - 1);
