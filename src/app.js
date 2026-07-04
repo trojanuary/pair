@@ -867,6 +867,8 @@ function mdLite(t) {
   return esc(t)
     .replace(/^\s*[-*]\s+(.*)$/gm, '• $1')
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    // markdown links (e.g. web-search citations) -> clickable (sandbox-safe)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="cite">$1</a>')
     .replace(/\n/g, '<br>');
 }
 

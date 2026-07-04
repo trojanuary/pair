@@ -173,6 +173,8 @@ svg{display:block}
 .card-b{padding:2px 13px 13px 13px}
 .msg{font-size:13.5px;color:var(--ink);line-height:1.5}
 .msg .men{color:var(--blue);font-weight:600}
+.msg a.cite,.msg a{color:var(--blue);text-decoration:none;font-weight:500}
+.msg a.cite:hover,.msg a:hover{text-decoration:underline}
 .q-src{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;margin-top:7px}
 .q-src .qn{width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;
   font-size:11px;font-weight:700;display:grid;place-items:center}
