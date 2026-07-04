@@ -44,8 +44,10 @@ svg{display:block}
 .new-btn:hover{background:var(--surface-2)}
 .nav{padding:2px 8px}
 .nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:8px;
-  color:var(--ink-2);font-weight:500}
+  color:var(--ink-2);font-weight:500;cursor:pointer}
 .nav-item:hover{background:var(--surface-2)}
+.nav-item.active{background:var(--blue-weak);color:var(--blue-2);font-weight:600}
+.nav-item.active .ic{color:var(--blue)}
 .nav-item .ic{color:var(--faint)}
 .sb-sec{margin-top:14px;padding:6px 16px;color:var(--muted);font-weight:600;
   font-size:12px;display:flex;align-items:center;gap:6px;justify-content:space-between}
@@ -60,10 +62,15 @@ svg{display:block}
 .tree .indent-2{padding-left:36px}
 .tree .indent-3{padding-left:50px}
 .doc-row .doc-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.doc-row .doc-del{flex:0 0 auto;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;
-  color:var(--faint);font-size:15px;line-height:1;opacity:0;transition:opacity .12s}
-.doc-row:hover .doc-del{opacity:1}
-.doc-row .doc-del:hover{background:var(--surface-2);color:var(--danger,#DC2626)}
+.doc-row .doc-actions{flex:0 0 auto;display:flex;gap:1px;margin-left:4px}
+.doc-act{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:var(--faint);
+  font-size:14px;line-height:1;opacity:0;transition:opacity .12s}
+.doc-act svg{width:14px;height:14px}
+.doc-row:hover .doc-act{opacity:1}
+.doc-act.star.on{opacity:1;color:#F59E0B}
+.doc-act:hover{background:var(--surface-2);color:var(--ink)}
+.doc-act.danger:hover,.doc-act[data-trash]:hover{color:#DC2626}
+.lib-empty{padding:10px 16px;color:var(--faint);font-size:12.5px;line-height:1.5}
 .doc-dot{width:15px;height:18px;flex:0 0 auto}
 .sb-storage{margin-top:auto;padding:14px 16px;border-top:1px solid var(--line-2);color:var(--muted);font-size:12px}
 .bar{height:6px;border-radius:99px;background:var(--line);margin:7px 0;overflow:hidden}

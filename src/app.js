@@ -46,7 +46,7 @@ function defaultState() {
     annotations: [],
     docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
     ui: { page: 1, zoom: 1.15, tool: 'cursor', filter: 'all', autoscroll: true, sort: 'time',
-          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample' },
+          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample', libView: 'home' },
     seeded: false,
   };
 }
@@ -59,6 +59,7 @@ function migrateState(s) {
   if (!Array.isArray(s.docs) || !s.docs.length) s.docs = [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }];
   if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() });
   if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
+  if (!s.ui.libView) s.ui.libView = 'home';
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
   (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
   return s;
@@ -138,6 +139,7 @@ async function switchDoc(id) {
   if (id === state.ui.activeDoc) { renderTree(); return; }
   const doc = state.docs.find(d => d.id === id); if (!doc) { toast('Document not found.', 'err'); return; }
   state.ui.activeDoc = id; state.ui.activeId = null; state.ui.page = 1;
+  doc.lastOpened = nowISO();
   Object.keys(pageTextCache).forEach(k => delete pageTextCache[k]);
   save(); renderTree(); render();
   const bytes = await loadDocBytes(id);
@@ -151,33 +153,83 @@ async function openPdfFile(f) {
   const buf = new Uint8Array(await f.arrayBuffer());
   const id = uid('doc'), name = f.name || 'Document.pdf';
   _docBytes[id] = buf; idbPut('pdf:' + id, buf);
-  state.docs.push({ id, name, kind: 'user', addedAt: nowISO() });
-  save();
+  state.docs.push({ id, name, kind: 'user', addedAt: nowISO(), lastOpened: nowISO() });
+  state.ui.libView = 'home'; save();
   await switchDoc(id);
+  updateStorage();
   toast('Opened ' + name + ' — highlight text or capture a figure to start.');
 }
-function deleteDoc(id) {
-  const doc = state.docs.find(d => d.id === id); if (!doc || doc.kind === 'sample') return;
+function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
+function trashDoc(id) {   // soft delete -> Trash view
+  const d = state.docs.find(x => x.id === id); if (!d || d.kind === 'sample') return;
+  d.trashed = true; d.trashedAt = nowISO();
+  if (state.ui.activeDoc === id) { state.ui.activeDoc = 'sample'; save(); switchDoc('sample'); }
+  else { save(); renderTree(); }
+  toast('Moved “' + d.name + '” to Trash.');
+}
+function restoreDoc(id) { const d = state.docs.find(x => x.id === id); if (d) { d.trashed = false; save(); renderTree(); toast('Restored “' + d.name + '”.'); } }
+function purgeDoc(id) {   // permanent delete
+  const d = state.docs.find(x => x.id === id); if (!d) return;
   const n = state.annotations.filter(a => docIdOf(a) === id).length;
-  if (!confirm('Remove “' + doc.name + '”' + (n ? ' and its ' + n + ' note' + (n === 1 ? '' : 's') : '') + '?')) return;
-  state.docs = state.docs.filter(d => d.id !== id);
+  if (!confirm('Permanently delete “' + d.name + '”' + (n ? ' and its ' + n + ' note' + (n === 1 ? '' : 's') : '') + '? This cannot be undone.')) return;
+  state.docs = state.docs.filter(x => x.id !== id);
   state.annotations = state.annotations.filter(a => docIdOf(a) !== id);
   idbDel('pdf:' + id); delete _docBytes[id];
   if (state.ui.activeDoc === id) { state.ui.activeDoc = 'sample'; save(); switchDoc('sample'); }
   else { save(); renderTree(); render(); }
+  updateStorage();
 }
+function docsForView() {
+  const v = state.ui.libView || 'home';
+  let docs = state.docs.slice();
+  if (v === 'trash') return docs.filter(d => d.trashed).sort((a, b) => new Date(b.trashedAt || 0) - new Date(a.trashedAt || 0));
+  docs = docs.filter(d => !d.trashed);
+  if (v === 'starred') docs = docs.filter(d => d.starred);
+  if (v === 'recents') docs.sort((a, b) => new Date(b.lastOpened || b.addedAt || 0) - new Date(a.lastOpened || a.addedAt || 0));
+  return docs;
+}
+const _FILEIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
+const _STAR = f => `<svg viewBox="0 0 24 24" fill="${f ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.5l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.6 6.6 20.4l1-6.1L3.2 10l6.1-.9z"/></svg>`;
 function renderTree() {
+  $$('.nav-item[data-view]').forEach(n => n.classList.toggle('active', (state.ui.libView || 'home') === n.dataset.view));
+  const lab = $('#libSecLabel'); if (lab) lab.textContent = { home: 'My Library', recents: 'Recents', starred: 'Starred', trash: 'Trash' }[state.ui.libView || 'home'];
   const list = $('#docList'); if (!list) return; list.innerHTML = '';
-  state.docs.forEach(d => {
-    const active = d.id === state.ui.activeDoc;
-    const row = el(`<div class="tree-row indent-2 doc-row ${active ? 'active' : ''}" data-doc="${d.id}" title="${esc(d.name)}">
-      <span class="fic" style="color:${active ? '#DC2626' : 'currentColor'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></span>
+  const view = state.ui.libView || 'home', inTrash = view === 'trash';
+  const docs = docsForView();
+  if (!docs.length) {
+    const msg = inTrash ? 'Trash is empty.' : view === 'starred' ? 'No starred documents yet.' : 'No documents yet — use New to open a PDF.';
+    list.appendChild(el(`<div class="lib-empty">${msg}</div>`)); return;
+  }
+  docs.forEach(d => {
+    const active = d.id === state.ui.activeDoc && !inTrash;
+    const actions = inTrash
+      ? `<button class="doc-act" data-restore="${d.id}" title="Restore">↩</button><button class="doc-act danger" data-purge="${d.id}" title="Delete forever">${ICON_TRASH}</button>`
+      : `<button class="doc-act star ${d.starred ? 'on' : ''}" data-star="${d.id}" title="${d.starred ? 'Unstar' : 'Star'}">${_STAR(d.starred)}</button>`
+        + (d.kind === 'user' ? `<button class="doc-act" data-trash="${d.id}" title="Move to trash">${ICON_TRASH}</button>` : '');
+    const row = el(`<div class="tree-row indent-1 doc-row ${active ? 'active' : ''}" data-doc="${d.id}" title="${esc(d.name)}">
+      <span class="fic" style="color:${active ? '#DC2626' : 'currentColor'}">${_FILEIC}</span>
       <span class="doc-name">${esc(d.name)}</span>
-      ${d.kind === 'user' ? `<button class="doc-del" data-del="${d.id}" title="Remove document">×</button>` : ''}</div>`);
-    row.addEventListener('click', e => { if (e.target.closest('[data-del]')) return; switchDoc(d.id); });
+      <span class="doc-actions">${actions}</span></div>`);
+    if (!inTrash) row.addEventListener('click', e => { if (e.target.closest('.doc-actions')) return; switchDoc(d.id); });
     list.appendChild(row);
   });
-  $$('[data-del]', list).forEach(b => b.onclick = e => { e.stopPropagation(); deleteDoc(b.dataset.del); });
+  $$('[data-star]', list).forEach(b => b.onclick = e => { e.stopPropagation(); toggleStar(b.dataset.star); });
+  $$('[data-trash]', list).forEach(b => b.onclick = e => { e.stopPropagation(); trashDoc(b.dataset.trash); });
+  $$('[data-restore]', list).forEach(b => b.onclick = e => { e.stopPropagation(); restoreDoc(b.dataset.restore); });
+  $$('[data-purge]', list).forEach(b => b.onclick = e => { e.stopPropagation(); purgeDoc(b.dataset.purge); });
+}
+async function updateStorage() {
+  const fmt = b => b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b >= 1048576 ? (b / 1048576).toFixed(0) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+  const txt = $('#storageText'), bar = $('#storageBar');
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+      if (txt) txt.textContent = fmt(usage) + (quota ? ' of ' + fmt(quota) : ' used');
+      if (bar) bar.style.width = Math.max(2, quota ? Math.min(100, usage / quota * 100) : 4) + '%';
+      return;
+    }
+  } catch (e) {}
+  if (txt) txt.textContent = state.docs.filter(d => !d.trashed).length + ' documents';
 }
 
 function setupWorker() {
@@ -477,7 +529,7 @@ function pickImageProvider() {
 async function aiText(provider, { system, user, image }) {
   const r = await fetch('/api/ai', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, system, user, image, model: state.settings.models[provider], userKey: keyFor(provider) || undefined }),
+    body: JSON.stringify({ provider, system, user, image, web: !!state.settings.enableWeb, model: state.settings.models[provider], userKey: keyFor(provider) || undefined }),
   });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || `AI request failed (${r.status})`);
@@ -558,7 +610,17 @@ async function askAI(annId, question, providerOverride) {
     chips: chipsFor(a), external: state.settings.enableWeb, tools: [] };
   a.messages.push(msg); a.updated_at = nowISO(); save(); render();
   const passages = retrievePassages(question, a.page);
-  const system = `You are a reading assistant embedded in a source-linked research workspace. Answer the reader's question grounded in the SELECTED SOURCE and the surrounding context from the SAME document provided below. Be concise, precise, and faithful to the text; use the reader's own document rather than generic knowledge. ${state.settings.enableWeb ? 'You may draw on external knowledge if needed, and say when you do.' : 'Do NOT use outside knowledge or external sources — if the provided context is insufficient, say what is missing.'}`;
+  const system = [
+    `You are a precise reading assistant embedded in a source-linked research workspace, answering about the SELECTED SOURCE and its surrounding context from the SAME document.`,
+    `Answer style — this matters:`,
+    `- Lead with the direct answer in the first sentence. No preamble, no restating the question, no throat-clearing ("Great question", "The selected text discusses…", "Sure!", "Based on the provided context…").`,
+    `- Be brief: 1–3 sentences, or a tight bullet list for multi-part answers. Add length only when the question truly needs it.`,
+    `- Plain, concrete language. No filler, no hedging, no summary of what you just said.`,
+    `- Ground claims in the reader's document; prefer it over generic knowledge. If the context is insufficient, say in one line exactly what's missing.`,
+    state.settings.enableWeb
+      ? `- Web search is ON: you may look up facts beyond the document when needed, and briefly note when an answer relies on the web.`
+      : `- Web search is OFF: rely only on the provided context; do not use outside knowledge.`,
+  ].join('\n');
   const user = [
     `SELECTED SOURCE — page ${ctx.page}${ctx.section ? `, ${ctx.section}` : ''}${a.source_type === 'screenshot' ? ' (screenshot)' : ''}:`,
     `"""${ctx.evidence || '(see attached image)'}"""`,
@@ -1196,6 +1258,7 @@ function wire() {
   $('#btnSettings').onclick = () => openSettings();
   $('#newBtn').onclick = () => $('#fileInput').click();
   $('#fileInput').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; try { await openPdfFile(f); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
+  $$('.nav-item[data-view]').forEach(n => n.onclick = () => { state.ui.libView = n.dataset.view; save(); renderTree(); });
   // reader top
   $('#pagePrev').onclick = () => renderPage(state.ui.page - 1);
   $('#pageNext').onclick = () => renderPage(state.ui.page + 1);
@@ -1275,7 +1338,7 @@ async function boot() {
   // Resolve the active document's bytes (sample inline, or a user PDF from IndexedDB).
   let startBytes = await loadDocBytes(state.ui.activeDoc);
   if (!startBytes) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
-  renderTree();
+  renderTree(); updateStorage();
   let pdfOk = true;
   try {
     // Race against a timeout: in a sandboxed preview the worker can hang instead of
