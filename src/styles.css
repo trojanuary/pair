@@ -146,6 +146,15 @@ svg{display:block}
   box-shadow:var(--shadow);overflow:hidden;scroll-margin-top:10px}
 .card.ai{border-color:#E9D5FF}
 .card.sel{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak)}
+/* nested reply thread inside a note card */
+.card .replies{border-top:1px solid var(--line)}
+.card .reply{position:relative;border-top:1px solid var(--line-2)}
+.card .reply:first-child{border-top:0}
+.card .reply.ai{background:#FBF9FE}
+.card .reply .card-h{padding:10px 12px 4px 22px}
+.card .reply .reply-b{padding:0 14px 12px 22px}
+.card .reply::before{content:"";position:absolute;left:12px;top:12px;bottom:12px;width:2px;border-radius:2px;background:var(--line)}
+.card .reply.ai::before{background:#D8B4FE}
 .card-h{display:flex;align-items:center;gap:10px;padding:11px 12px 6px}
 .avatar{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;
   font-size:11px;font-weight:700;flex:0 0 auto}

@@ -264,6 +264,7 @@ function sectionForIndex(pageText, idx) {
 
 /* ---------- selection popover ---------- */
 let pendingSel = null;
+let askNextId = null;   // when set, the next composer message on this note is routed to the AI
 function onTextSelect() {
   if (state.ui.tool === 'shot') return;
   const sel = window.getSelection();
@@ -315,8 +316,12 @@ function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
   $('#selPop').classList.add('hidden');
   selectAnnotation(ann.id, true);
   render(); drawHighlights(); drawPins();
-  if (kind === 'ask') { focusComposer(); $('#composerInput').value = 'Can you explain this?'; }
-  else focusComposer();
+  // Leave the composer EMPTY and focused so the user can immediately type. For "Ask AI" we
+  // also flag this note so their next message is routed to the AI even without a trailing "?".
+  askNextId = (kind === 'ask') ? ann.id : null;
+  const inp = $('#composerInput'); inp.value = '';
+  if (kind === 'ask') inp.placeholder = 'Ask the AI about this selection…';
+  focusComposer();
   pendingSel = null;
 }
 
@@ -621,7 +626,11 @@ function errHint(m) {
 }
 
 /* ---------- composer ---------- */
-function focusComposer() { const c = $('#composerInput'); focusComposerCtx(); setTimeout(() => c.focus({ preventScroll: true }), 60); }
+function focusComposer() {
+  const c = $('#composerInput'); focusComposerCtx();
+  const go = () => { try { c.focus({ preventScroll: true }); } catch (e) { c.focus(); } };
+  go(); requestAnimationFrame(go); setTimeout(go, 60);   // land focus reliably across re-renders
+}
 function focusComposerCtx() {
   const a = state.annotations.find(x => x.id === state.ui.activeId);
   const ctx = $('#composerCtx'), input = $('#composerInput'), send = $('#composerSend');
@@ -641,9 +650,10 @@ function sendComposer() {
   a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(text, a.source_type, 'comment')]));
   a.updated_at = nowISO(); save(); render();
   // Route from the text itself: a visual request -> generateVisual; otherwise a question/@mention -> askAI.
+  const forceAsk = askNextId === a.id; askNextId = null;   // user chose “Ask AI” on this note
   const wantVisual = /\b(visual|diagram|chart|graph|plot|sketch|infographic)\b/i.test(clean) &&
                      /(generate|make|create|draw|turn|produce|render|convert|visuali[sz]e|cleaner|summar)/i.test(clean);
-  const wantAI = mProvider || /@ai/i.test(text) || /\?\s*$/.test(text) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean);
+  const wantAI = forceAsk || mProvider || /@ai/i.test(text) || /\?\s*$/.test(text) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean);
   if (wantVisual) generateVisual(a.id, clean);
   else if (wantAI) askAI(a.id, clean || text, mProvider || undefined);
 }
@@ -747,31 +757,33 @@ function compactCard(a) {
       ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
       <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
     </div></div>`);
-  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu]')) return; selectAnnotation(a.id, true); });
+  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu]')) return; selectAnnotation(a.id, true, true); });
   return wrap;
 }
 function annCard(a) {
   if (a.id !== state.ui.activeId) return [compactCard(a)];  // compact unless selected
-  const cards = [];
-  if (!a.messages.length) {
-    const wrap = el(`<div class="card sel" data-ann="${a.id}"><div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span></div>
-      <div class="card-b"><div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>
-      ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? `<div class="linked-quote">${esc(a.selected_text)}</div>` : '')}
-      ${tagPills(a)}</div></div>`);
-    cards.push(wrap); return cards;
+  // Expanded: ONE card holds the whole note thread — the question/comment first, then every
+  // AI answer / follow-up nested INSIDE it as a reply (so replies read as replies, not siblings).
+  let headHtml, firstBody;
+  if (a.messages.length) {
+    const mc = msgCard(a, a.messages[0], true);
+    headHtml = mc.head; firstBody = mc.body;
+  } else {
+    headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span></div>`;
+    firstBody = `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>`
+      + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? `<div class="linked-quote">${esc(a.selected_text)}</div>` : ''));
   }
-  a.messages.forEach((m, i) => {
-    const { head, body } = msgCard(a, m, i === 0);
-    const isAI = m.actor === 'ai';
-    const first = i === 0;
-    const wrap = el(`<div class="card ${isAI ? 'ai' : ''} sel ${a.resolved ? 'isres' : ''}" data-ann="${a.id}" data-msg="${m.id}">
-      ${head}<div class="card-b">${body}
-      ${first ? tagPills(a) : ''}
-      </div></div>`);
-    wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],button,a')) return; selectAnnotation(a.id, false); });
-    cards.push(wrap);
-  });
-  return cards;
+  let replies = '';
+  for (let i = 1; i < a.messages.length; i++) {
+    const m = a.messages[i];
+    const { head, body } = msgCard(a, m, false);
+    replies += `<div class="reply ${m.actor === 'ai' ? 'ai' : ''}" data-msg="${m.id}">${head}<div class="reply-b">${body}</div></div>`;
+  }
+  const wrap = el(`<div class="card sel ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
+    ${headHtml}<div class="card-b">${firstBody}${tagPills(a)}</div>
+    ${replies ? `<div class="replies">${replies}</div>` : ''}</div>`);
+  wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],button,a')) return; selectAnnotation(a.id, false); });
+  return [wrap];
 }
 function mdLite(t) {
   return esc(t)
