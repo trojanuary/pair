@@ -3,8 +3,9 @@
 // No npm deps — global fetch (Node 18+).
 const ENV = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY' };
 const DEFAULT_MODEL = { openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash' };
-// GPT-5+/o-series reasoning models use max_completion_tokens (not max_tokens).
-const capTokens = (m, n) => (/^(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n } : { max_tokens: n });
+// GPT-5+/o-series are reasoning models: reasoning tokens are billed against max_completion_tokens,
+// so add a generous reasoning buffer or the visible answer can come back empty ("could not finalize").
+const capTokens = (m, n) => (/^(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n + 4000 } : { max_tokens: n });
 
 async function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -37,7 +38,8 @@ async function openaiCall(key, { system, user, image, model, web }) {
 // ---- OpenAI agent step: one turn of a tool-calling ReAct loop. Returns {content, tool_calls}. ----
 async function openaiAgentStep(key, { messages, tools, model }) {
   const m = model || DEFAULT_MODEL.openai;
-  const body = { model: m, messages, tools, tool_choice: 'auto', parallel_tool_calls: false, ...capTokens(m, 1100) };
+  const body = { model: m, messages, ...capTokens(m, 1500) };
+  if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; body.parallel_tool_calls = false; }
   const { r, j } = await openaiChat(key, body);
   if (!r.ok) throw new Error(j.error?.message || 'OpenAI error');
   const msg = j.choices?.[0]?.message || {};
@@ -47,7 +49,7 @@ async function openaiAgentStep(key, { messages, tools, model }) {
 // ---- Anthropic (adds the server-side web_search tool when web is on) ----
 async function anthropicCall(key, { system, user, image, model, web }) {
   const content = image ? [{ type: 'text', text: user }, { type: 'image', source: { type: 'base64', media_type: image.mime, data: image.b64 } }] : user;
-  const body = { model: model || DEFAULT_MODEL.anthropic, max_tokens: 1200, system, messages: [{ role: 'user', content }] };
+  const body = { model: model || DEFAULT_MODEL.anthropic, max_tokens: 2000, system, messages: [{ role: 'user', content }] };
   if (web) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(body),

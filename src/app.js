@@ -40,7 +40,7 @@ function defaultState() {
       provider: 'openai',
       models: { ...DEFAULT_MODELS },
       keys: { openai: '', anthropic: '', gemini: '' },
-      enableVisuals: true, enableWeb: false, enablePython: false,
+      enableVisuals: true, enableWeb: true, enablePython: true,
       actorName: 'You', actorInitials: 'YO',
     },
     annotations: [],
@@ -60,6 +60,8 @@ function migrateState(s) {
   if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() });
   if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
   if (!s.ui.libView) s.ui.libView = 'home';
+  // one-time: turn all tools on by default (respects later manual changes via the flag)
+  if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings.enablePython = true; s.settings._toolsDefaulted = true; }
   // upgrade anyone still on the previous default models to the current generation
   if (s.settings && s.settings.models) {
     const OLD = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022', gemini: 'gemini-1.5-pro' };
@@ -812,40 +814,46 @@ async function askAIAgent(a, question, msg) {
     `You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page (e.g. the previous/next section), search the document, get the outline, read the whole paper, ${state.settings.enableWeb ? 'or search the web' : ''}. Use them when the selection alone is not enough — e.g. to summarize the whole paper, verify a claim elsewhere, or pull an adjacent section. Prefer the smallest sufficient context; call tools only as needed, then answer.`,
     `Answer style: lead with the direct answer, be concise (no preamble or fluff), and ground claims in the document.`,
   ].join('\n');
-  const messages = [
-    { role: 'system', content: system },
-    { role: 'user', content: [
-      `The reader selected this passage on page ${c.page}${c.section ? `, ${c.section}` : ''}:`,
-      `"""${c.evidence || '(no text)'}"""`,
-      c.surrounding ? `Immediate surrounding text: ${c.surrounding.slice(0, 700)}` : '',
-      c.thread ? `Conversation so far on this note:\n${c.thread}` : '',
-      `The document has ${numPages} pages. Reader's question: ${question}`,
-    ].filter(Boolean).join('\n\n') },
-  ];
+  const userContext = [
+    c.evidence ? `The reader selected this passage on page ${c.page}${c.section ? `, ${c.section}` : ''}:\n"""${c.evidence}"""` : `The reader is on page ${c.page}${c.section ? `, ${c.section}` : ''} (no text selected).`,
+    c.surrounding ? `Immediate surrounding text: ${c.surrounding.slice(0, 700)}` : '',
+    c.thread ? `Conversation so far on this note:\n${c.thread}` : '',
+    `The document has ${numPages} pages. Reader's question: ${question}`,
+  ].filter(Boolean).join('\n\n');
+  const messages = [{ role: 'system', content: system }, { role: 'user', content: userContext }];
   const tools = agentTools(); const used = new Set();
+  msg.trace = [{ type: 'context', title: 'Context sent to the model', text: userContext }];
   try {
-    let last = '';
-    for (let i = 0; i < 5; i++) {
+    let answer = '';
+    for (let i = 0; i < 7 && !answer; i++) {
       msg.status = i === 0 ? 'Thinking…' : 'Gathering context…'; save(); render();
       const step = await aiAgentStep(model, messages, tools);
-      last = step.content || last;
       if (step.tool_calls && step.tool_calls.length) {
         messages.push({ role: 'assistant', content: step.content || '', tool_calls: step.tool_calls });
         for (const tc of step.tool_calls) {
           let args = {}; try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
           used.add(tc.function.name);
           msg.status = TOOL_LABEL[tc.function.name] || 'Working…'; save(); render();
-          const result = await runAgentTool(a, tc.function.name, args);
-          messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result).slice(0, 50000) });
+          const result = String(await runAgentTool(a, tc.function.name, args));
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: result.slice(0, 50000) });
+          msg.trace.push({ type: 'tool', name: tc.function.name, args, result: result.slice(0, 6000) });
         }
         continue;
       }
-      msg.text = step.content || last || '(no answer)'; msg.pending = false; msg.status = null;
-      msg.chips = agentChips(a, used);
-      a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(question, a.source_type, 'ai_answer')]));
-      save(); render(); return;
+      if (step.content && step.content.trim()) { answer = step.content.trim(); break; }
+      // Empty turn with no tool call — nudge the model to answer from what it has.
+      messages.push({ role: 'user', content: 'Answer the question now, directly and concisely, using the context you have gathered. Do not call any tools.' });
     }
-    msg.text = last || 'I gathered context but could not finalize an answer — try rephrasing.'; msg.pending = false; msg.status = null; msg.chips = agentChips(a, used);
+    // Guaranteed final answer: one more call with NO tools so the model must produce text.
+    if (!answer) {
+      msg.status = 'Writing the answer…'; save(); render();
+      const fin = await aiAgentStep(model, messages.concat([{ role: 'user', content: 'Give your best answer now in a few sentences using the gathered context. If the document lacks the detail, say briefly what is missing. Do not call tools.' }]), []);
+      answer = (fin.content || '').trim();
+      msg.trace.push({ type: 'final', title: 'Final synthesis', text: answer });
+    }
+    msg.text = answer || 'The document doesn’t seem to cover that — try selecting the relevant passage, or ask a more specific question.';
+    msg.pending = false; msg.status = null; msg.chips = agentChips(a, used);
+    a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(question, a.source_type, 'ai_answer')]));
     save(); render();
   } catch (e) {
     msg.pending = false; msg.status = null; msg.text = ''; msg.error = e.message;
@@ -1103,7 +1111,8 @@ function msgCard(a, m, isFirst) {
     else {
       // Answer first; provenance chips are tucked into a collapsed “sources” disclosure.
       body += `<div class="msg">${mdLite(m.text)}</div>`
-        + `<details class="prov"><summary><span class="disc-i">ⓘ</span> AI-generated${m.model ? ' · ' + esc(m.model) : ''}<span class="prov-more"> · sources</span></summary>${chipRow(m.chips)}</details>`;
+        + `<details class="prov"><summary><span class="disc-i">ⓘ</span> AI-generated${m.model ? ' · ' + esc(m.model) : ''}<span class="prov-more"> · sources</span></summary>${chipRow(m.chips)}</details>`
+        + traceHTML(m);
     }
   }
   if (m.type === 'generated_visual') {
@@ -1181,6 +1190,16 @@ function annCard(a) {
     selectAnnotation(a.id, false);
   });
   return [wrap];
+}
+// Collapsible "agent's work" transcript: the context sent, each tool call + result, final synthesis.
+function traceHTML(m) {
+  if (!m.trace || !m.trace.length) return '';
+  const nTools = m.trace.filter(s => s.type === 'tool').length;
+  const steps = m.trace.map(s => {
+    if (s.type === 'tool') return `<div class="tr-step"><div class="tr-h">🔧 ${esc(s.name)}(${esc(JSON.stringify(s.args || {}))})</div><pre class="tr-body">${esc(s.result || '')}</pre></div>`;
+    return `<div class="tr-step"><div class="tr-h">${esc(s.title || s.type)}</div><pre class="tr-body">${esc(s.text || '')}</pre></div>`;
+  }).join('');
+  return `<details class="trace"><summary>Show the agent's work${nTools ? ` · ${nTools} tool call${nTools === 1 ? '' : 's'}` : ''}</summary><div class="tr-list">${steps}</div></details>`;
 }
 function mdLite(t) {
   return esc(t)

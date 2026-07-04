@@ -206,6 +206,16 @@ svg{display:block}
 .prov[open]>summary .prov-more{color:var(--muted);font-weight:500}
 .prov>summary:hover .prov-more{text-decoration:underline}
 .prov .chips{margin-top:8px}
+/* agent "show work" transcript */
+.trace{margin-top:8px}
+.trace>summary{list-style:none;cursor:pointer;color:var(--blue);font-size:11.5px;font-weight:600;user-select:none;display:inline-flex;align-items:center;gap:5px}
+.trace>summary::-webkit-details-marker{display:none}
+.trace>summary::before{content:"▸";font-size:10px}
+.trace[open]>summary::before{content:"▾"}
+.trace .tr-list{margin-top:8px;border-left:2px solid var(--line);padding-left:10px;display:flex;flex-direction:column;gap:8px}
+.tr-step .tr-h{font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:3px}
+.tr-body{margin:0;background:var(--surface-2);border-radius:7px;padding:8px 9px;font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;line-height:1.45;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:break-word;max-height:220px;overflow:auto}
 .tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
 .tag{border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:600;letter-spacing:.01em}
 .tag.q{background:#EFF6FF;color:#1D4ED8}.tag.claim{background:#F1F5F9;color:#334155}
