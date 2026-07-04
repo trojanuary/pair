@@ -338,7 +338,8 @@ svg{display:block}
   font-weight:700;font-size:12px;display:inline-grid;place-items:center;margin-right:8px}
 .ex-loc{font-weight:700;font-size:13.5px;margin-bottom:12px;display:flex;align-items:center}
 .ex-sub{color:var(--muted);font-weight:600;font-size:12px;margin-bottom:6px}
-.ex-quote{background:#EFF6FF;border-radius:9px;padding:12px 13px;font-family:var(--serif);font-size:13px;color:var(--ink-2)}
+.ex-quote{background:#EFF6FF;border-left:3px solid #93C5FD;border-radius:0 9px 9px 0;padding:12px 13px;font-family:var(--serif);font-size:13px;color:#1E293B}
+.ex-quote.yellow{background:#FEF9C3;border-left-color:#FCD34D;color:#3F3F46}
 .ex-shot{border:1px solid var(--line);border-radius:9px;overflow:hidden}.ex-shot img{width:100%;display:block}
 .ex-comment .who{font-size:13px}
 .ex-resp{margin-top:12px}
@@ -346,6 +347,8 @@ svg{display:block}
 @media print{
   @page{margin:12mm}
   body{background:#fff}
+  /* print highlight/quote/chip backgrounds faithfully (Chrome drops them by default) */
+  #exportView, #exportView *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #app,#exportView .ex-top,#exportView .ex-opts,#connectors,#toasts{display:none !important}
   #exportView{position:static}.ex-body{display:block}
   .ex-preview{padding:0;overflow:visible}

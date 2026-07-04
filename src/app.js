@@ -986,17 +986,47 @@ function quoteBlock(text) {
 const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 const ICON_CHEVUP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
-// hover action icons in a message head — collapse (note head), edit (comment or AI), plus delete-note / delete-reply
+const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+// hover action icons in a message head — collapse (note head), copy, edit (comment or AI), plus delete-note / delete-reply
 function msgActions(a, m, isFirst) {
   const editable = m.type === 'comment' || m.type === 'ai_answer';
-  // Collapse chevron sits outside .macts so it stays visible; edit/delete reveal on hover.
+  // Collapse chevron sits outside .macts so it stays visible; copy/edit/delete reveal on hover.
   const collapse = isFirst ? `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button>` : '';
+  const copy = isFirst
+    ? `<button class="mact" data-copynote="${a.id}" title="Copy whole thread">${ICON_COPY}</button>`
+    : `<button class="mact" data-copymsg="${m.id}" data-ann="${a.id}" title="Copy this response">${ICON_COPY}</button>`;
   return collapse + `<span class="macts">`
+    + copy
     + (editable ? `<button class="mact" data-edit="${m.id}" data-ann="${a.id}" title="Edit">${ICON_EDIT}</button>` : '')
     + (isFirst ? `<button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button>`
                : `<button class="mact" data-delmsg="${m.id}" data-ann="${a.id}" title="Delete reply">${ICON_TRASH}</button>`)
     + `</span>`;
 }
+function msgToText(a, m) {
+  const who = m.actor === 'ai' ? (PROVIDER_LABEL[m.provider] || 'AI') : actorName(m);
+  if (m.type === 'comment') return `${who}: ${m.text || ''}`;
+  if (m.type === 'ai_answer') return `${who}: ${m.text || ''}` + (m.chips && m.chips.length ? `\n(${m.chips.join(' · ')})` : '');
+  if (m.type === 'generated_visual') return `${who}: [Generated visual: ${m.title || 'visual'}]` + (m.takeaways && m.takeaways.length ? `\n- ${m.takeaways.join('\n- ')}` : '');
+  return '';
+}
+function noteToText(a) {
+  const L = [`${srcLabel(a)} — Page ${a.page}${a.section ? ' · ' + a.section : ''}`];
+  if (a.selected_text) L.push(`"${a.selected_text}"`);
+  (a.messages || []).forEach(m => { const t = msgToText(a, m); if (t) L.push(t); });
+  const tags = [...(a.auto_tags || []), ...(a.manual_tags || [])]; if (tags.length) L.push(`Tags: ${tags.join(', ')}`);
+  return L.join('\n\n');
+}
+function fallbackCopy(txt, done) {
+  try { const ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); ta.remove(); (done || (() => {}))(); }
+  catch (e) { toast('Copy failed — select the text and copy manually.', 'err'); }
+}
+function copyTextToClipboard(txt, label) {
+  const done = () => toast((label || 'Copied') + ' to clipboard.');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done).catch(() => fallbackCopy(txt, done));
+  else fallbackCopy(txt, done);
+}
+function copyNote(annId) { const a = state.annotations.find(x => x.id === annId); if (a) copyTextToClipboard(noteToText(a), 'Note'); }
+function copyMsg(annId, msgId) { const a = state.annotations.find(x => x.id === annId); if (!a) return; const m = a.messages.find(x => x.id === msgId); if (m) copyTextToClipboard(msgToText(a, m).replace(/^[^:]+:\s*/, ''), 'Response'); }
 function editBox(a, m) {
   const reask = m.actor === 'you' ? `<button class="eb-reask" data-reask="${m.id}" data-ann="${a.id}">Save &amp; re-ask AI</button>` : '';
   return `<div class="edit-wrap"><textarea class="edit-input" data-editing="${m.id}" data-ann="${a.id}">${esc(m.text || '')}</textarea>`
@@ -1072,7 +1102,7 @@ function annCard(a) {
     headHtml = mc.head; firstBody = mc.body;
   } else {
     headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span>`
-      + `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button><span class="macts"><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
+      + `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button><span class="macts"><button class="mact" data-copynote="${a.id}" title="Copy note">${ICON_COPY}</button><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
     firstBody = `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>`
       + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? quoteBlock(a.selected_text) : ''));
   }
@@ -1135,6 +1165,8 @@ function render() {
   $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
   $$('[data-reask]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveAndReask(b.dataset.ann, b.dataset.reask); });
   $$('[data-collapse]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); collapseNote(b.dataset.collapse); });
+  $$('[data-copynote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); copyNote(b.dataset.copynote); });
+  $$('[data-copymsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); copyMsg(b.dataset.ann, b.dataset.copymsg); });
   $$('[data-delnote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteNote(b.dataset.delnote); });
   $$('[data-delmsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteMsg(b.dataset.ann, b.dataset.delmsg); });
   $$('[data-quotemore]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); const q = b.parentElement.querySelector('.linked-quote'); const on = q.classList.toggle('clip'); b.textContent = on ? 'Show more' : 'Show less'; });
@@ -1347,7 +1379,7 @@ function buildSheet() {
     n++;
     const left = [];
     if (hasShot && inc.screenshots && a.screenshot) left.push(`<div class="ex-sub">Screenshot</div><div class="ex-shot"><img src="${a.screenshot}"></div>`);
-    if (!hasShot && inc.linked && a.selected_text) left.push(`<div class="ex-sub">Linked text</div><div class="ex-quote">${esc(a.selected_text)}</div>`);
+    if (!hasShot && inc.linked && a.selected_text) left.push(`<div class="ex-sub">${a.hlColor === 'yellow' ? 'Highlight' : 'Linked text'}</div><div class="ex-quote ${a.hlColor === 'yellow' ? 'yellow' : ''}">${esc(a.selected_text)}</div>`);
     const right = [];
     a.messages.forEach(m => {
       if (m.type === 'comment' && inc.comments) right.push(`<div class="ex-comment"><div class="card-h" style="padding:0;margin:2px 0 4px">${actorAvatar(m)}<span class="who">${esc(actorName(m))}</span><span class="when">${new Date(m.created_at).toLocaleDateString()} · ${timeLabel(m.created_at)}</span></div><div class="msg">${esc(m.text || '')}</div></div>`);
