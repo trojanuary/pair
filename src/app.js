@@ -42,6 +42,7 @@ function defaultState() {
       keys: { openai: '', anthropic: '', gemini: '' },
       enableVisuals: true, enableWeb: true, enablePython: true,
       actorName: 'You', actorInitials: 'YO',
+      storage: { mode: 'browser', folderName: '' },
     },
     annotations: [],
     docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
@@ -68,6 +69,7 @@ function migrateState(s) {
     for (const k of ['openai', 'anthropic', 'gemini']) if (s.settings.models[k] === OLD[k]) s.settings.models[k] = DEFAULT_MODELS[k];
   }
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
+  if (s.settings && !s.settings.storage) s.settings.storage = { mode: 'browser', folderName: '' };
   (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
   return s;
 }
@@ -113,6 +115,7 @@ function save() {
         for (const m of (a.messages || [])) if (typeof m.image === 'string' && m.image.startsWith('data:')) { idbPut('img:' + m.id, m.image); m.image = '@idb'; }
       }
       localStorage.setItem(LS, JSON.stringify(light));
+      scheduleFolderSync();
     } catch (e) {
       // Opaque-origin sandbox denies storage (SecurityError) -> silent; it's only a preview.
       if (e && /quota|exceeded/i.test((e.name || '') + (e.message || ''))) toast('Storage limit reached — export your notes to keep them.', 'err');
@@ -1436,8 +1439,117 @@ function openFilterPopover(anchor) {
     { label: 'Auto-scroll to active note', toggle: state.ui.autoscroll, keepOpen: true, onClick: () => { state.ui.autoscroll = !state.ui.autoscroll; save(); openFilterPopover(anchor); } },
   ]);
 }
+/* ---------- portable JSON notes storage ----------
+   A human-readable "<doc>.notes.json" holding all annotations for a document. It auto-saves
+   into a folder you pick (File System Access API — Chrome/Edge), so notes live next to your
+   PDFs and sync anywhere the folder does (e.g. a Google Drive folder). Export/Import works in
+   every browser as a fallback. Nothing leaves the browser except the folder you choose. */
+function fsSupported() { return typeof window !== 'undefined' && 'showDirectoryPicker' in window; }
+function storageCfg() { state.settings.storage = state.settings.storage || { mode: 'browser', folderName: '' }; return state.settings.storage; }
+function notesFileName(docId) {
+  const d = state.docs.find(x => x.id === docId) || activeDoc();
+  const base = ((d && d.name) || 'document').replace(/\.pdf$/i, '').replace(/[^\w.\- ]+/g, '_').trim() || 'document';
+  return base + '.notes.json';
+}
+function docNotesJSON(docId) {
+  const anns = state.annotations.filter(a => docIdOf(a) === docId).map(a => JSON.parse(JSON.stringify(a)));
+  const d = state.docs.find(x => x.id === docId) || activeDoc();
+  return { app: 'Source-Linked AI Reading Workspace', schema: 1, exportedAt: nowISO(),
+    document: { id: docId, name: d ? d.name : 'document' }, noteCount: anns.length, annotations: anns };
+}
+function applyNotesJSON(obj, docId) {
+  if (!obj || !Array.isArray(obj.annotations)) { toast('That file has no notes to import.', 'err'); return 0; }
+  const others = state.annotations.filter(a => docIdOf(a) !== docId);
+  const incoming = obj.annotations.map(a => { const c = JSON.parse(JSON.stringify(a)); c.doc = docId; return c; });
+  state.annotations = others.concat(incoming);
+  state.ui.activeId = null; if (typeof renumber === 'function') renumber();
+  save(); render(); drawHighlights(); drawPins();
+  return incoming.length;
+}
+async function chooseNotesFolder() {
+  if (!fsSupported()) { toast('Folder sync needs Chrome or Edge. Use Export / Import notes instead.', 'err'); return false; }
+  try {
+    const h = await window.showDirectoryPicker({ mode: 'readwrite', id: 'srw-notes' });
+    idbPut('dir:notes', h);
+    state.settings.storage = { mode: 'folder', folderName: h.name }; save();
+    await writeNotesToFolder(state.ui.activeDoc, false);
+    toast('Notes will auto-save to “' + h.name + '”.');
+    return true;
+  } catch (e) { if (e && e.name !== 'AbortError') toast('Could not open that folder: ' + (e.message || e), 'err'); return false; }
+}
+async function notesDirHandle(interactive) {
+  const h = await idbGet('dir:notes'); if (!h) return null;
+  try {
+    let p = await h.queryPermission({ mode: 'readwrite' });
+    if (p === 'granted') return h;
+    if (interactive) { p = await h.requestPermission({ mode: 'readwrite' }); if (p === 'granted') return h; }
+  } catch (e) {}
+  return null;
+}
+async function writeNotesToFolder(docId, interactive) {
+  const dir = await notesDirHandle(interactive); if (!dir) return false;
+  try {
+    const fh = await dir.getFileHandle(notesFileName(docId), { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify(docNotesJSON(docId), null, 2)); await w.close();
+    return true;
+  } catch (e) { if (interactive) toast('Save failed: ' + (e.message || e), 'err'); return false; }
+}
+async function loadNotesFromFolder(docId, interactive) {
+  const dir = await notesDirHandle(interactive); if (!dir) { if (interactive) toast('Pick a notes folder first (Settings → Notes storage).', 'err'); return false; }
+  try {
+    const fh = await dir.getFileHandle(notesFileName(docId), { create: false });
+    const n = applyNotesJSON(JSON.parse(await (await fh.getFile()).text()), docId);
+    toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.');
+    return true;
+  } catch (e) { if (interactive) toast('No saved notes for this document in that folder yet.', 'err'); return false; }
+}
+let _folderSyncT;
+function scheduleFolderSync() {
+  if (storageCfg().mode !== 'folder') return;
+  clearTimeout(_folderSyncT);
+  _folderSyncT = setTimeout(() => { writeNotesToFolder(state.ui.activeDoc, false); }, 1500);
+}
+function downloadNotesJSON(docId) {
+  try {
+    const blob = new Blob([JSON.stringify(docNotesJSON(docId), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = notesFileName(docId); document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast('Downloaded ' + notesFileName(docId));
+  } catch (e) { toast('Could not export: ' + (e.message || e), 'err'); }
+}
+function importNotesJSON() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return; try { const n = applyNotesJSON(JSON.parse(await f.text()), state.ui.activeDoc); toast(n + ' note' + (n === 1 ? '' : 's') + ' imported.'); } catch (e) { toast('Could not read that JSON: ' + (e.message || e), 'err'); } };
+  inp.click();
+}
+function flashSaved() { const b = document.getElementById('btnSaveNotes'); if (b) { b.classList.add('saved'); setTimeout(() => b.classList.remove('saved'), 1400); } }
+// Save button: write to the chosen folder; if none is set, offer to pick one (Chromium) or download.
+async function saveNotesNow() {
+  const cfg = storageCfg();
+  if (cfg.mode === 'folder') {
+    if (await writeNotesToFolder(state.ui.activeDoc, true)) { toast('Saved to “' + cfg.folderName + '”.'); flashSaved(); return; }
+  }
+  if (fsSupported()) { if (await chooseNotesFolder()) { flashSaved(); return; } }
+  downloadNotesJSON(state.ui.activeDoc);
+}
+function injectSaveButton() {
+  const fb = document.getElementById('btnFilter'); if (!fb || document.getElementById('btnSaveNotes')) return;
+  const b = el('<button class="icon-btn save-btn" id="btnSaveNotes" title="Save notes (auto-saves to your folder when set)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7"/><path d="M8 13h8v6H8z"/></svg></button>');
+  fb.parentNode.insertBefore(b, fb);
+  b.onclick = () => saveNotesNow();
+}
 function openNotesMenu(anchor) {
+  const folder = storageCfg().mode === 'folder';
   openPopover(anchor, [
+    { label: folder ? 'Save notes to folder now' : 'Save notes…', onClick: () => saveNotesNow() },
+    (folder ? { label: 'Load notes from folder', onClick: () => loadNotesFromFolder(state.ui.activeDoc, true) } : { label: 'Choose notes folder…', onClick: () => chooseNotesFolder() }),
+    { label: 'Export notes (JSON)', onClick: () => downloadNotesJSON(state.ui.activeDoc) },
+    { label: 'Import notes (JSON)', onClick: () => importNotesJSON() },
+    { sep: true },
+    { label: 'Export annotations (PDF)…', onClick: () => openExport() },
+    { sep: true },
     { label: 'Mark all resolved', onClick: () => { state.annotations.forEach(a => a.resolved = true); save(); render(); } },
     { label: 'Mark all unresolved', onClick: () => { state.annotations.forEach(a => a.resolved = false); save(); render(); } },
     { sep: true },
@@ -1474,6 +1586,15 @@ function openSettings(note) {
       </div>
       <div class="hint">Your own keys (if entered) are stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's keys are used and never exposed to the browser.</div>
     </div>
+      <div class="field"><label>Notes storage</label>
+        <div class="hint" style="margin-top:0">Notes are always kept in this browser. Optionally choose a folder to also auto-save a portable <b>.notes.json</b> next to your PDFs (Chrome/Edge) — ideal for backups, other computers, and Google Drive folders. Export / Import works in any browser.</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          <button type="button" class="btn ghost" id="stFolder">${(s.storage && s.storage.mode === 'folder') ? ('📁 ' + esc(s.storage.folderName || 'folder set')) : 'Choose folder…'}</button>
+          <button type="button" class="btn ghost" id="stExport">Export notes (JSON)</button>
+          <button type="button" class="btn ghost" id="stImport">Import notes (JSON)</button>
+          ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stBrowserOnly">Stop folder sync</button>' : ''}
+        </div>
+      </div>
     <div class="foot"><button class="btn ghost" id="mCancel">Close</button><button class="btn primary" id="mSave">Save</button></div>
   </div></div>`);
   $('#modalRoot').appendChild(m);
@@ -1482,6 +1603,10 @@ function openSettings(note) {
   m.addEventListener('click', e => { if (e.target === m) close(); });
   $$('.def-radio', m).forEach(b => b.onclick = () => { $$('.def-radio', m).forEach(x => x.classList.remove('on')); b.classList.add('on'); });
   ['tgVis', 'tgWeb', 'tgPy'].forEach(id => $('#' + id, m).onclick = () => $('#' + id, m).classList.toggle('on'));
+  { const stF = $('#stFolder', m); if (stF) stF.onclick = async () => { if (await chooseNotesFolder()) close(); }; }
+  { const stE = $('#stExport', m); if (stE) stE.onclick = () => downloadNotesJSON(state.ui.activeDoc); }
+  { const stI = $('#stImport', m); if (stI) stI.onclick = () => importNotesJSON(); }
+  { const stB = $('#stBrowserOnly', m); if (stB) stB.onclick = () => { state.settings.storage = { mode: 'browser', folderName: '' }; save(); close(); toast('Folder sync off — notes stay in this browser.'); }; }
   $('#mSave', m).onclick = () => {
     const defEl = $('.def-radio.on', m); if (defEl) s.provider = defEl.dataset.def;
     s.keys.openai = $('#kOpenai', m).value.trim(); s.keys.anthropic = $('#kAnthropic', m).value.trim(); s.keys.gemini = $('#kGemini', m).value.trim();
@@ -1843,6 +1968,7 @@ function wire() {
   // notes header (mockup 2: funnel + search + kebab)
   $('#btnFilter').onclick = e => openFilterPopover(e.currentTarget);
   $('#btnNotesMenu').onclick = e => openNotesMenu(e.currentTarget);
+  injectSaveButton();
   $('#btnNotesSearch').onclick = () => {
     const b = $('#ntSearchbar'); b.classList.toggle('hidden');
     if (!b.classList.contains('hidden')) $('#notesSearchInput').focus();
