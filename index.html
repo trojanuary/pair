@@ -1432,10 +1432,11 @@ function agentTools() {
     { type: 'function', function: { name: 'document_outline', description: 'List detected section headings with their page numbers to navigate the paper.', parameters: { type: 'object', properties: {} } } },
     { type: 'function', function: { name: 'read_full_document', description: 'Read the entire document text (use for whole-paper summaries; may be truncated if very long).', parameters: { type: 'object', properties: {} } } },
   ];
+  if (state.settings.enableVisuals) t.push({ type: 'function', function: { name: 'create_visual', description: 'Generate a visual to help answer: an AI-rendered image (for illustrations, physical scenes, mechanisms, or concepts) or a monospace diagram built from the document (for structure, process, data, or comparisons). Call this when a picture or diagram would materially help — e.g. the reader asks to see, draw, illustrate, or visualize something. Provide a clear description of what to depict.', parameters: { type: 'object', properties: { description: { type: 'string', description: 'What the visual should depict.' } }, required: ['description'] } } });
   if (state.settings.enableWeb) t.push({ type: 'function', function: { name: 'web_search', description: 'Search the public web for facts beyond this document. Returns text with source links.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } });
   return t;
 }
-const TOOL_LABEL = { read_selection_context: 'Re-reading the selection…', read_page: 'Reading a page…', search_document: 'Searching the document…', document_outline: 'Scanning the outline…', read_full_document: 'Reading the full paper…', web_search: 'Searching the web…' };
+const TOOL_LABEL = { read_selection_context: 'Re-reading the selection…', read_page: 'Reading a page…', search_document: 'Searching the document…', document_outline: 'Scanning the outline…', read_full_document: 'Reading the full paper…', create_visual: 'Creating a visual…', web_search: 'Searching the web…' };
 async function runAgentTool(a, name, args) {
   try {
     if (name === 'read_selection_context') { const c = buildContext(a); return `Selected (page ${c.page}${c.section ? ', ' + c.section : ''}): "${c.evidence}"\n\nSurrounding text: ${c.surrounding || '(none)'}`; }
@@ -1443,6 +1444,7 @@ async function runAgentTool(a, name, args) {
     if (name === 'search_document') return await agentSearch(args.query || '');
     if (name === 'document_outline') return await agentOutline();
     if (name === 'read_full_document') { let out = ''; for (let n = 1; n <= numPages; n++) { out += `\n\n[Page ${n}]\n` + await ensureText(n); if (out.length > 48000) { out += '\n\n[…truncated…]'; break; } } return out.slice(0, 50000); }
+    if (name === 'create_visual') { await generateVisual(a.id, String(args.description || '').trim() || 'A visual that helps explain the selected content.'); const vm = a.messages[a.messages.length - 1]; if (vm && vm.type === 'generated_visual' && !vm.error) return `Generated a ${vm.kind === 'image' ? 'image' : 'diagram'} titled "${vm.title}" — it is now shown to the reader in this thread.${vm.caption ? ' Caption: ' + vm.caption : ''} Briefly reference it in your answer.`; return 'The visual could not be generated: ' + ((vm && vm.error) || 'unknown error') + '. Answer in text instead.'; }
     if (name === 'web_search') return await agentWeb(args.query || '');
   } catch (e) { return 'Tool error: ' + (e.message || e); }
   return 'Unknown tool: ' + name;
@@ -1460,6 +1462,7 @@ function agentChips(a, used) {
   if (used.has('read_full_document')) chips.push('Read full paper');
   if (used.has('search_document')) chips.push('Searched document');
   if (used.has('read_page') || used.has('document_outline')) chips.push('Read related pages');
+  if (used.has('create_visual')) chips.push('Generated visual');
   chips.push(a.source_type === 'screenshot' ? 'Used screenshot' : 'Used highlighted text');
   chips.push(used.has('web_search') ? 'Used web search' : 'No external sources');
   return chips;
@@ -1469,7 +1472,7 @@ async function askAIAgent(a, question, msg) {
   const c = buildContext(a);
   const system = [
     `You are a precise research assistant embedded in a source-linked reading workspace, answering about the document the reader is viewing.`,
-    `You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page (e.g. the previous/next section), search the document, get the outline, read the whole paper, ${state.settings.enableWeb ? 'or search the web' : ''}. Use them when the selection alone is not enough — e.g. to summarize the whole paper, verify a claim elsewhere, or pull an adjacent section. Prefer the smallest sufficient context; call tools only as needed, then answer.`,
+    `You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page, search the document, get the outline, read the whole paper${state.settings.enableWeb ? ', search the web' : ''}${state.settings.enableVisuals ? ', or generate a visual (an image, or a monospace diagram built from the document)' : ''}. Use them when they help — e.g. to summarize the whole paper, verify a claim elsewhere, pull an adjacent section, or produce a picture/diagram when the reader asks to see or visualize something. Prefer the smallest sufficient context; call tools only as needed, then answer.`,
     `Answer style: lead with the direct answer, be concise (no preamble or fluff), and ground claims in the document.`,
   ].join('\n');
   const userContext = [
@@ -1618,9 +1621,10 @@ function submitToNote(annId, rawText) {
   const text = (rawText || '').trim();
   const a = state.annotations.find(x => x.id === annId);
   if (!text || !a) return;
+  if (a.messages.some(mm => mm.actor === 'you' && mm.type === 'comment' && mm.text === text && (Date.now() - new Date(mm.created_at).getTime()) < 5000)) return;
   const mProvider = /@claude/i.test(text) ? 'anthropic' : /@gpt/i.test(text) ? 'openai' : /@gemini/i.test(text) ? 'gemini' : null;
   const clean = text.replace(/@(ai|gpt|claude|gemini)/ig, '').trim();
-  a.messages.push({ id: uid('m'), actor: 'you', type: 'comment', text: clean || text, created_at: nowISO() });
+  a.messages.push({ id: uid('m'), actor: 'you', type: 'comment', text: text, created_at: nowISO() });
   a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(text, a.source_type, 'comment')]));
   a.updated_at = nowISO(); save(); render(); focusThreadCompose();
   const forceAsk = askNextId === a.id; askNextId = null;   // user chose “Ask AI” on this note
@@ -2242,6 +2246,8 @@ async function findRun(raw) {
   clearFindMarks();
   findS.q = q; findS.matches = []; findS.idx = -1;
   if (!q) { if (countEl) countEl.textContent = ''; return; }
+  if (!pdfDoc || !numPages) { if (countEl) countEl.textContent = 'No results'; return; }
+  if (countEl) countEl.textContent = 'Searching…';
   const ql = q.toLowerCase(); const m = [];
   for (let i = 1; i <= numPages; i++) {
     const { text } = await ensurePageText(i);
@@ -2429,7 +2435,10 @@ function wire() {
   // reader top
   $('#pagePrev').onclick = () => gotoPage(state.ui.page - 1);
   $('#pageNext').onclick = () => gotoPage(state.ui.page + 1);
-  $('#pageInput').onchange = e => gotoPage(parseInt(e.target.value) || 1);
+  const commitPage = raw => { const v = parseInt(String(raw).replace(/[^\d]/g, ''), 10); if (!v || v < 1) { $('#pageInput').value = state.ui.page; return; } gotoPage(v); };
+  $('#pageInput').onfocus = e => { try { e.target.select(); } catch (x) {} };
+  $('#pageInput').onchange = e => commitPage(e.target.value);
+  $('#pageInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); commitPage(e.target.value); e.target.blur(); } };
   $('#btnContinuous').onclick = () => setContinuous(!state.ui.continuous);
   $('#btnContinuous').classList.toggle('active', !!state.ui.continuous);
   $('#zoomIn').onclick = () => { state.ui.zoom = clamp(state.ui.zoom + 0.15, 0.5, 3); updateZoom(); };
