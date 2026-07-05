@@ -819,6 +819,7 @@ async function openPdfFile(f) {
   await switchDoc(id);
   updateStorage();
   toast('Opened ' + name + ' — highlight text or capture a figure to start.');
+  maybeOfferFolderNotes(id);
 }
 function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
 function trashDoc(id) {   // soft delete -> Trash view
@@ -2154,6 +2155,18 @@ async function loadNotesFromFolder(docId, interactive) {
     toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.');
     return true;
   } catch (e) { if (interactive) toast('No saved notes for this document in that folder yet.', 'err'); return false; }
+}
+// On opening a PDF, if the chosen notes folder already holds "<name>.notes.json", offer to import it.
+async function maybeOfferFolderNotes(docId) {
+  if (storageCfg().mode !== 'folder') return;
+  let dir = null; try { dir = await notesDirHandle(false); } catch (e) {}
+  if (!dir) return;   // folder access not granted right now (re-grant once via Save/Load this session)
+  let exists = false;
+  try { await dir.getFileHandle(notesFileName(docId), { create: false }); exists = true; } catch (e) {}
+  if (!exists) return;
+  if (confirm('Found saved notes “' + notesFileName(docId) + '” in “' + dir.name + '”. Import them for this document?')) {
+    await loadNotesFromFolder(docId, true);
+  }
 }
 let _folderSyncT;
 function scheduleFolderSync() {
