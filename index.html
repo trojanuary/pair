@@ -2120,7 +2120,7 @@ function applyNotesJSON(obj, docId) {
 async function chooseNotesFolder() {
   if (!fsSupported()) { toast('Folder sync needs Chrome or Edge. Use Export / Import notes instead.', 'err'); return false; }
   try {
-    const h = await window.showDirectoryPicker({ mode: 'readwrite', id: 'srw-notes' });
+    const h = await window.showDirectoryPicker({ mode: 'readwrite', id: 'srw-notes', startIn: 'documents' });
     idbPut('dir:notes', h);
     state.settings.storage = { mode: 'folder', folderName: h.name }; save();
     await writeNotesToFolder(state.ui.activeDoc, false);
@@ -2178,34 +2178,37 @@ function importNotesJSON() {
 function flashSaved() { const b = document.getElementById('btnSaveNotes'); if (b) { b.classList.add('saved'); setTimeout(() => b.classList.remove('saved'), 1400); } }
 // Save button: write to the chosen folder; if none is set, offer to pick one (Chromium) or download.
 async function saveNotesNow() {
-  const cfg = storageCfg();
-  if (cfg.mode === 'folder') {
-    if (await writeNotesToFolder(state.ui.activeDoc, true)) { toast('Saved to “' + cfg.folderName + '”.'); flashSaved(); return; }
+  // The Save button never opens the OS folder picker (that lives in Settings → Choose folder),
+  // so it can't trigger Chrome's "folder contains system files" prompt. It writes to an already
+  // chosen folder, otherwise downloads a portable JSON. Nothing "saves" on a cancelled prompt.
+  if (storageCfg().mode === 'folder' && await writeNotesToFolder(state.ui.activeDoc, true)) {
+    toast('Saved to “' + storageCfg().folderName + '”.'); flashSaved(); return;
   }
-  if (fsSupported()) { if (await chooseNotesFolder()) { flashSaved(); return; } }
-  downloadNotesJSON(state.ui.activeDoc);
+  downloadNotesJSON(state.ui.activeDoc); flashSaved();
 }
-function injectSaveButton() {
-  const fb = document.getElementById('btnFilter'); if (!fb || document.getElementById('btnSaveNotes')) return;
-  const b = el('<button class="icon-btn save-btn" id="btnSaveNotes" title="Save notes (auto-saves to your folder when set)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7"/><path d="M8 13h8v6H8z"/></svg></button>');
-  fb.parentNode.insertBefore(b, fb);
-  b.onclick = () => saveNotesNow();
+function injectNotesButtons() {
+  const fb = document.getElementById('btnFilter'); if (!fb) return;
+  // Retire the reader-toolbar "⋯": PDF export now lives in the notes header + the ⋮ menu.
+  const oldExport = document.getElementById('btnExportTop'); if (oldExport) oldExport.remove();
+  const mk = (id, title, svg, on) => { if (document.getElementById(id)) return; const b = el('<button class="icon-btn" id="' + id + '" title="' + title + '">' + svg + '</button>'); fb.parentNode.insertBefore(b, fb); b.onclick = on; };
+  const SAVE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7"/><path d="M8 13h8v6H8z"/></svg>';
+  const IMPORT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 21h16"/></svg>';
+  const PDF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6v20h12V8z"/><path d="M14 2v6h6"/><path d="M8.5 14h7M8.5 17.5h4"/></svg>';
+  mk('btnSaveNotes', 'Save notes (JSON; auto-saves to your folder when one is set)', SAVE, () => saveNotesNow());
+  mk('btnImportNotes', 'Import notes from a JSON file', IMPORT, () => importNotesJSON());
+  mk('btnExportPdf', 'Export annotations to PDF', PDF, () => openExport());
 }
 function openNotesMenu(anchor) {
   const folder = storageCfg().mode === 'folder';
   openPopover(anchor, [
-    { label: folder ? 'Save notes to folder now' : 'Save notes…', onClick: () => saveNotesNow() },
     (folder ? { label: 'Load notes from folder', onClick: () => loadNotesFromFolder(state.ui.activeDoc, true) } : { label: 'Choose notes folder…', onClick: () => chooseNotesFolder() }),
-    { label: 'Export notes (JSON)', onClick: () => downloadNotesJSON(state.ui.activeDoc) },
-    { label: 'Import notes (JSON)', onClick: () => importNotesJSON() },
-    { sep: true },
-    { label: 'Export annotations (PDF)…', onClick: () => openExport() },
+    (folder ? { label: 'Stop folder sync', onClick: () => { state.settings.storage = { mode: 'browser', folderName: '' }; save(); toast('Folder sync off — notes stay in this browser.'); } } : null),
     { sep: true },
     { label: 'Mark all resolved', onClick: () => { state.annotations.forEach(a => a.resolved = true); save(); render(); } },
     { label: 'Mark all unresolved', onClick: () => { state.annotations.forEach(a => a.resolved = false); save(); render(); } },
     { sep: true },
     { label: 'Clear all notes', onClick: () => { if (confirm('Delete all notes?')) { state.annotations = []; state.ui.activeId = null; save(); render(); drawHighlights(); drawPins(); } } },
-  ]);
+  ].filter(Boolean));
 }
 
 /* ---------- settings modal ---------- */
@@ -2609,7 +2612,7 @@ function wire() {
   });
   $('#btnSearch').onclick = () => { const b = document.getElementById('findBar'); (b && !b.classList.contains('hidden')) ? closeFind() : openFind(); };
   document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F') && numPages > 0) { e.preventDefault(); openFind(); } });
-  $('#btnExportTop').onclick = openExport;
+  { const _bx = $('#btnExportTop'); if (_bx) _bx.onclick = openExport; }
   // selection popover
   document.addEventListener('mouseup', e => { const t = e.target; if (t && t.nodeType === 1 && t.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
   $('#spHi').onclick = () => createFromSelection('yellow');
@@ -2619,7 +2622,7 @@ function wire() {
   // notes header (mockup 2: funnel + search + kebab)
   $('#btnFilter').onclick = e => openFilterPopover(e.currentTarget);
   $('#btnNotesMenu').onclick = e => openNotesMenu(e.currentTarget);
-  injectSaveButton();
+  injectNotesButtons();
   $('#btnNotesSearch').onclick = () => {
     const b = $('#ntSearchbar'); b.classList.toggle('hidden');
     if (!b.classList.contains('hidden')) $('#notesSearchInput').focus();
