@@ -1196,7 +1196,7 @@ function annCard(a) {
   }
   // Inline thread composer — reply / ask a follow-up right inside the note (no detached bottom bar).
   const compose = `<div class="thread-compose">
-    <div class="men-box"><div class="men-hl" aria-hidden="true"></div><textarea class="tc-input men-input" rows="1" placeholder="Reply, ask a follow-up, or @gpt · @claude · @gemini…"></textarea></div>
+    <div class="men-box"><div class="men-hl" aria-hidden="true"></div><textarea class="tc-input men-input" rows="1" placeholder="Reply or ask a follow-up…"></textarea></div>
     <button class="tc-send" title="Send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button>
   </div>`;
   const wrap = el(`<div class="card sel k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
@@ -1736,7 +1736,7 @@ function wire() {
   const gc = $('#composer'); if (gc) gc.classList.remove('hidden');
   const ci = $('#composerInput');
   if (ci) {
-    ci.placeholder = 'Ask a question about this document… (or highlight text for a focused question)';
+    ci.placeholder = 'Ask about this document…';
     const hl = $('#composerHL');
     const sendDoc = () => { const t = ci.value.trim(); if (!t) return; ci.value = ''; ci.style.height = 'auto'; if (hl) hl.innerHTML = '\n'; askAboutDocument(t); };
     $('#composerSend').onclick = sendDoc;
