@@ -1,3 +1,4 @@
+// redeploy nudge 2026-07-05T20:12:51.929Z
 // Vercel serverless function: server-side AI proxy (text/vision), with optional web search.
 // Uses the site's env key by default, or a user-supplied BYO key passed in the request.
 // No npm deps — global fetch (Node 18+).
