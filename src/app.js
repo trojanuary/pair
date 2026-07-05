@@ -1550,27 +1550,26 @@ async function saveNotesNow() {
 }
 function injectNotesButtons() {
   const fb = document.getElementById('btnFilter'); if (!fb) return;
-  // Retire the reader-toolbar "⋯": PDF export now lives in the notes header + the ⋮ menu.
-  const oldExport = document.getElementById('btnExportTop'); if (oldExport) oldExport.remove();
-  const mk = (id, title, svg, on) => { if (document.getElementById(id)) return; const b = el('<button class="icon-btn" id="' + id + '" title="' + title + '">' + svg + '</button>'); fb.parentNode.insertBefore(b, fb); b.onclick = on; };
+  // Retire the reader-toolbar "⋯" and the notes "⋮" menu — everything is a labelled button now.
+  ['btnExportTop', 'btnNotesMenu'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  const mk = (id, before, title, svg, on) => { if (!before || document.getElementById(id)) return; const b = el('<button class="icon-btn" id="' + id + '" title="' + title + '">' + svg + '</button>'); before.parentNode.insertBefore(b, before); b.onclick = on; };
   const SAVE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7"/><path d="M8 13h8v6H8z"/></svg>';
-  const IMPORT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 21h16"/></svg>';
-  const PDF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6v20h12V8z"/><path d="M14 2v6h6"/><path d="M8.5 14h7M8.5 17.5h4"/></svg>';
-  mk('btnSaveNotes', 'Save notes (JSON; auto-saves to your folder when one is set)', SAVE, () => saveNotesNow());
-  mk('btnImportNotes', 'Import notes from a JSON file', IMPORT, () => importNotesJSON());
-  mk('btnExportPdf', 'Export annotations to PDF', PDF, () => openExport());
+  const IMPORT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m9 18 3-3-3-3"/></svg>';
+  const PDF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><rect x="5" y="12.5" width="14" height="7" rx="1.5" fill="currentColor" stroke="none"/><text x="12" y="18" font-size="5.4" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">PDF</text></svg>';
+  const TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+  mk('btnSaveNotes', fb, 'Save notes (JSON; auto-saves to your folder when one is set)', SAVE, () => saveNotesNow());
+  mk('btnImportNotes', fb, 'Import notes from a JSON file', IMPORT, () => importNotesJSON());
+  mk('btnExportPdf', fb, 'Export annotations to PDF', PDF, () => openExport());
+  const cr = document.getElementById('btnCollapseRight');
+  mk('btnClearNotes', cr || fb, 'Delete all notes for this document', TRASH, () => clearActiveNotes());
 }
-function openNotesMenu(anchor) {
-  const folder = storageCfg().mode === 'folder';
-  openPopover(anchor, [
-    (folder ? { label: 'Load notes from folder', onClick: () => loadNotesFromFolder(state.ui.activeDoc, true) } : { label: 'Choose notes folder…', onClick: () => chooseNotesFolder() }),
-    (folder ? { label: 'Stop folder sync', onClick: () => { state.settings.storage = { mode: 'browser', folderName: '' }; save(); toast('Folder sync off — notes stay in this browser.'); } } : null),
-    { sep: true },
-    { label: 'Mark all resolved', onClick: () => { state.annotations.forEach(a => a.resolved = true); save(); render(); } },
-    { label: 'Mark all unresolved', onClick: () => { state.annotations.forEach(a => a.resolved = false); save(); render(); } },
-    { sep: true },
-    { label: 'Clear all notes', onClick: () => { if (confirm('Delete all notes?')) { state.annotations = []; state.ui.activeId = null; save(); render(); drawHighlights(); drawPins(); } } },
-  ].filter(Boolean));
+function clearActiveNotes() {
+  const n = state.annotations.filter(inActiveDoc).length;
+  if (!n) { toast('No notes to delete for this document.'); return; }
+  if (!confirm('Delete all ' + n + ' note' + (n === 1 ? '' : 's') + ' for “' + activeDoc().name + '”? This cannot be undone.')) return;
+  state.annotations = state.annotations.filter(a => !inActiveDoc(a));
+  state.ui.activeId = null; save(); render(); drawHighlights(); drawPins();
+  toast('Deleted all notes for this document.');
 }
 
 /* ---------- settings modal ---------- */
@@ -1608,6 +1607,7 @@ function openSettings(note) {
           <button type="button" class="btn ghost" id="stFolder">${(s.storage && s.storage.mode === 'folder') ? ('📁 ' + esc(s.storage.folderName || 'folder set')) : 'Choose folder…'}</button>
           <button type="button" class="btn ghost" id="stExport">Export notes (JSON)</button>
           <button type="button" class="btn ghost" id="stImport">Import notes (JSON)</button>
+          ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stLoad">Load from folder</button>' : ''}
           ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stBrowserOnly">Stop folder sync</button>' : ''}
         </div>
       </div>
@@ -1623,6 +1623,7 @@ function openSettings(note) {
   { const stE = $('#stExport', m); if (stE) stE.onclick = () => downloadNotesJSON(state.ui.activeDoc); }
   { const stI = $('#stImport', m); if (stI) stI.onclick = () => importNotesJSON(); }
   { const stB = $('#stBrowserOnly', m); if (stB) stB.onclick = () => { state.settings.storage = { mode: 'browser', folderName: '' }; save(); close(); toast('Folder sync off — notes stay in this browser.'); }; }
+  { const stL = $('#stLoad', m); if (stL) stL.onclick = async () => { close(); await loadNotesFromFolder(state.ui.activeDoc, true); }; }
   $('#mSave', m).onclick = () => {
     const defEl = $('.def-radio.on', m); if (defEl) s.provider = defEl.dataset.def;
     s.keys.openai = $('#kOpenai', m).value.trim(); s.keys.anthropic = $('#kAnthropic', m).value.trim(); s.keys.gemini = $('#kGemini', m).value.trim();
@@ -1983,7 +1984,6 @@ function wire() {
   document.addEventListener('scroll', () => $('#selPop').classList.add('hidden'), true);
   // notes header (mockup 2: funnel + search + kebab)
   $('#btnFilter').onclick = e => openFilterPopover(e.currentTarget);
-  $('#btnNotesMenu').onclick = e => openNotesMenu(e.currentTarget);
   injectNotesButtons();
   $('#btnNotesSearch').onclick = () => {
     const b = $('#ntSearchbar'); b.classList.toggle('hidden');
