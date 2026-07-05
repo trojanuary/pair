@@ -625,10 +625,10 @@ function pickImageProvider() {
 }
 // AI calls go through the server-side proxy (/api/*): uses the site's env key by default,
 // or the user's BYO key (from Settings) passed through as `userKey`.
-async function aiText(provider, { system, user, image }) {
+async function aiText(provider, { system, user, image, maxTokens }) {
   const r = await fetch('/api/ai', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, system, user, image, web: !!state.settings.enableWeb, model: state.settings.models[provider], userKey: keyFor(provider) || undefined }),
+    body: JSON.stringify({ provider, system, user, image, web: !!state.settings.enableWeb, model: state.settings.models[provider], maxTokens, userKey: keyFor(provider) || undefined }),
   });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || `AI request failed (${r.status})`);
@@ -794,7 +794,7 @@ async function runAgentTool(a, name, args) {
     if (name === 'search_document') return await agentSearch(args.query || '');
     if (name === 'document_outline') return await agentOutline();
     if (name === 'read_full_document') { let out = ''; for (let n = 1; n <= numPages; n++) { out += `\n\n[Page ${n}]\n` + await ensureText(n); if (out.length > 48000) { out += '\n\n[…truncated…]'; break; } } return out.slice(0, 50000); }
-    if (name === 'create_visual') { await generateVisual(a.id, String(args.description || '').trim() || 'A visual that helps explain the selected content.'); const vm = a.messages[a.messages.length - 1]; if (vm && vm.type === 'generated_visual' && !vm.error) return `Generated a ${vm.kind === 'image' ? 'image' : 'diagram'} titled "${vm.title}" — it is now shown to the reader in this thread.${vm.caption ? ' Caption: ' + vm.caption : ''} Briefly reference it in your answer.`; return 'The visual could not be generated: ' + ((vm && vm.error) || 'unknown error') + '. Answer in text instead.'; }
+    if (name === 'create_visual') { await generateVisual(a.id, String(args.description || '').trim() || 'A visual that helps explain the selected content.'); const vm = a.messages[a.messages.length - 1]; if (vm && vm.type === 'generated_visual' && !vm.error) return `Generated a ${vm.kind === 'image' ? 'image' : 'diagram'} titled "${vm.title}" — it is now shown to the reader in this thread.${vm.caption ? ' Caption: ' + vm.caption : ''} The reader can already see it — reply with at most ONE short sentence pointing to it (e.g. "Here's the diagram."); do NOT describe its contents or offer other versions.`; return 'The visual could not be generated: ' + ((vm && vm.error) || 'unknown error') + '. Answer in text instead.'; }
     if (name === 'web_search') return await agentWeb(args.query || '');
   } catch (e) { return 'Tool error: ' + (e.message || e); }
   return 'Unknown tool: ' + name;
@@ -873,7 +873,20 @@ async function askAIAgent(a, question, msg) {
     save(); render(); toast(errHint(e.message), 'err');
   }
 }
-function stripJson(s) { try { return JSON.parse(String(s).replace(/```json|```/g, '').trim()); } catch (e) {} const m = String(s).match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch (e) {} } return null; }
+function stripJson(s) {
+  const raw = String(s == null ? '' : s).replace(/```json|```/g, '').trim();
+  try { return JSON.parse(raw); } catch (e) {}
+  const m = raw.match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch (e) {} }
+  // Salvage a truncated/partial planner object by pulling known fields out of the text (never return raw JSON to the UI).
+  const out = {}; const un = v => { try { return JSON.parse('"' + v + '"'); } catch (e) { return v; } }; let x;
+  if ((x = raw.match(/"format"\s*:\s*"(ascii|image)"/))) out.format = x[1];
+  if ((x = raw.match(/"ascii"\s*:\s*"((?:\\.|[^"\\])*)"/))) out.ascii = un(x[1]);
+  if ((x = raw.match(/"image_prompt"\s*:\s*"((?:\\.|[^"\\])*)"/))) out.image_prompt = un(x[1]);
+  if ((x = raw.match(/"title"\s*:\s*"((?:\\.|[^"\\])*)"/))) out.title = un(x[1]);
+  if ((x = raw.match(/"caption"\s*:\s*"((?:\\.|[^"\\])*)"/))) out.caption = un(x[1]);
+  if ((x = raw.match(/"takeaways"\s*:\s*\[([\s\S]*?)\]/))) { try { out.takeaways = JSON.parse('[' + x[1] + ']'); } catch (e) {} }
+  return Object.keys(out).length ? out : null;
+}
 // Broader document context for a visual (selection + surrounding + cross-document passages).
 function visualContext(a, prompt) {
   const ctx = buildContext(a);
@@ -904,7 +917,7 @@ async function generateVisual(annId, prompt) {
     '4) If ambiguous → "ascii".',
     'For "ascii" build a faithful monospace diagram from the document (never invent numbers). For "image" write a vivid image_prompt.',
     (canImage ? '' : 'NOTE: image generation is unavailable, so you must use "ascii".'),
-    'Return STRICT JSON only: {"format":"ascii"|"image","title":"<=6 words","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}',
+    'Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}',
   ].filter(Boolean).join('\n');
   const planUser = [
     `Reader's request: ${prompt || 'Make a helpful visual of this.'}`,
@@ -915,7 +928,7 @@ async function generateVisual(annId, prompt) {
     docText ? `Document excerpts:${docText}` : '',
   ].filter(Boolean).join('\n\n');
   try {
-    const planRaw = await aiText(tp, { system: planSys, user: planUser, image: ctx.image });
+    const planRaw = await aiText(tp, { system: planSys, user: planUser, image: ctx.image, maxTokens: 2600 });
     let plan = stripJson(planRaw) || {};
     if (!plan.format) plan.format = (canImage && /\b(illustrat|picture|scene|concept art|artistic|imagine|photo)\b/i.test(prompt || '')) ? 'image' : 'ascii';
     if (plan.format === 'image' && !canImage) plan.format = 'ascii';
@@ -929,7 +942,15 @@ async function generateVisual(annId, prompt) {
         msg.kind = 'image'; msg.model = state.settings.models[ip === 'openai' ? 'openaiImage' : 'geminiImage'];
       } catch (e) { msg.kind = 'ascii'; msg.ascii = plan.ascii || ('Image generation failed: ' + (e.message || e)); }
     } else {
-      msg.kind = 'ascii'; msg.ascii = plan.ascii || (planRaw || '').slice(0, 1400); msg.model = state.settings.models[tp];
+      msg.kind = 'ascii'; msg.model = state.settings.models[tp];
+      let art = (plan.ascii || '').trim();
+      if (!art) {
+        // Planner JSON was unusable (e.g. truncated before the diagram) — ask for the diagram as plain text so there's no JSON to break.
+        msg.status = 'Drawing the diagram…'; save(); render();
+        try { const rawDiagram = await aiText(tp, { system: 'Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.', user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
+      }
+      if (art) msg.ascii = art;
+      else { msg.error = 'Could not render the diagram — please try again.'; msg.title = 'Visual unavailable'; }
     }
     msg.pending = false; msg.status = null;
     a.auto_tags = Array.from(new Set([...(a.auto_tags || []), 'Generated visual']));

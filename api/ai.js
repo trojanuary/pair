@@ -20,17 +20,17 @@ async function openaiChat(key, body) {
   return { r, j: await r.json() };
 }
 // ---- OpenAI (chat completions; swaps to a web-search model when web is on and there's no image) ----
-async function openaiCall(key, { system, user, image, model, web }) {
+async function openaiCall(key, { system, user, image, model, web, maxTokens }) {
   const content = image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.b64}` } }] : user;
   const useSearch = web && !image;
   const m = useSearch ? 'gpt-4o-search-preview' : (model || DEFAULT_MODEL.openai);
-  const body = { model: m, messages: [{ role: 'system', content: system }, { role: 'user', content }], ...capTokens(m, 900) };
+  const body = { model: m, messages: [{ role: 'system', content: system }, { role: 'user', content }], ...capTokens(m, maxTokens || 900) };
   if (useSearch) body.web_search_options = {};
   let { r, j } = await openaiChat(key, body);
   // Resilience: if the search-preview model isn't available, retry once without web search.
   if (!r.ok && useSearch) {
     const bm = model || DEFAULT_MODEL.openai;
-    ({ r, j } = await openaiChat(key, { model: bm, messages: [{ role: 'system', content: system }, { role: 'user', content }], ...capTokens(bm, 900) }));
+    ({ r, j } = await openaiChat(key, { model: bm, messages: [{ role: 'system', content: system }, { role: 'user', content }], ...capTokens(bm, maxTokens || 900) }));
   }
   if (!r.ok) throw new Error(j.error?.message || 'OpenAI error');
   return (j.choices?.[0]?.message?.content || '').trim();
@@ -47,9 +47,9 @@ async function openaiAgentStep(key, { messages, tools, model }) {
 }
 
 // ---- Anthropic (adds the server-side web_search tool when web is on) ----
-async function anthropicCall(key, { system, user, image, model, web }) {
+async function anthropicCall(key, { system, user, image, model, web, maxTokens }) {
   const content = image ? [{ type: 'text', text: user }, { type: 'image', source: { type: 'base64', media_type: image.mime, data: image.b64 } }] : user;
-  const body = { model: model || DEFAULT_MODEL.anthropic, max_tokens: 2000, system, messages: [{ role: 'user', content }] };
+  const body = { model: model || DEFAULT_MODEL.anthropic, max_tokens: maxTokens || 2000, system, messages: [{ role: 'user', content }] };
   if (web) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(body),
@@ -59,10 +59,11 @@ async function anthropicCall(key, { system, user, image, model, web }) {
 }
 
 // ---- Gemini (adds Google Search grounding when web is on) ----
-async function geminiCall(key, { system, user, image, model, web }) {
+async function geminiCall(key, { system, user, image, model, web, maxTokens }) {
   const m = model || DEFAULT_MODEL.gemini;
   const parts = image ? [{ text: user }, { inline_data: { mime_type: image.mime, data: image.b64 } }] : [{ text: user }];
   const body = { system_instruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts }] };
+  if (maxTokens) body.generationConfig = { maxOutputTokens: maxTokens };
   if (web) body.tools = [/1\.5/.test(m) ? { google_search_retrieval: {} } : { google_search: {} }];
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${key}`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -83,8 +84,8 @@ module.exports = async function handler(req, res) {
       const step = await openaiAgentStep(key, { messages, tools, model });
       return res.status(200).json(step);
     }
-    const { system = '', user = '', image = null, web = false } = body;
-    const args = { system, user, image, model, web };
+    const { system = '', user = '', image = null, web = false, maxTokens } = body;
+    const args = { system, user, image, model, web, maxTokens };
     let text = '';
     if (provider === 'openai') text = await openaiCall(key, args);
     else if (provider === 'anthropic') text = await anthropicCall(key, args);
