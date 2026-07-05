@@ -731,10 +731,13 @@ async function askAI(annId, question, providerOverride) {
     ctx.thread ? `Conversation so far on this note:\n${ctx.thread}` : '',
     `\nReader's question: ${question}`,
   ].filter(Boolean).join('\n\n');
+  msg.trace = [{ type: 'context', title: 'Context sent to the model', text: system + '\n\n' + user }];
+  if (state.settings.enableWeb) msg.trace.push({ type: 'note', title: 'Web search enabled', text: 'This provider searched the web live; any outside facts and citation links came from that search.' });
   if (passages.length) msg.chips = msg.chips.map(c => c === 'No external sources' ? 'Used related passages · no external sources' : c);
   try {
     const out = await aiText(provider, { system, user, image: ctx.image });
     msg.text = out; msg.pending = false;
+    if (msg.trace) msg.trace.push({ type: 'final', title: 'Final answer', text: out });
     a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(question, a.source_type, 'ai_answer')]));
     save(); render();
   } catch (e) {
@@ -835,6 +838,7 @@ async function askAIAgent(a, question, msg) {
       const step = await aiAgentStep(model, messages, tools);
       if (step.tool_calls && step.tool_calls.length) {
         messages.push({ role: 'assistant', content: step.content || '', tool_calls: step.tool_calls });
+        if (step.content && step.content.trim()) msg.trace.push({ type: 'thought', title: 'Model reasoning', text: step.content.trim() });
         for (const tc of step.tool_calls) {
           let args = {}; try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
           used.add(tc.function.name);
@@ -857,6 +861,7 @@ async function askAIAgent(a, question, msg) {
       msg.trace.push({ type: 'final', title: 'Final synthesis', text: answer });
     }
     msg.text = answer || 'The document doesn’t seem to cover that — try selecting the relevant passage, or ask a more specific question.';
+    if (answer && !(msg.trace.length && msg.trace[msg.trace.length - 1].type === 'final')) msg.trace.push({ type: 'final', title: 'Final answer', text: answer });
     msg.pending = false; msg.status = null; msg.chips = agentChips(a, used);
     a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(question, a.source_type, 'ai_answer')]));
     save(); render();
@@ -1118,7 +1123,7 @@ function msgCard(a, m, isFirst) {
     else {
       // Answer first; provenance chips are tucked into a collapsed “sources” disclosure.
       body += `<div class="msg">${mdLite(m.text)}</div>`
-        + `<details class="prov"><summary><span class="disc-i">ⓘ</span> AI-generated${m.model ? ' · ' + esc(m.model) : ''}<span class="prov-more"> · sources</span></summary>${chipRow(m.chips)}</details>`
+        + `<details class="prov" data-disc="prov:${m.id}"${(state.ui.openDisc || {})['prov:' + m.id] ? ' open' : ''}><summary><span class="disc-i">ⓘ</span> AI-generated${m.model ? ' · ' + esc(m.model) : ''}<span class="prov-more"> · sources</span></summary><div class="prov-body"><div class="prov-lbl">What this answer used</div>${chipRow((m.chips && m.chips.length) ? m.chips : chipsFor(a))}</div></details>`
         + traceHTML(m);
     }
   }
@@ -1192,7 +1197,7 @@ function annCard(a) {
     ${replies ? `<div class="replies">${replies}</div>` : ''}
     ${compose}</div>`);
   wrap.addEventListener('click', ev => {
-    if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],[data-edit],[data-delnote],[data-delmsg],[data-quotemore],.thread-compose,button,a,textarea')) return;
+    if (ev.target.closest('[data-menu],[data-rmtag],[data-addtag],[data-edit],[data-delnote],[data-delmsg],[data-quotemore],.thread-compose,button,a,textarea,summary,details')) return;
     if (window.getSelection && String(window.getSelection()).trim()) return;   // let the user select/copy text without re-rendering
     selectAnnotation(a.id, false);
   });
@@ -1201,20 +1206,64 @@ function annCard(a) {
 // Collapsible "agent's work" transcript: the context sent, each tool call + result, final synthesis.
 function traceHTML(m) {
   if (!m.trace || !m.trace.length) return '';
-  const nTools = m.trace.filter(s => s.type === 'tool').length;
+  const tools = m.trace.filter(s => s.type === 'tool');
+  const nTools = tools.length;
+  let n = 0;
   const steps = m.trace.map(s => {
-    if (s.type === 'tool') return `<div class="tr-step"><div class="tr-h">🔧 ${esc(s.name)}(${esc(JSON.stringify(s.args || {}))})</div><pre class="tr-body">${esc(s.result || '')}</pre></div>`;
-    return `<div class="tr-step"><div class="tr-h">${esc(s.title || s.type)}</div><pre class="tr-body">${esc(s.text || '')}</pre></div>`;
+    n++;
+    if (s.type === 'tool') {
+      const args = (s.args && Object.keys(s.args).length) ? esc(JSON.stringify(s.args)) : '(none)';
+      return `<div class="tr-step"><div class="tr-h"><span class="tr-n">${n}</span>🔧 Tool call · <b>${esc(s.name)}</b></div><div class="tr-sub">Input</div><pre class="tr-body">${args}</pre><div class="tr-sub">Result</div><pre class="tr-body">${esc(s.result || '(empty)')}</pre></div>`;
+    }
+    const label = s.title || (s.type === 'final' ? 'Final answer' : s.type === 'thought' ? 'Model reasoning' : s.type === 'context' ? 'Context sent to the model' : s.type);
+    return `<div class="tr-step"><div class="tr-h"><span class="tr-n">${n}</span>${esc(label)}</div><pre class="tr-body">${esc(s.text || '')}</pre></div>`;
   }).join('');
-  return `<details class="trace"><summary>Show the agent's work${nTools ? ` · ${nTools} tool call${nTools === 1 ? '' : 's'}` : ''}</summary><div class="tr-list">${steps}</div></details>`;
+  const toolsLine = nTools ? `<div class="tr-tools">Tools called: ${tools.map(t => `<code>${esc(t.name)}</code>`).join(', ')}</div>` : `<div class="tr-tools">No tools were needed — answered directly from the context.</div>`;
+  const id = 'trace:' + (m.id || '');
+  const open = (state.ui.openDisc || {})[id] ? ' open' : '';
+  return `<details class="trace" data-disc="${id}"${open}><summary>Show the agent's work${nTools ? ` · ${nTools} tool call${nTools === 1 ? '' : 's'}` : ''}</summary><div class="tr-list">${toolsLine}${steps}</div></details>`;
+}
+function mdInline(s) {
+  // s is ALREADY html-escaped. Apply inline markdown (code, links, bold, italic, mentions).
+  return s
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="cite">$1</a>')
+    .replace(/\*\*([^\n]+?)\*\*/g, '<b>$1</b>')
+    .replace(/__([^\n]+?)__/g, '<b>$1</b>')
+    .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, '$1<i>$2</i>')
+    .replace(/(^|[^_\w])_(?!\s)([^_\n]+?)(?<!\s)_(?!\w)/g, '$1<i>$2</i>')
+    .replace(/@(ai|gpt|claude|gemini)\b/ig, x => `<span class="men">${x}</span>`);
 }
 function mdLite(t) {
-  return esc(t)
-    .replace(/^\s*[-*]\s+(.*)$/gm, '• $1')
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-    // markdown links (e.g. web-search citations) -> clickable (sandbox-safe)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="cite">$1</a>')
-    .replace(/\n/g, '<br>');
+  // Block-aware markdown -> HTML: headers, tables, ordered/unordered lists, blockquotes, rules,
+  // paragraphs, plus inline formatting. Input is escaped up front so it is XSS-safe.
+  const lines = esc(t == null ? '' : String(t)).replace(/\r\n?/g, '\n').split('\n');
+  const isSep = l => l.includes('|') && /^[\s|:\-]+$/.test(l) && l.includes('-');
+  const cells = l => l.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+  const isBlock = (l, nx) => /^#{1,6}\s+/.test(l) || /^\s*[-*+•]\s+/.test(l) || /^\s*\d+[.)]\s+/.test(l)
+    || /^\s*>\s?/.test(l) || /^\s*([-*_])\1{2,}\s*$/.test(l) || (l.includes('|') && isSep(nx || ''));
+  const out = []; let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    if (line.includes('|') && isSep(lines[i + 1] || '')) {
+      const header = cells(line); i += 2; const rows = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) { rows.push(cells(lines[i])); i++; }
+      const th = '<tr>' + header.map(c => `<th>${mdInline(c)}</th>`).join('') + '</tr>';
+      const tb = rows.map(r => '<tr>' + r.map(c => `<td>${mdInline(c)}</td>`).join('') + '</tr>').join('');
+      out.push(`<div class="md-tablewrap"><table class="md-table"><thead>${th}</thead><tbody>${tb}</tbody></table></div>`); continue;
+    }
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { const lvl = h[1].length <= 1 ? 4 : h[1].length === 2 ? 5 : 6; out.push(`<h${lvl} class="md-h">${mdInline(h[2].trim())}</h${lvl}>`); i++; continue; }
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) { out.push('<hr class="md-hr">'); i++; continue; }
+    if (/^\s*>\s?/.test(line)) { const buf = []; while (i < lines.length && /^\s*>\s?/.test(lines[i])) { buf.push(mdInline(lines[i].replace(/^\s*>\s?/, ''))); i++; } out.push(`<blockquote class="md-q">${buf.join('<br>')}</blockquote>`); continue; }
+    if (/^\s*[-*+•]\s+/.test(line)) { const buf = []; while (i < lines.length && /^\s*[-*+•]\s+/.test(lines[i])) { buf.push(`<li>${mdInline(lines[i].replace(/^\s*[-*+•]\s+/, ''))}</li>`); i++; } out.push(`<ul class="md-ul">${buf.join('')}</ul>`); continue; }
+    if (/^\s*\d+[.)]\s+/.test(line)) { const buf = []; while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) { buf.push(`<li>${mdInline(lines[i].replace(/^\s*\d+[.)]\s+/, ''))}</li>`); i++; } out.push(`<ol class="md-ol">${buf.join('')}</ol>`); continue; }
+    const buf = [];
+    while (i < lines.length && lines[i].trim() && !isBlock(lines[i], lines[i + 1])) { buf.push(mdInline(lines[i])); i++; }
+    out.push(`<p class="md-p">${buf.join('<br>')}</p>`);
+  }
+  return out.join('');
 }
 
 function render() {
@@ -1249,6 +1298,7 @@ function render() {
   // edit / delete / quote controls
   $$('[data-edit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = b.dataset.edit; render(); const ta = list.querySelector('.edit-input'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } });
   $$('[data-canceledit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = null; render(); });
+  $$('details[data-disc]', list).forEach(d => d.addEventListener('toggle', () => { state.ui.openDisc = state.ui.openDisc || {}; if (d.open) state.ui.openDisc[d.dataset.disc] = true; else delete state.ui.openDisc[d.dataset.disc]; save(); }));
   $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
   $$('[data-reask]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveAndReask(b.dataset.ann, b.dataset.reask); });
   $$('[data-collapse]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); collapseNote(b.dataset.collapse); });
