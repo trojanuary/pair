@@ -77,7 +77,7 @@ svg{display:block}
 .bar>i{display:block;height:100%;width:42%;background:var(--blue);border-radius:99px}
 
 /* ---------- Center reader ---------- */
-#reader{display:flex;flex-direction:column;min-width:0;background:var(--bg);overflow:clip}
+#reader{display:flex;flex-direction:column;min-width:0;background:var(--bg);overflow:clip;position:relative}
 .rd-top{height:60px;flex:0 0 auto;display:flex;align-items:center;gap:12px;
   padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);position:relative}
 .rd-group{display:flex;align-items:center;gap:6px;border:1px solid var(--line);
@@ -109,6 +109,18 @@ svg{display:block}
   transform-origin:0% 0%}
 .textLayer ::selection{background:rgba(37,99,235,.28)}
 .textLayer .search-hit{background:rgba(245,158,11,.38);border-radius:2px}
+.textLayer mark.sh{background:rgba(245,158,11,.34);color:inherit;border-radius:2px;padding:0}
+.textLayer mark.sh.cur{background:rgba(245,158,11,.9);box-shadow:0 0 0 1.5px rgba(180,110,0,.55)}
+.find-bar{position:absolute;top:68px;right:16px;z-index:40;display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px 8px}
+.find-bar.hidden{display:none}
+.find-bar .find-ic{width:16px;height:16px;color:var(--muted);flex:0 0 auto;margin:0 3px}
+#findInput{border:0;outline:none;background:transparent;font-size:13.5px;color:var(--ink);width:210px;font-family:inherit}
+#findInput::placeholder{color:var(--muted)}
+.find-count{font-size:12px;color:var(--muted);min-width:52px;text-align:right;font-variant-numeric:tabular-nums;padding:0 2px}
+.find-sep{width:1px;align-self:stretch;background:var(--line);margin:2px 3px}
+.find-nav{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--ink-2);flex:0 0 auto;background:transparent;border:0;cursor:pointer}
+.find-nav:hover{background:var(--surface-2);color:var(--ink)}
+.find-nav svg{width:16px;height:16px}
 .overlay{position:absolute;left:0;top:0;pointer-events:none;z-index:3}
 .hl-rect{position:absolute;border-radius:2px;pointer-events:auto;cursor:pointer}
 .hl-rect.text{background:rgba(37,99,235,.20)}

@@ -1539,14 +1539,101 @@ function buildSheet() {
 }
 
 /* ---------- search ---------- */
-async function runSearch(q) {
-  if (!q) return; const hits = [];
-  for (let i = 1; i <= numPages; i++) { const { text } = await ensurePageText(i); if (text.toLowerCase().includes(q.toLowerCase())) hits.push(i); }
-  if (!hits.length) { toast('No matches for “' + q + '”.'); return; }
-  const cur = state.ui.page; const next = hits.find(p => p > cur) ?? hits[0];
-  await renderPage(next);
-  setTimeout(() => { $$('#textLayer span').forEach(s => { if (s.textContent.toLowerCase().includes(q.toLowerCase())) s.classList.add('search-hit'); }); }, 120);
-  toast(`“${q}” found on page${hits.length > 1 ? 's' : ''} ${hits.join(', ')} — showing ${next}.`);
+/* ---------- in-document find bar (replaces the native prompt) ---------- */
+let findS = { q: '', matches: [], idx: -1 };
+function findBarEl() {
+  let b = document.getElementById('findBar');
+  if (b) return b;
+  const r = document.getElementById('reader'); if (!r) return null;
+  b = el(`<div id="findBar" class="find-bar hidden">
+    <svg class="find-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+    <input id="findInput" placeholder="Find in document…" autocomplete="off" spellcheck="false">
+    <span class="find-count" id="findCount"></span>
+    <span class="find-sep"></span>
+    <button class="find-nav" id="findPrev" title="Previous (Shift+Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="find-nav" id="findNext" title="Next (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>
+    <button class="find-nav" id="findClose" title="Close (Esc)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>`);
+  r.appendChild(b);
+  const input = b.querySelector('#findInput');
+  let deb;
+  input.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(() => findRun(input.value), 160); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); e.shiftKey ? findGo(-1) : findGo(1); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+  });
+  b.querySelector('#findPrev').onclick = () => findGo(-1);
+  b.querySelector('#findNext').onclick = () => findGo(1);
+  b.querySelector('#findClose').onclick = () => closeFind();
+  return b;
+}
+function openFind() {
+  const b = findBarEl(); if (!b) return;
+  b.classList.remove('hidden');
+  const btn = document.getElementById('btnSearch'); if (btn) btn.classList.add('active');
+  const input = b.querySelector('#findInput'); input.focus(); input.select();
+  if (input.value.trim()) findRun(input.value);
+}
+function closeFind() {
+  clearFindMarks();
+  findS = { q: '', matches: [], idx: -1 };
+  const b = document.getElementById('findBar');
+  if (b) { b.classList.add('hidden'); const c = b.querySelector('#findCount'); if (c) c.textContent = ''; }
+  const btn = document.getElementById('btnSearch'); if (btn) btn.classList.remove('active');
+}
+function clearFindMarks() {
+  document.querySelectorAll('.textLayer span._shl').forEach(s => { s.textContent = s.textContent; s.classList.remove('_shl'); });
+}
+function findCurrentPage() { return state.ui.continuous ? currentContinuousPage() : state.ui.page; }
+function findPageEl(p) { return state.ui.continuous ? document.querySelector(`#contPages .pg[data-page="${p}"]`) : document.getElementById('pageWrap'); }
+async function findRun(raw) {
+  const q = (raw || '').trim();
+  const countEl = document.getElementById('findCount');
+  clearFindMarks();
+  findS.q = q; findS.matches = []; findS.idx = -1;
+  if (!q) { if (countEl) countEl.textContent = ''; return; }
+  const ql = q.toLowerCase(); const m = [];
+  for (let i = 1; i <= numPages; i++) {
+    const { text } = await ensurePageText(i);
+    const lc = (text || '').toLowerCase(); let from = 0, k, occ = 0;
+    while ((k = lc.indexOf(ql, from)) >= 0) { m.push({ page: i, occ }); occ++; from = k + ql.length; }
+  }
+  if (findS.q !== q) return; // a newer query superseded this run
+  findS.matches = m;
+  if (!m.length) { if (countEl) countEl.textContent = 'No results'; return; }
+  const cur = findCurrentPage();
+  let start = m.findIndex(x => x.page >= cur); if (start < 0) start = 0;
+  await findGoto(start);
+}
+async function findGoto(idx) {
+  const m = findS.matches; if (!m.length) return;
+  idx = (idx + m.length) % m.length; findS.idx = idx;
+  const { page, occ } = m[idx];
+  clearFindMarks();
+  if (state.ui.continuous) await gotoPage(page);
+  else if (page !== state.ui.page) await renderPage(page);
+  await new Promise(r => setTimeout(r, 50));
+  const pel = findPageEl(page);
+  if (pel) findMarkPage(pel, findS.q, occ);
+  const countEl = document.getElementById('findCount'); if (countEl) countEl.textContent = (idx + 1) + ' / ' + m.length;
+  const cur = pel && pel.querySelector('mark.sh.cur');
+  if (cur) cur.scrollIntoView({ block: 'center', inline: 'nearest' });
+}
+function findGo(delta) { if (findS.matches.length) findGoto(findS.idx + delta); }
+function findMarkPage(pel, q, curOcc) {
+  const ql = q.toLowerCase(); let occ = 0;
+  pel.querySelectorAll('.textLayer span').forEach(s => {
+    const txt = s.textContent; const lc = txt.toLowerCase();
+    if (!lc.includes(ql)) return;
+    let html = '', from = 0, k;
+    while ((k = lc.indexOf(ql, from)) >= 0) {
+      html += esc(txt.slice(from, k));
+      html += `<mark class="sh${occ === curOcc ? ' cur' : ''}">` + esc(txt.slice(k, k + ql.length)) + `</mark>`;
+      from = k + ql.length; occ++;
+    }
+    html += esc(txt.slice(from));
+    s.innerHTML = html; s.classList.add('_shl');
+  });
 }
 
 /* ---------- seeding (mirror the mockups) ---------- */
@@ -1714,7 +1801,8 @@ function wire() {
     setTool('cursor'); selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
     toast('Comment placed — type your note below.');
   });
-  $('#btnSearch').onclick = () => { const q = prompt('Search inside document:'); if (q) runSearch(q.trim()); };
+  $('#btnSearch').onclick = () => { const b = document.getElementById('findBar'); (b && !b.classList.contains('hidden')) ? closeFind() : openFind(); };
+  document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F') && numPages > 0) { e.preventDefault(); openFind(); } });
   $('#btnExportTop').onclick = openExport;
   // selection popover
   document.addEventListener('mouseup', e => { const t = e.target; if (t && t.nodeType === 1 && t.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
