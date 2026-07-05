@@ -590,7 +590,12 @@ function scrollNoteIntoView(id, center) {
 function selectAnnotation(id, scrollCard, scrollPage) {
   state.ui.activeId = id; save();
   const a = state.annotations.find(x => x.id === id);
-  if (a && scrollPage && a.page !== state.ui.page) renderPage(a.page).then(() => { drawPins(); });
+  if (a && scrollPage) {
+    // Continuous mode: scroll the stacked view to the note's page (renderPage would draw into the
+    // hidden single-page canvas and never move the reader). Single mode: swap the page as before.
+    if (state.ui.continuous) gotoPage(a.page);
+    else if (a.page !== state.ui.page) renderPage(a.page).then(() => { drawPins(); });
+  }
   render(); drawPins();
   if (scrollCard) scrollNoteIntoView(id, true);
   requestAnimationFrame(drawConnector);
