@@ -1145,6 +1145,13 @@ function msgCard(a, m, isFirst) {
   return { head, body };
 }
 
+function cardKind(a) {
+  // AI presence wins: any note we asked AI in (answer or generated visual) reads as an "AI" card.
+  if ((a.messages || []).some(m => m.actor === 'ai' && (m.type === 'ai_answer' || m.type === 'generated_visual'))) return 'ai';
+  if (a.source_type === 'screenshot') return 'shot';
+  if (a.source_type === 'free_comment') return 'comment';
+  return 'hl';
+}
 function compactCard(a) {
   // compact by default (mockup 2): number badge + type label + time; clamped preview + location.
   const m0 = a.messages[0];
@@ -1154,7 +1161,7 @@ function compactCard(a) {
     || a.selected_text || '';
   const when = timeLabel(m0 ? m0.created_at : a.created_at);
   const badge = a.source_type === 'screenshot' ? 'var(--green)' : 'var(--blue)';
-  const wrap = el(`<div class="card compact ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
+  const wrap = el(`<div class="card compact k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${!a.resolved ? '<span class="unread-dot"></span>' : ''}
     <div class="card-h"><span style="width:22px;height:22px;border-radius:50%;background:${badge};color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto">${a.anchor}</span>
       <span class="who">${label}</span><span class="when">${when}</span></div>
@@ -1192,7 +1199,7 @@ function annCard(a) {
     <div class="men-box"><div class="men-hl" aria-hidden="true"></div><textarea class="tc-input men-input" rows="1" placeholder="Reply, ask a follow-up, or @gpt · @claude · @gemini…"></textarea></div>
     <button class="tc-send" title="Send"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button>
   </div>`;
-  const wrap = el(`<div class="card sel ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
+  const wrap = el(`<div class="card sel k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${headHtml}<div class="card-b">${firstBody}${tagPills(a)}</div>
     ${replies ? `<div class="replies">${replies}</div>` : ''}
     ${compose}</div>`);

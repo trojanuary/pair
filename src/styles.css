@@ -157,6 +157,11 @@ svg{display:block}
 .card{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);
   box-shadow:var(--shadow);overflow:hidden;scroll-margin-top:10px}
 .card.ai{border-color:#E9D5FF}
+/* Faint Scandinavian tints so each note kind reads at a glance (muted, low-saturation) */
+.card.k-hl{background:#F8F3EA}
+.card.k-comment{background:#EDF2E9}
+.card.k-ai{background:#F2EFF8}
+.card.k-shot{background:#E9EFF4}
 .card.sel{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak)}
 /* nested reply thread inside a note card */
 .card .replies{border-top:1px solid var(--line)}
