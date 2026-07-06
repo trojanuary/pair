@@ -31,17 +31,18 @@ const ACTORS = {
   sara:  { name: 'Sara Davis',     initials: 'SD', color: '#059669', type: 'human' },
   bonnie:{ name: 'Bonnie Kearney', initials: 'BK', color: '#2563EB', type: 'human' },
 };
-const PROVIDER_LABEL = { openrouter: 'OpenRouter', openai: 'GPT', anthropic: 'Claude', gemini: 'Gemini' };
+const PROVIDER_LABEL = { openrouter: 'OpenRouter', compat: 'OpenAI-compatible' };
 const DEFAULT_MODELS = {
-  openrouter: 'openai/gpt-5.4-mini', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash',
-  openrouterImage: 'google/gemini-3.1-flash-lite-image', openaiImage: 'gpt-image-1', geminiImage: 'imagen-3.0-generate-002',
+  openrouter: 'openai/gpt-5.4-mini', openrouterImage: 'google/gemini-3.1-flash-lite-image',
+  compat: 'gpt-5.4-mini', compatImage: 'gpt-image-1',
 };
 function defaultState() {
   return {
     settings: {
       provider: 'openrouter',
       models: { ...DEFAULT_MODELS },
-      keys: { openrouter: '', openai: '', anthropic: '', gemini: '' },
+      keys: { openrouter: '', compat: '' },
+      compatBaseUrl: 'https://api.openai.com/v1',
       enableVisuals: true, enableWeb: true, enablePython: true,
       actorName: 'You', actorInitials: 'YO',
       storage: { mode: 'browser', folderName: '' },
@@ -66,11 +67,7 @@ function migrateState(s) {
   if (!s.ui.libView) s.ui.libView = 'home';
   // one-time: turn all tools on by default (respects later manual changes via the flag)
   if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings.enablePython = true; s.settings._toolsDefaulted = true; }
-  // upgrade anyone still on the previous default models to the current generation
-  if (s.settings && s.settings.models) {
-    const OLD = { openai: 'gpt-4o', anthropic: 'claude-3-5-sonnet-20241022', gemini: 'gemini-1.5-pro' };
-    for (const k of ['openai', 'anthropic', 'gemini']) if (s.settings.models[k] === OLD[k]) s.settings.models[k] = DEFAULT_MODELS[k];
-  }
+  // (per-provider model upgrade removed — providers are now openrouter + compat)
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
   if (s.settings && !s.settings.storage) s.settings.storage = { mode: 'browser', folderName: '' };
   if (s.settings && !s.settings.prompts) s.settings.prompts = {};
@@ -81,7 +78,12 @@ function migrateState(s) {
     if (s.settings.models.openrouter === 'google/gemma-4-31b-it:free') s.settings.models.openrouter = DEFAULT_MODELS.openrouter;
     if (!s.settings.models.openrouterImage) s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
     if (s.settings.models.openrouterImage === 'x-ai/grok-imagine-image-quality') s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
+    if (!('compat' in s.settings.keys)) s.settings.keys.compat = '';
+    if (!s.settings.models.compat) s.settings.models.compat = DEFAULT_MODELS.compat;
+    if (!s.settings.models.compatImage) s.settings.models.compatImage = DEFAULT_MODELS.compatImage;
+    if (!s.settings.compatBaseUrl) s.settings.compatBaseUrl = 'https://api.openai.com/v1';
     if (!s.settings._orDefaulted) { s.settings.provider = 'openrouter'; s.settings._orDefaulted = true; }
+    if (s.settings.provider !== 'openrouter' && s.settings.provider !== 'compat') s.settings.provider = 'openrouter';
     const P = s.settings.prompts || (s.settings.prompts = {});
     if (!P.text && (P.answer_direct || P.answer_agent)) P.text = P.answer_direct || P.answer_agent;
     if (!P.image && P.visual_planner) P.image = P.visual_planner;
@@ -664,7 +666,7 @@ const TAG_CLASS = { 'Question': 'q', 'Claim': 'claim', 'Definition': 'def', 'Equ
   'Critique': 'crit', 'Summary': 'sum', 'Action item': 'act' };
 
 /* ---------- AI providers (client-side, live) ---------- */
-const canImage = p => p === 'openrouter' || p === 'openai' || p === 'gemini';
+const canImage = p => p === 'openrouter' || p === 'compat';
 function activeProvider() { return state.settings.provider; }
 function keyFor(p) { return (state.settings.keys[p] || '').trim(); }
 function pickImageProvider() {
@@ -676,17 +678,17 @@ function pickImageProvider() {
 async function aiText(provider, { system, user, image, maxTokens }) {
   const r = await fetch('/api/ai', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, system, user, image, web: !!state.settings.enableWeb, model: state.settings.models[provider], maxTokens, userKey: keyFor(provider) || undefined }),
+    body: JSON.stringify({ provider, system, user, image, web: !!state.settings.enableWeb, model: state.settings.models[provider], maxTokens, userKey: keyFor(provider) || undefined, baseUrl: state.settings.compatBaseUrl }),
   });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || `AI request failed (${r.status})`);
   return j.text || '';
 }
 async function aiImage(provider, prompt) {
-  const model = provider === 'openai' ? state.settings.models.openaiImage : provider === 'gemini' ? state.settings.models.geminiImage : state.settings.models.openrouterImage;
+  const model = provider === 'openrouter' ? state.settings.models.openrouterImage : state.settings.models.compatImage;
   const r = await fetch('/api/ai-image', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, prompt, model, userKey: keyFor(provider) || undefined }),
+    body: JSON.stringify({ provider, prompt, model, userKey: keyFor(provider) || undefined, baseUrl: state.settings.compatBaseUrl }),
   });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || `Image request failed (${r.status})`);
@@ -756,7 +758,7 @@ async function askAI(annId, question, providerOverride) {
     chips: chipsFor(a), external: state.settings.enableWeb, tools: [] };
   a.messages.push(msg); a.updated_at = nowISO(); save(); render();
   // OpenAI text notes use the agentic ReAct loop (it can pull more of the document as needed).
-  if ((provider === 'openrouter' || provider === 'openai') && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg, provider); return; }
+  if ((provider === 'openrouter' || provider === 'compat') && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg, provider); return; }
   const ctx = buildContext(a);
   const passages = retrievePassages(question, a.page);
   const system = promptFor('text');
@@ -807,7 +809,7 @@ async function agentOutline() {
 async function agentWeb(query) {
   try {
     const r = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'openai', web: true, system: promptFor('web'), user: String(query), userKey: keyFor('openai') || undefined }) });
+      body: JSON.stringify({ provider: activeProvider(), web: true, system: promptFor('web'), user: String(query), userKey: keyFor(activeProvider()) || undefined, baseUrl: state.settings.compatBaseUrl }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error || 'web search failed');
     return j.text || '(no web results)';
   } catch (e) { return 'Web search error: ' + (e.message || e); }
@@ -839,7 +841,7 @@ async function runAgentTool(a, name, args) {
 }
 async function aiAgentStep(provider, model, messages, tools) {
   const r = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, mode: 'agent', model, messages, tools, userKey: keyFor(provider) || undefined }) });
+    body: JSON.stringify({ provider, mode: 'agent', model, messages, tools, userKey: keyFor(provider) || undefined, baseUrl: state.settings.compatBaseUrl }) });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || `Agent step failed (${r.status})`);
   return j;
@@ -1001,7 +1003,7 @@ function attachMentions(ta) {
   const cs = getComputedStyle(ta);
   ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'textIndent', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'].forEach(p => { hl.style[p] = cs[p]; });
   hl.style.borderStyle = 'solid'; hl.style.borderColor = 'transparent';
-  const sync = () => { hl.innerHTML = esc(ta.value).replace(/@(gpt|claude|gemini|ai)\b/ig, m => `<span class="men">${m}</span>`) + '\n'; hl.scrollTop = ta.scrollTop; };
+  const sync = () => { hl.innerHTML = esc(ta.value).replace(/@ai\b/ig, m => `<span class="men">${m}</span>`) + '\n'; hl.scrollTop = ta.scrollTop; };
   ta.addEventListener('input', sync);
   ta.addEventListener('scroll', () => { hl.scrollTop = ta.scrollTop; });
   ta._menWired = true; sync();
@@ -1020,15 +1022,14 @@ function submitToNote(annId, rawText) {
   const a = state.annotations.find(x => x.id === annId);
   if (!text || !a) return;
   if (a.messages.some(mm => mm.actor === 'you' && mm.type === 'comment' && mm.text === text && (Date.now() - new Date(mm.created_at).getTime()) < 5000)) return;
-  const mProvider = /@claude/i.test(text) ? 'anthropic' : /@gpt/i.test(text) ? 'openai' : /@gemini/i.test(text) ? 'gemini' : null;
-  const clean = text.replace(/@(ai|gpt|claude|gemini)/ig, '').trim();
+  const clean = text.replace(/@ai\b/ig, '').trim();
   a.messages.push({ id: uid('m'), actor: 'you', type: 'comment', text: text, created_at: nowISO() });
   a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(text, a.source_type, 'comment')]));
   a.updated_at = nowISO(); save(); render(); focusThreadCompose();
   const forceAsk = askNextId === a.id; askNextId = null;   // user chose “Ask AI” on this note
-  const wantAI = forceAsk || mProvider || /@ai/i.test(text) || /\?\s*$/.test(text) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean);
+  const wantAI = forceAsk || /@ai\b/i.test(text) || /\?\s*$/.test(text) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean);
   if (isVisualRequest(clean)) generateVisual(a.id, clean);
-  else if (wantAI) askAI(a.id, clean || text, mProvider || undefined);
+  else if (wantAI) askAI(a.id, clean || text);
 }
 // Recognize a request to CREATE a visual (image or diagram) — a visual noun + a make/turn-into verb.
 function isVisualRequest(t) {
@@ -1080,15 +1081,13 @@ function passesFilter(a) {
   return true; // 'all'
 }
 function providerGlyph(p) {
-  if (p === 'openai') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v17M4.4 7.75l15.2 8.5M19.6 7.75L4.4 16.25"/></svg>';   // OpenAI radial
-  if (p === 'anthropic') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>'; // Anthropic sunburst
-  if (p === 'gemini') return '<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2c.5 5.2 3.3 8 8.5 8.5-5.2.5-8 3.3-8.5 8.5-.5-5.2-3.3-8-8.5-8.5C8.7 10 11.5 7.2 12 2z"/></svg>';       // Gemini spark
   if (p === 'openrouter') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h6a4 4 0 0 1 4 4"/><path d="M13 4l3 3-3 3"/><circle cx="6" cy="17" r="1.8"/><path d="M8 17h9"/></svg>';
+  if (p === 'compat') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0z"/><path d="M12 16v6"/></svg>';
   return '✦';
 }
 function actorAvatar(m) {
   if (m.actor === 'ai') {
-    const p = m.provider, cls = p === 'openai' ? 'gpt' : p === 'anthropic' ? 'claude' : p === 'gemini' ? 'gemini' : p === 'openrouter' ? 'openrouter' : '';
+    const p = m.provider, cls = p === 'openrouter' ? 'openrouter' : p === 'compat' ? 'compat' : p === 'openai' ? 'gpt' : p === 'anthropic' ? 'claude' : p === 'gemini' ? 'gemini' : '';
     return `<div class="avatar ai brand ${cls}" title="${esc(PROVIDER_LABEL[p] || 'AI')}">${providerGlyph(p)}</div>`;
   }
   const ac = ACTORS[m.actor] || { initials: state.settings.actorInitials || 'YO', color: '#2563EB' };
@@ -1219,7 +1218,7 @@ function compactCard(a) {
     <div class="card-h"><span style="width:22px;height:22px;border-radius:50%;background:${badge};color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto">${a.anchor}</span>
       <span class="who">${label}</span><span class="when">${when}</span></div>
     <div class="card-b">
-      ${preview ? `<div class="msg clamp">${esc(preview).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`)}</div>` : ''}
+      ${preview ? `<div class="msg clamp">${esc(preview).replace(/@ai\b/ig, x => `<span class="men">${x}</span>`)}</div>` : ''}
       ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
       <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
     </div></div>`);
@@ -1292,7 +1291,7 @@ function mdInline(s) {
     .replace(/__([^\n]+?)__/g, '<b>$1</b>')
     .replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, '$1<i>$2</i>')
     .replace(/(^|[^_\w])_(?!\s)([^_\n]+?)(?<!\s)_(?!\w)/g, '$1<i>$2</i>')
-    .replace(/@(ai|gpt|claude|gemini)\b/ig, x => `<span class="men">${x}</span>`);
+    .replace(/@ai\b/ig, x => `<span class="men">${x}</span>`);
 }
 function mdLite(t) {
   // Block-aware markdown -> HTML: headers, tables, ordered/unordered lists, blockquotes, rules,
@@ -1369,7 +1368,7 @@ function mdRich(t) { return richSegments(t, run => { const { s, store } = protec
 function commentHTML(t) {
   return richSegments(t, run => {
     const { s, store } = protectMath(run);
-    const html = esc(s).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`).replace(/\n/g, '<br>');
+    const html = esc(s).replace(/@ai\b/ig, x => `<span class="men">${x}</span>`).replace(/\n/g, '<br>');
     return restoreRich(html, store);
   });
 }
@@ -1485,8 +1484,7 @@ function saveAndReask(annId, msgId) {
   const idx = a.messages.findIndex(x => x.id === msgId);
   while (idx + 1 < a.messages.length && a.messages[idx + 1].actor === 'ai') a.messages.splice(idx + 1, 1);
   state.ui.editing = null; a.updated_at = nowISO(); save(); render();
-  const prov = /@claude/i.test(newText) ? 'anthropic' : /@gpt/i.test(newText) ? 'openai' : /@gemini/i.test(newText) ? 'gemini' : undefined;
-  askAI(annId, newText.replace(/@(ai|gpt|claude|gemini)/ig, '').trim() || newText, prov);
+  askAI(annId, newText.replace(/@ai\b/ig, '').trim() || newText);
 }
 function deleteMsg(annId, msgId) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
@@ -1748,7 +1746,7 @@ function ptItemHTML(id, label, value, def, desc) {
 }
 function templatesPaneHTML() {
   const prompts = PROMPT_KEYS.map(k => ptItemHTML(k, (PROMPT_META[k] || {}).label || k, promptFor(k), DEFAULT_PROMPTS[k], (PROMPT_META[k] || {}).desc || '')).join('');
-  const tools = TOOL_KEYS.map(k => ptItemHTML('tool_' + k, (TOOL_META[k] || k), toolDesc(k), DEFAULT_TOOLS[k], 'What the tool-using agent reads to decide when to call this tool. Only used when the tool-calling agent runs (OpenRouter or OpenAI).')).join('');
+  const tools = TOOL_KEYS.map(k => ptItemHTML('tool_' + k, (TOOL_META[k] || k), toolDesc(k), DEFAULT_TOOLS[k], 'What the tool-using agent reads to decide when to call this tool. Only used while the tool-using agent runs.')).join('');
   return `<div class="hint" style="margin:-2px 0 14px">Make the assistant your own — expand any prompt below to view or edit it. The per-request context (your selection, question, and page) is always added by the app, so restyling here won’t break how answers are built. Changes apply after you press <b>Save</b>.</div>
     <div class="pt-actions"><button type="button" class="btn ghost" id="ptExport">Export (JSON)</button><button type="button" class="btn ghost" id="ptImport">Import (JSON)</button><button type="button" class="btn ghost" id="ptResetAll">Reset all to default</button></div>
     <div class="pt-sec">System prompts</div>
@@ -1794,25 +1792,20 @@ function openSettings(note) {
   const m = el(`<div class="modal-mask"><div class="modal">
     <h3>Settings <span class="icon-btn" id="mClose">✕</span></h3>
     <div class="body">
-      <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button></div>
+      <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button><button type="button" class="settab" data-tab="storage">Storage</button></div>
       <div class="tabpane" data-pane="ai">
       ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. <b>OpenRouter</b> is the recommended default — it powers text answers, image generation, and the tool-using agent. Optionally paste your <b>own</b> key for any provider (BYO override) and mark one as <b>Default</b>; target others inline with @gpt / @claude / @gemini.</div>
+      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server key by default — you don't need to enter anything. <b>OpenRouter</b> is the recommended default (it powers text, images, and the tool-using agent). Or use any <b>OpenAI-compatible API</b> by setting its URL, key, and models. Mark one as <b>Default</b>, or type <b>@ai</b> in a note to ask it.</div>
       <div class="field">
-        <div class="lbl-row"><label>OpenRouter API key <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
-        <input id="kOpenrouter" type="password" placeholder="sk-or-… (optional — server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Default provider. Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
+        <div class="lbl-row"><label>OpenRouter <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
+        <input id="kOpenrouter" type="password" placeholder="API key — sk-or-… (optional; server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
       </div>
       <div class="field">
-        <div class="lbl-row"><label>OpenAI API key</label><button type="button" class="def-radio ${s.provider === 'openai' ? 'on' : ''}" data-def="openai"><span class="rdot"></span>Default</button></div>
-        <input id="kOpenai" type="password" placeholder="sk-…" value="${esc(s.keys.openai)}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px" id="mOpenai" value="${esc(s.models.openai)}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px" id="mOpenaiImg" value="${esc(s.models.openaiImage)}"></div>
-      </div>
-      <div class="field">
-        <div class="lbl-row"><label>Anthropic API key</label><button type="button" class="def-radio ${s.provider === 'anthropic' ? 'on' : ''}" data-def="anthropic"><span class="rdot"></span>Default</button></div>
-        <input id="kAnthropic" type="password" placeholder="sk-ant-…" value="${esc(s.keys.anthropic)}"><div class="hint">Text/vision model: <input style="width:auto;display:inline-block;padding:3px 7px" id="mAnthropic" value="${esc(s.models.anthropic)}"> · (no image generation)</div>
-      </div>
-      <div class="field">
-        <div class="lbl-row"><label>Google Gemini API key</label><button type="button" class="def-radio ${s.provider === 'gemini' ? 'on' : ''}" data-def="gemini"><span class="rdot"></span>Default</button></div>
-        <input id="kGemini" type="password" placeholder="AIza…" value="${esc(s.keys.gemini)}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px" id="mGemini" value="${esc(s.models.gemini)}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px" id="mGeminiImg" value="${esc(s.models.geminiImage)}"></div>
+        <div class="lbl-row"><label>OpenAI-compatible API</label><button type="button" class="def-radio ${s.provider === 'compat' ? 'on' : ''}" data-def="compat"><span class="rdot"></span>Default</button></div>
+        <div class="hint" style="margin-top:0">Any OpenAI-compatible endpoint (OpenAI, Together, Groq, a local model…). Used for text, images, and the tool-using agent.</div>
+        <input id="cBase" placeholder="Base URL — e.g. https://api.openai.com/v1" value="${esc(s.compatBaseUrl || '')}" style="margin-top:8px">
+        <input id="kCompat" type="password" placeholder="API key" value="${esc((s.keys && s.keys.compat) || '')}" style="margin-top:8px">
+        <div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompat" value="${esc((s.models && s.models.compat) || '')}"> · Image model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"></div>
       </div>
       <div class="field"><label>Your identity (actor)</label>
         <div style="display:flex;gap:8px"><input id="actorName" placeholder="Your name" value="${esc(s.actorName)}" style="flex:1"><input id="actorInit" placeholder="IN" maxlength="2" value="${esc(s.actorInitials)}" style="width:70px;text-transform:uppercase"></div></div>
@@ -1821,8 +1814,11 @@ function openSettings(note) {
         <div class="chk"><div class="sw ${s.enableWeb ? 'on' : ''}" id="tgWeb"><i></i></div> Allow external web search (changes provenance to “Used web search”)</div>
         <div class="chk"><div class="sw ${s.enablePython ? 'on' : ''}" id="tgPy"><i></i></div> Enable Python tool use (stub)</div>
       </div>
-      <div class="hint">Your own keys (if entered) are stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's keys are used and never exposed to the browser.</div>
-      <div class="field"><label>Notes storage</label>
+      <div class="hint">Your own key (if entered) is stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's key is used and never exposed to the browser.</div>
+      </div>
+      <div class="tabpane hidden" data-pane="templates">${templatesPaneHTML()}</div>
+      <div class="tabpane hidden" data-pane="storage">
+        <div class="field"><label>Notes storage</label>
         <div class="hint" style="margin-top:0">Notes are always kept in this browser. Optionally choose a folder to also auto-save a portable <b>.notes.json</b> next to your PDFs (Chrome/Edge) — ideal for backups, other computers, and Google Drive folders. Export / Import works in any browser.</div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
           <button type="button" class="btn ghost" id="stFolder">${(s.storage && s.storage.mode === 'folder') ? ('📁 ' + esc(s.storage.folderName || 'folder set')) : 'Choose folder…'}</button>
@@ -1831,9 +1827,8 @@ function openSettings(note) {
           ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stLoad">Load from folder</button>' : ''}
           ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stBrowserOnly">Stop folder sync</button>' : ''}
         </div>
+        </div>
       </div>
-      </div>
-      <div class="tabpane hidden" data-pane="templates">${templatesPaneHTML()}</div>
     </div>
     <div class="foot"><button class="btn ghost" id="mCancel">Close</button><button class="btn primary" id="mSave">Save</button></div>
   </div></div>`);
@@ -1854,14 +1849,12 @@ function openSettings(note) {
   $('#mSave', m).onclick = () => {
     const defEl = $('.def-radio.on', m); if (defEl) s.provider = defEl.dataset.def;
     s.keys.openrouter = $('#kOpenrouter', m).value.trim();
-    s.keys.openai = $('#kOpenai', m).value.trim(); s.keys.anthropic = $('#kAnthropic', m).value.trim(); s.keys.gemini = $('#kGemini', m).value.trim();
+    s.keys.compat = $('#kCompat', m).value.trim();
+    s.compatBaseUrl = $('#cBase', m).value.trim();
     s.models.openrouter = $('#mOpenrouter', m).value.trim() || DEFAULT_MODELS.openrouter;
     s.models.openrouterImage = $('#mOpenrouterImg', m).value.trim() || DEFAULT_MODELS.openrouterImage;
-    s.models.openai = $('#mOpenai', m).value.trim() || DEFAULT_MODELS.openai;
-    s.models.anthropic = $('#mAnthropic', m).value.trim() || DEFAULT_MODELS.anthropic;
-    s.models.gemini = $('#mGemini', m).value.trim() || DEFAULT_MODELS.gemini;
-    s.models.openaiImage = $('#mOpenaiImg', m).value.trim() || DEFAULT_MODELS.openaiImage;
-    s.models.geminiImage = $('#mGeminiImg', m).value.trim() || DEFAULT_MODELS.geminiImage;
+    s.models.compat = $('#mCompat', m).value.trim() || DEFAULT_MODELS.compat;
+    s.models.compatImage = $('#mCompatImg', m).value.trim() || DEFAULT_MODELS.compatImage;
     s.actorName = $('#actorName', m).value.trim() || 'You';
     s.actorInitials = ($('#actorInit', m).value.trim() || 'YO').toUpperCase().slice(0, 2);
     ACTORS.you.name = s.actorName; ACTORS.you.initials = s.actorInitials;
