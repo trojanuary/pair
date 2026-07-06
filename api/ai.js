@@ -2,11 +2,12 @@
 // Vercel serverless function: server-side AI proxy (text/vision), with optional web search.
 // Uses the site's env key by default, or a user-supplied BYO key passed in the request.
 // No npm deps — global fetch (Node 18+).
-const ENV = { openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY' };
-const DEFAULT_MODEL = { openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash' };
+const ENV = { openrouter: 'OPENROUTER_API_KEY', openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY' };
+const DEFAULT_MODEL = { openrouter: 'google/gemma-4-31b-it:free', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash' };
 // GPT-5+/o-series are reasoning models: reasoning tokens are billed against max_completion_tokens,
 // so add a generous reasoning buffer or the visible answer can come back empty ("could not finalize").
 const capTokens = (m, n) => (/^(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n + 4000 } : { max_tokens: n });
+const OR_HEADERS = { 'HTTP-Referer': 'https://pair-liart.vercel.app', 'X-Title': 'Source-Linked AI Reading Workspace' };
 
 async function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -47,6 +48,18 @@ async function openaiAgentStep(key, { messages, tools, model }) {
   return { content: (msg.content || '').trim(), tool_calls: msg.tool_calls || null };
 }
 
+// ---- OpenRouter (OpenAI-compatible chat completions; the default provider) ----
+async function openrouterCall(key, { system, user, image, model, maxTokens }) {
+  const content = image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.b64}` } }] : user;
+  const m = model || DEFAULT_MODEL.openrouter;
+  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, ...OR_HEADERS },
+    body: JSON.stringify({ model: m, messages: [{ role: 'system', content: system }, { role: 'user', content }], max_tokens: maxTokens || 2000 }),
+  });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || j.error || 'OpenRouter error');
+  return (j.choices?.[0]?.message?.content || '').trim();
+}
+
 // ---- Anthropic (adds the server-side web_search tool when web is on) ----
 async function anthropicCall(key, { system, user, image, model, web, maxTokens }) {
   const content = image ? [{ type: 'text', text: user }, { type: 'image', source: { type: 'base64', media_type: image.mime, data: image.b64 } }] : user;
@@ -77,7 +90,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   try {
     const body = await readBody(req);
-    const { provider = 'openai', mode, messages, tools, model, userKey } = body;
+    const { provider = 'openrouter', mode, messages, tools, model, userKey } = body;
     const key = (userKey && String(userKey).trim()) || process.env[ENV[provider]];
     if (!key) return res.status(400).json({ error: `No ${provider} key available. Add your own key in Settings, or ask the site owner to set ${ENV[provider] || 'the API key'}.` });
     // Agent mode: one ReAct step (OpenAI tool-calling). Returns {content, tool_calls}.
@@ -88,7 +101,8 @@ module.exports = async function handler(req, res) {
     const { system = '', user = '', image = null, web = false, maxTokens } = body;
     const args = { system, user, image, model, web, maxTokens };
     let text = '';
-    if (provider === 'openai') text = await openaiCall(key, args);
+    if (provider === 'openrouter') text = await openrouterCall(key, args);
+    else if (provider === 'openai') text = await openaiCall(key, args);
     else if (provider === 'anthropic') text = await anthropicCall(key, args);
     else if (provider === 'gemini') text = await geminiCall(key, args);
     else return res.status(400).json({ error: 'Unknown provider' });

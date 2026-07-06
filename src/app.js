@@ -24,29 +24,31 @@ function toast(msg, kind) {
 
 /* ---------- state ---------- */
 const LS = 'srw_state_v1';
+const SAMPLE_DOC_NAME = 'NIPS-2017-attention-is-all-you-need-Paper.pdf';
+const SEED_VERSION = 2;
 const ACTORS = {
   you:   { name: 'You',            initials: 'YO', color: '#2563EB', type: 'human' },
   sara:  { name: 'Sara Davis',     initials: 'SD', color: '#059669', type: 'human' },
   bonnie:{ name: 'Bonnie Kearney', initials: 'BK', color: '#2563EB', type: 'human' },
 };
-const PROVIDER_LABEL = { openai: 'GPT', anthropic: 'Claude', gemini: 'Gemini' };
+const PROVIDER_LABEL = { openrouter: 'OpenRouter', openai: 'GPT', anthropic: 'Claude', gemini: 'Gemini' };
 const DEFAULT_MODELS = {
-  openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash',
-  openaiImage: 'gpt-image-1', geminiImage: 'imagen-3.0-generate-002',
+  openrouter: 'google/gemma-4-31b-it:free', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash',
+  openrouterImage: 'x-ai/grok-imagine-image-quality', openaiImage: 'gpt-image-1', geminiImage: 'imagen-3.0-generate-002',
 };
 function defaultState() {
   return {
     settings: {
-      provider: 'openai',
+      provider: 'openrouter',
       models: { ...DEFAULT_MODELS },
-      keys: { openai: '', anthropic: '', gemini: '' },
+      keys: { openrouter: '', openai: '', anthropic: '', gemini: '' },
       enableVisuals: true, enableWeb: true, enablePython: true,
       actorName: 'You', actorInitials: 'YO',
       storage: { mode: 'browser', folderName: '' },
       prompts: {},
     },
     annotations: [],
-    docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
+    docs: [{ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() }],
     ui: { page: 1, zoom: 1.15, tool: 'cursor', filter: 'all', autoscroll: true, sort: 'time',
           collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample', libView: 'home', continuous: false },
     seeded: false,
@@ -58,8 +60,8 @@ function loadState() { try { return JSON.parse(localStorage.getItem(LS)); } catc
 function migrateState(s) {
   if (!s) return null;
   if (!s.ui) s.ui = {};
-  if (!Array.isArray(s.docs) || !s.docs.length) s.docs = [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }];
-  if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() });
+  if (!Array.isArray(s.docs) || !s.docs.length) s.docs = [{ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() }];
+  if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() });
   if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
   if (!s.ui.libView) s.ui.libView = 'home';
   // one-time: turn all tools on by default (respects later manual changes via the flag)
@@ -72,6 +74,18 @@ function migrateState(s) {
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
   if (s.settings && !s.settings.storage) s.settings.storage = { mode: 'browser', folderName: '' };
   if (s.settings && !s.settings.prompts) s.settings.prompts = {};
+  if (s.settings) {
+    s.settings.keys = s.settings.keys || {}; if (!('openrouter' in s.settings.keys)) s.settings.keys.openrouter = '';
+    s.settings.models = s.settings.models || {};
+    if (!s.settings.models.openrouter) s.settings.models.openrouter = DEFAULT_MODELS.openrouter;
+    if (!s.settings.models.openrouterImage) s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
+    if (!s.settings._orDefaulted) { s.settings.provider = 'openrouter'; s.settings._orDefaulted = true; }
+    const P = s.settings.prompts || (s.settings.prompts = {});
+    if (!P.text && (P.answer_direct || P.answer_agent)) P.text = P.answer_direct || P.answer_agent;
+    if (!P.image && P.visual_planner) P.image = P.visual_planner;
+    ['answer_direct', 'answer_agent', 'visual_planner', 'diagram'].forEach(k => delete P[k]);
+  }
+  { const sd = (s.docs || []).find(d => d.id === 'sample'); if (sd && sd.name === 'Turbulence_review.pdf') sd.name = SAMPLE_DOC_NAME; }
   (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
   return s;
 }
@@ -626,12 +640,12 @@ const TAG_CLASS = { 'Question': 'q', 'Claim': 'claim', 'Definition': 'def', 'Equ
   'Critique': 'crit', 'Summary': 'sum', 'Action item': 'act' };
 
 /* ---------- AI providers (client-side, live) ---------- */
-const canImage = p => p === 'openai' || p === 'gemini';
+const canImage = p => p === 'openrouter' || p === 'openai' || p === 'gemini';
 function activeProvider() { return state.settings.provider; }
 function keyFor(p) { return (state.settings.keys[p] || '').trim(); }
 function pickImageProvider() {
   const a = activeProvider(); if (canImage(a)) return a;   // server may hold the key
-  return 'openai';   // fallback image-capable provider (server key or BYO)
+  return 'openrouter';   // fallback image-capable provider (server key or BYO)
 }
 // AI calls go through the server-side proxy (/api/*): uses the site's env key by default,
 // or the user's BYO key (from Settings) passed through as `userKey`.
@@ -645,7 +659,7 @@ async function aiText(provider, { system, user, image, maxTokens }) {
   return j.text || '';
 }
 async function aiImage(provider, prompt) {
-  const model = provider === 'openai' ? state.settings.models.openaiImage : state.settings.models.geminiImage;
+  const model = provider === 'openai' ? state.settings.models.openaiImage : provider === 'gemini' ? state.settings.models.geminiImage : state.settings.models.openrouterImage;
   const r = await fetch('/api/ai-image', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ provider, prompt, model, userKey: keyFor(provider) || undefined }),
@@ -721,7 +735,7 @@ async function askAI(annId, question, providerOverride) {
   if (provider === 'openai' && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg); return; }
   const ctx = buildContext(a);
   const passages = retrievePassages(question, a.page);
-  const system = promptFor('answer_direct');
+  const system = promptFor('text');
   const user = [
     `SELECTED SOURCE — page ${ctx.page}${ctx.section ? `, ${ctx.section}` : ''}${a.source_type === 'screenshot' ? ' (screenshot)' : ''}:`,
     `"""${ctx.evidence || '(see attached image)'}"""`,
@@ -820,7 +834,7 @@ function agentChips(a, used) {
 async function askAIAgent(a, question, msg) {
   const model = state.settings.models.openai || 'gpt-5.4';
   const c = buildContext(a);
-  const system = promptFor('answer_agent');
+  const system = promptFor('text');
   const userContext = [
     c.evidence ? `The reader selected this passage on page ${c.page}${c.section ? `, ${c.section}` : ''}:\n"""${c.evidence}"""` : `The reader is on page ${c.page}${c.section ? `, ${c.section}` : ''} (no text selected).`,
     c.surrounding ? `Immediate surrounding text: ${c.surrounding.slice(0, 700)}` : '',
@@ -905,7 +919,7 @@ async function generateVisual(annId, prompt) {
   const { ctx, passages, docText } = visualContext(a, prompt);
   const tp = activeProvider();
   // 1) Let the model choose the RIGHT format and produce it, grounded in the document.
-  let planSys = promptFor('visual_planner');
+  let planSys = promptFor('image');
   if (!canImage && !/image generation is unavailable/i.test(planSys)) planSys += '\nNOTE: image generation is unavailable, so you must use "ascii".';
   if (!/STRICT JSON/i.test(planSys)) planSys += '\nReturn STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}';
   const planUser = [
@@ -936,7 +950,7 @@ async function generateVisual(annId, prompt) {
       if (!art) {
         // Planner JSON was unusable (e.g. truncated before the diagram) — ask for the diagram as plain text so there's no JSON to break.
         msg.status = 'Drawing the diagram…'; save(); render();
-        try { const rawDiagram = await aiText(tp, { system: promptFor('diagram'), user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
+        try { const rawDiagram = await aiText(tp, { system: DIAGRAM_PROMPT, user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
       }
       if (art) msg.ascii = art;
       else { msg.error = 'Could not render the diagram — please try again.'; msg.title = 'Visual unavailable'; }
@@ -1045,11 +1059,12 @@ function providerGlyph(p) {
   if (p === 'openai') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v17M4.4 7.75l15.2 8.5M19.6 7.75L4.4 16.25"/></svg>';   // OpenAI radial
   if (p === 'anthropic') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>'; // Anthropic sunburst
   if (p === 'gemini') return '<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2c.5 5.2 3.3 8 8.5 8.5-5.2.5-8 3.3-8.5 8.5-.5-5.2-3.3-8-8.5-8.5C8.7 10 11.5 7.2 12 2z"/></svg>';       // Gemini spark
+  if (p === 'openrouter') return '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h6a4 4 0 0 1 4 4"/><path d="M13 4l3 3-3 3"/><circle cx="6" cy="17" r="1.8"/><path d="M8 17h9"/></svg>';
   return '✦';
 }
 function actorAvatar(m) {
   if (m.actor === 'ai') {
-    const p = m.provider, cls = p === 'openai' ? 'gpt' : p === 'anthropic' ? 'claude' : p === 'gemini' ? 'gemini' : '';
+    const p = m.provider, cls = p === 'openai' ? 'gpt' : p === 'anthropic' ? 'claude' : p === 'gemini' ? 'gemini' : p === 'openrouter' ? 'openrouter' : '';
     return `<div class="avatar ai brand ${cls}" title="${esc(PROVIDER_LABEL[p] || 'AI')}">${providerGlyph(p)}</div>`;
   }
   const ac = ACTORS[m.actor] || { initials: state.settings.actorInitials || 'YO', color: '#2563EB' };
@@ -1649,31 +1664,27 @@ function clearActiveNotes() {
    page info) and the tool wiring are always supplied by the app, so overrides can restyle
    the assistant without breaking how it works. */
 const DEFAULT_PROMPTS = {
-  answer_agent: `You are a precise research assistant embedded in a source-linked reading workspace, answering about the document the reader is viewing.
-You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page, search the document, get the outline, read the whole paper, search the web, or generate a visual (an image, or a monospace diagram built from the document). Use them when they help — e.g. to summarize the whole paper, verify a claim elsewhere, pull an adjacent section, or produce a picture/diagram when the reader asks to see or visualize something. Prefer the smallest sufficient context; call tools only as needed, then answer.
-Answer style: lead with the direct answer, be concise (no preamble or fluff), and ground claims in the document.`,
-  answer_direct: `You are a precise reading assistant embedded in a source-linked research workspace, answering about the SELECTED SOURCE and its surrounding context from the SAME document.
+  text: `You are a precise reading assistant embedded in a source-linked research workspace. You answer questions about the SELECTED SOURCE and its surrounding context from the document the reader is viewing.
+When tools are available (reading other pages, searching the document, searching the web, or generating a visual), use them only as needed to gather the smallest sufficient context, then answer.
 Answer style — this matters:
-- Lead with the direct answer in the first sentence. No preamble, no restating the question, no throat-clearing ("Great question", "The selected text discusses…", "Sure!", "Based on the provided context…").
+- Lead with the direct answer in the first sentence. No preamble, no restating the question, no throat-clearing ("Great question", "Sure!", "Based on the provided context…").
 - Be brief: 1–3 sentences, or a tight bullet list for multi-part answers. Add length only when the question truly needs it.
 - Plain, concrete language. No filler, no hedging, no summary of what you just said.
 - Ground claims in the reader's document; prefer it over generic knowledge. If the context is insufficient, say in one line exactly what's missing.
-- If web search is available you may look up facts beyond the document and briefly note when an answer relies on the web; otherwise rely only on the provided context.`,
-  visual_planner: `You turn a reader's request into the most useful visual. Choose the FORMAT ("ascii" = monospace text diagram built only from the document; "image" = an AI-rendered picture) using this PRIORITY ORDER:
+- Use Markdown. Write mathematics in LaTeX — \\( … \\) for inline and \\[ … \\] for display — so it renders cleanly.`,
+  image: `You turn a reader's request into the most useful visual. Choose the FORMAT ("ascii" = monospace text diagram built only from the document; "image" = an AI-rendered picture) using this PRIORITY ORDER:
 1) If the request depicts the paper's RESULTS, findings, data, numbers, statistics, a table, comparisons, equations, or a "summary of results" → "ascii". This wins EVEN IF the reader wrote "image" or "picture" (an image would fabricate the specifics). Example: "create an image of the main results" → ascii.
 2) Else if the reader says diagram / flowchart / schematic / chart / pipeline / tree / table → "ascii".
 3) Else if the reader asks to illustrate / draw / sketch / picture a phenomenon, physical scene, mechanism, object, analogy, or concept → "image". Examples: "illustrate eddies breaking into smaller eddies" → image; "draw the experimental setup" → image; "picture of a hairpin vortex" → image.
 4) If ambiguous → "ascii".
 For "ascii" build a faithful monospace diagram from the document (never invent numbers). For "image" write a vivid image_prompt.
 Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}`,
-  diagram: `Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.`,
 };
-const PROMPT_KEYS = ['answer_agent', 'answer_direct', 'visual_planner', 'diagram'];
+const DIAGRAM_PROMPT = 'Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.';
+const PROMPT_KEYS = ['text', 'image'];
 const PROMPT_META = {
-  answer_agent: { label: 'AI answer — agent (OpenAI)', desc: 'System prompt for OpenAI text notes, which use the tool-calling agent. Sets the assistant’s persona and answer style.' },
-  answer_direct: { label: 'AI answer — direct (Claude · Gemini · screenshots)', desc: 'System prompt for single-shot answers (Anthropic, Gemini, and questions about a captured figure).' },
-  visual_planner: { label: 'Visual planner', desc: 'Decides whether a request becomes a diagram or an image, and how. The strict-JSON output contract is always enforced automatically, so you can safely reword the guidance.' },
-  diagram: { label: 'Diagram (text fallback)', desc: 'Used to redraw a monospace/ASCII diagram if the planner’s diagram came back empty.' },
+  text: { label: 'Text answers', desc: 'The system prompt used for every text answer, whatever model you pick — set the assistant’s voice and answer style here.' },
+  image: { label: 'Images & diagrams', desc: 'Decides whether a request becomes a diagram or an image, and how. The strict-JSON output contract is always enforced automatically, so you can safely reword the guidance.' },
 };
 function promptFor(key) {
   const o = state.settings && state.settings.prompts;
@@ -1732,7 +1743,11 @@ function openSettings(note) {
       <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button></div>
       <div class="tabpane" data-pane="ai">
       ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. Optionally paste your <b>own</b> key below to use your account (BYO override). Mark one provider as <b>Default</b> for the composer; target any inline with @gpt / @claude / @gemini.</div>
+      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. <b>OpenRouter</b> is the default provider. Optionally paste your <b>own</b> key for any provider (BYO override) and mark one as <b>Default</b>; target others inline with @gpt / @claude / @gemini.</div>
+      <div class="field">
+        <div class="lbl-row"><label>OpenRouter API key</label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
+        <input id="kOpenrouter" type="password" placeholder="sk-or-… (optional — server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Default provider. Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
+      </div>
       <div class="field">
         <div class="lbl-row"><label>OpenAI API key</label><button type="button" class="def-radio ${s.provider === 'openai' ? 'on' : ''}" data-def="openai"><span class="rdot"></span>Default</button></div>
         <input id="kOpenai" type="password" placeholder="sk-…" value="${esc(s.keys.openai)}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px" id="mOpenai" value="${esc(s.models.openai)}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px" id="mOpenaiImg" value="${esc(s.models.openaiImage)}"></div>
@@ -1784,7 +1799,10 @@ function openSettings(note) {
   { const stL = $('#stLoad', m); if (stL) stL.onclick = async () => { close(); await loadNotesFromFolder(state.ui.activeDoc, true); }; }
   $('#mSave', m).onclick = () => {
     const defEl = $('.def-radio.on', m); if (defEl) s.provider = defEl.dataset.def;
+    s.keys.openrouter = $('#kOpenrouter', m).value.trim();
     s.keys.openai = $('#kOpenai', m).value.trim(); s.keys.anthropic = $('#kAnthropic', m).value.trim(); s.keys.gemini = $('#kGemini', m).value.trim();
+    s.models.openrouter = $('#mOpenrouter', m).value.trim() || DEFAULT_MODELS.openrouter;
+    s.models.openrouterImage = $('#mOpenrouterImg', m).value.trim() || DEFAULT_MODELS.openrouterImage;
     s.models.openai = $('#mOpenai', m).value.trim() || DEFAULT_MODELS.openai;
     s.models.anthropic = $('#mAnthropic', m).value.trim() || DEFAULT_MODELS.anthropic;
     s.models.gemini = $('#mGemini', m).value.trim() || DEFAULT_MODELS.gemini;
@@ -1967,98 +1985,18 @@ function findMarkPage(pel, q, curOcc) {
 
 /* ---------- seeding (mirror the mockups) ---------- */
 async function seed() {
-  const t = new Date(); const yest = new Date(t.getTime() - 86400000);
-  const at = (base, h, m) => { const d = new Date(base); d.setHours(h, m, 0, 0); return d.toISOString(); };
-  const figImg = window.FIG3_B64 ? 'data:image/png;base64,' + window.FIG3_B64 : null;
-
-  // A1 — Energy Cascade explain (screen 1 + export)
-  const q1 = 'A defining feature of turbulence is the transfer of kinetic energy across a wide range of scales.';
-  const p1 = (await locateQuote(q1)) || 2;
-  const rects1 = await rectsForQuote(p1, q1);
-  const A1 = newAnnotation({ page: p1, section: '2.3 Energy Cascade', selected_text: q1, rects: rects1, hlColor: 'text',
-    created_at: at(t, 10, 24), auto_tags: ['Question'] });
-  A1.messages = [
-    { id: uid('m'), actor: 'sara', type: 'comment', text: 'A defining feature of turbulence is the transfer of kinetic energy across a wide range of scales. @ai can you explain this in simple terms?', created_at: at(t, 10, 24) },
-    { id: uid('m'), actor: 'ai', provider: 'openai', model: 'gpt-4o', type: 'ai_answer', created_at: at(t, 10, 24),
-      text: 'Turbulence moves energy from big swirls to smaller ones in a step-by-step way. The big eddies break down into smaller eddies, and this continues until the eddies are so small that viscosity turns the energy into heat. This process happens across a very wide range of scales.',
-      chips: ['Page ' + p1, 'Section 2.3', 'Used highlighted text', 'No external sources'] },
-  ];
-
-  // A1b — the equation boxed as a second anchor on the same page (mockup 1 ②, mockup 2 #2)
-  const A1b = newAnnotation({ page: p1, section: '2.3 Energy Cascade', source_type: 'equation',
-    selected_text: 'E(k) = C_K ε^(2/3) k^(−5/3)', hlColor: 'box',
-    rects: [{ x: 0.11, y: 0.695, w: 0.42, h: 0.05 }], created_at: at(t, 10, 25), auto_tags: ['Equation', 'Question'] });
-  A1b.messages = [
-    { id: uid('m'), actor: 'you', type: 'comment', text: 'Can you explain how the −5/3 power law follows from Kolmogorov\'s assumptions?', created_at: at(t, 10, 25) },
-    { id: uid('m'), actor: 'ai', provider: 'openai', model: 'gpt-4o', type: 'ai_answer', created_at: at(t, 10, 25),
-      text: 'In the inertial subrange Kolmogorov assumed the spectrum depends only on the wavenumber k and the energy flux ε (equal to the mean dissipation rate). Dimensional analysis then leaves only one possibility: E(k) = C_K ε^(2/3) k^(−5/3), since that is the unique combination of ε and k with the units of E(k). The constant C_K ≈ 1.5 is universal and fixed by experiment.',
-      chips: ['Page ' + p1, 'Section 2.3', 'Used highlighted text', 'No external sources'] },
-  ];
-
-  // A2 — "what does this spectrum look like?" -> generated visual (screens 1 & 5)
-  const q2 = 'The energy cascade can be summarized as';
-  const p2 = (await locateQuote(q2)) || p1;
-  const A2 = newAnnotation({ page: p2, section: '2.3 Energy Cascade', selected_text: 'the energy spectrum E(k) in the inertial range follows the −5/3 power law', rects: await rectsForQuote(p2, 'the energy spectrum E(k) in the inertial range follows'), hlColor: 'text',
-    created_at: at(t, 10, 35), auto_tags: ['Figure', 'Generated visual'] });
-  A2.messages = [
-    { id: uid('m'), actor: 'bonnie', type: 'comment', text: 'Can you turn this into a cleaner visual summary of the energy spectrum?', created_at: at(t, 10, 35) },
-    { id: uid('m'), actor: 'ai', provider: 'openai', model: 'gpt-image-1', type: 'generated_visual', created_at: at(t, 10, 35),
-      title: 'Turbulent Energy Spectrum', image: figImg,
-      takeaways: ['Energy is injected at large scales (low k).', 'In the inertial subrange, E(k) ∝ k^(−5/3).', 'At high k, viscous dissipation removes energy.'],
-      strip: ['Large scales (energy input)', 'Inertial subrange (E(k) ∝ k^−5/3)', 'Small scales (dissipation)'],
-      is_conceptual: true, is_data_extracted: false,
-      chips: ['Page ' + p2, 'Section 2.3', 'Used highlighted text', 'Generated visual', 'No external sources'] },
-  ];
-
-  // A3 — screenshot of Figure 3 (screen 3)
-  const p3 = (await locateQuote('Energy Spectra in the Inertial Subrange')) || 3;
-  const A3 = newAnnotation({ source_type: 'screenshot', page: p3, section: '3.2 Energy Spectra in the Inertial Subrange',
-    screenshot: figImg, caption: 'Figure 3: Schematic of the turbulence kinetic energy spectrum.',
-    rects: [{ x: 0.24, y: 0.42, w: 0.52, h: 0.28 }], created_at: at(yest, 16, 18), auto_tags: ['Screenshot', 'Figure'] });
-  A3.messages = [
-    { id: uid('m'), actor: 'sara', type: 'comment', text: 'What does this figure show?', created_at: at(yest, 16, 18) },
-    { id: uid('m'), actor: 'ai', provider: 'anthropic', model: 'claude-3-5-sonnet', type: 'ai_answer', created_at: at(yest, 16, 18),
-      text: 'This figure shows the turbulence kinetic energy spectrum E(k) as a function of wavenumber k on a log–log scale. It illustrates three classic regions:\n- **Energy-containing range** (low k): energy is injected at large scales.\n- **Inertial subrange** (mid k): E(k) ∝ k^(−5/3), a constant energy transfer rate across scales.\n- **Dissipation range** (high k): viscous effects dominate and energy dissipates.\nThe dashed line is the Kolmogorov −5/3 reference scaling.',
-      chips: ['Page ' + p3, 'Figure 3', 'Used screenshot', 'Used nearby caption', 'No external sources'] },
-  ];
-
-  // A4 — clarification, unresolved (screen 2)
-  const q4 = 'energy spectrum E(k), where k is the wavenumber';
-  const p4 = (await locateQuote('Spectral Characteristics')) || 3;
-  const A4 = newAnnotation({ page: p4, section: '4.1 Spectral Characteristics', selected_text: 'energy spectrum E(k), where k is the wavenumber', rects: await rectsForQuote(p4, 'energy spectrum'), hlColor: 'text',
-    created_at: at(t, 9, 40), auto_tags: ['Question', 'Definition'], resolved: false });
-  A4.messages = [
-    { id: uid('m'), actor: 'you', type: 'comment', text: 'What exactly is meant by the energy spectrum E(k) in this context?', created_at: at(t, 9, 40) },
-    { id: uid('m'), actor: 'ai', provider: 'gemini', model: 'gemini-1.5-pro', type: 'ai_answer', created_at: at(t, 9, 41),
-      text: 'E(k) represents the distribution of turbulent kinetic energy across wavenumber k. It describes how energy is partitioned among eddies of different sizes, defined so that the integral of E(k) over all k gives the total turbulent kinetic energy per unit mass.',
-      chips: ['Page ' + p4, 'Section 4.1', 'Used highlighted text', 'No external sources'] },
-  ];
-
-  // A5 — intermittency summary (export variety, Claude actor)
-  const q5 = 'Turbulent flows are intermittent in space and time';
-  const p5 = (await locateQuote(q5)) || 2;
-  const A5 = newAnnotation({ page: p5, section: '2.4 Intermittency', selected_text: q5, rects: await rectsForQuote(p5, q5), hlColor: 'yellow',
-    created_at: at(yest, 10, 15), auto_tags: ['Summary'] });
-  A5.messages = [
-    { id: uid('m'), actor: 'bonnie', type: 'comment', text: 'Can you summarize this section in 2 bullets?', created_at: at(yest, 10, 15) },
-    { id: uid('m'), actor: 'ai', provider: 'openai', model: 'gpt-4o', type: 'ai_answer', created_at: at(yest, 10, 15),
-      text: '- Turbulence is intermittent: intense, irregular bursts break self-similarity.\n- Structure functions S_p(r) ∼ r^(ζp) quantify it; ζp deviating from p/3 signals intermittency corrections.',
-      chips: ['Page ' + p5, 'Section 2.4', 'Used highlighted text', 'No external sources'] },
-  ];
-
-  // Number + order by READING position (page, then vertical y), and assign ascending
-  // timestamps in that order so the time-sorted list reads 1..N top-to-bottom and the
-  // page pins ascend as you read. (Fixes scrambled badge/pin order.)
-  const ord = [...state.annotations].sort((a, b) => (a.page - b.page) || (((a.rects[0] || {}).y || 0) - ((b.rects[0] || {}).y || 0)));
-  const half = Math.ceil(ord.length / 2), dayY = new Date(t.getTime() - 86400000);
-  ord.forEach((a, i) => {
-    a.anchor = i + 1;
-    const base = i < half ? dayY : t, mins = 9 * 60 + (i % half) * 26;   // first half "yesterday", rest "today", ascending
-    const d = new Date(base); d.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
-    a.created_at = d.toISOString();
-    a.messages.forEach((mm, j) => { mm.created_at = new Date(d.getTime() + j * 90000).toISOString(); });
-  });
-  state.seeded = true; state.ui.activeId = ord[0].id; save();
+  // Seed the bundled sample: the "Attention Is All You Need" paper and its saved notes.
+  const src = window.SAMPLE_NOTES_JSON;
+  const others = (state.annotations || []).filter(a => docIdOf(a) !== 'sample');
+  if (src && Array.isArray(src.annotations)) {
+    const sample = src.annotations.map(a => { const c = JSON.parse(JSON.stringify(a)); c.doc = 'sample'; return c; });
+    state.annotations = others.concat(sample);
+  } else {
+    state.annotations = others;
+  }
+  state.ui.activeId = null;
+  if (typeof renumber === 'function') renumber();
+  state.seeded = true; state.seedVersion = SEED_VERSION; save();
 }
 function itemRect(it, vp) {
   const tx = pdfjsLib.Util.transform(vp.transform, it.transform);
@@ -2280,7 +2218,7 @@ async function boot() {
       new Promise((_, rej) => setTimeout(() => rej(new Error('PDF engine did not start — likely a sandboxed preview. Open the downloaded file directly.')), 7000)),
     ]);
   } catch (e) { pdfOk = false; showReaderFallback(e && e.message); }
-  if (!state.seeded && !state.annotations.length) { try { await seed(); } catch (e) { console.warn('seed failed', e); } }
+  if ((!state.seeded && !state.annotations.length) || state.seedVersion !== SEED_VERSION) { try { await seed(); } catch (e) { console.warn('seed failed', e); } }
   if (pdfOk && !state.ui.continuous) { await renderPage(state.ui.page); }
   render(); drawHighlights(); drawPins();
   // Pre-cache all page text in the background so AI context retrieval + document search

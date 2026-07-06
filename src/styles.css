@@ -454,6 +454,7 @@ svg{display:block}
 .avatar.gpt{background:#10A37F;color:#fff}
 .avatar.claude{background:#D97757;color:#fff;border-radius:7px}
 .avatar.gemini{background:#1C69FF;color:#fff}
+.avatar.openrouter{background:#6566F1;color:#fff}
 .avatar.ai svg{width:16px;height:16px}
 .avatar.brand svg{width:17px;height:17px}
 
