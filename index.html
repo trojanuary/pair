@@ -719,7 +719,7 @@ const ACTORS = {
 };
 const PROVIDER_LABEL = { openrouter: 'OpenRouter', openai: 'GPT', anthropic: 'Claude', gemini: 'Gemini' };
 const DEFAULT_MODELS = {
-  openrouter: 'google/gemma-4-31b-it:free', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash',
+  openrouter: 'openai/gpt-5.4-mini', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash',
   openrouterImage: 'google/gemini-3.1-flash-lite-image', openaiImage: 'gpt-image-1', geminiImage: 'imagen-3.0-generate-002',
 };
 function defaultState() {
@@ -764,6 +764,7 @@ function migrateState(s) {
     s.settings.keys = s.settings.keys || {}; if (!('openrouter' in s.settings.keys)) s.settings.keys.openrouter = '';
     s.settings.models = s.settings.models || {};
     if (!s.settings.models.openrouter) s.settings.models.openrouter = DEFAULT_MODELS.openrouter;
+    if (s.settings.models.openrouter === 'google/gemma-4-31b-it:free') s.settings.models.openrouter = DEFAULT_MODELS.openrouter;
     if (!s.settings.models.openrouterImage) s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
     if (s.settings.models.openrouterImage === 'x-ai/grok-imagine-image-quality') s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
     if (!s.settings._orDefaulted) { s.settings.provider = 'openrouter'; s.settings._orDefaulted = true; }

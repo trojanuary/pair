@@ -3,7 +3,7 @@
 // Uses the site's env key by default, or a user-supplied BYO key passed in the request.
 // No npm deps — global fetch (Node 18+).
 const ENV = { openrouter: 'OPENROUTER_API_KEY', openai: 'OPENAI_API_KEY', anthropic: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY' };
-const DEFAULT_MODEL = { openrouter: 'google/gemma-4-31b-it:free', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash' };
+const DEFAULT_MODEL = { openrouter: 'openai/gpt-5.4-mini', openai: 'gpt-5.4', anthropic: 'claude-sonnet-5', gemini: 'gemini-3.5-flash' };
 // GPT-5+/o-series are reasoning models: reasoning tokens are billed against max_completion_tokens,
 // so add a generous reasoning buffer or the visible answer can come back empty ("could not finalize").
 const capTokens = (m, n) => (/^(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n + 4000 } : { max_tokens: n });
