@@ -143,13 +143,13 @@ svg{display:block}
 #connectors{position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:40;overflow:visible}
 #connectors path{fill:none;stroke:var(--blue);stroke-width:2;stroke-dasharray:2 4;stroke-linecap:round;opacity:.85}
 /* screenshot capture */
-.capbar{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:20;
+.capbar{position:absolute;top:74px;left:50%;transform:translateX(-50%);z-index:31;
   background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);
   display:flex;align-items:center;gap:14px;padding:9px 12px 9px 14px;font-weight:600;color:var(--blue)}
 .capbar .x{color:var(--muted);font-weight:500;cursor:pointer;padding-left:8px;border-left:1px solid var(--line)}
 .selbox{position:absolute;border:1.5px dashed var(--blue);background:rgba(37,99,235,.08);z-index:15;pointer-events:none}
 .selhandle{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid var(--blue);border-radius:2px}
-#captureMask{position:absolute;inset:0;z-index:12;cursor:crosshair;display:none}
+#captureMask{position:absolute;left:0;right:0;top:60px;bottom:0;z-index:30;cursor:crosshair;display:none}
 
 /* ---------- Right notes panel ---------- */
 #notes{background:var(--surface);border-left:1px solid var(--line);display:flex;
@@ -1071,7 +1071,7 @@ function currentContinuousPage() {
 async function setContinuous(on) {
   state.ui.continuous = on; save();
   const btn = $('#btnContinuous'); if (btn) btn.classList.toggle('active', on);
-  if (on) { if (state.ui.tool === 'shot') setTool('cursor'); await buildContinuous(); }
+  if (on) { await buildContinuous(); }
   else { teardownContinuous(); const _pw = $('#pageWrap'); if (_pw) _pw.style.display = ''; await renderPage(state.ui.page); }
   drawHighlights(); drawPins();
 }
@@ -1136,10 +1136,15 @@ function onTextSelect() {
     suffix: idx >= 0 ? cleanText.slice(idx + text.length, idx + text.length + 32) : '',
     section: sectionForIndex(pt.text, idx < 0 ? 0 : idx),
   };
-  const last = range.getClientRects()[range.getClientRects().length - 1];
+  pop.classList.remove('hidden');
+  positionSelPop();
+}
+function positionSelPop() {
+  const sel = window.getSelection(); const pop = $('#selPop');
+  if (!sel || !sel.rangeCount || !String(sel).trim()) { pop.classList.add('hidden'); return; }
+  const rects = sel.getRangeAt(0).getClientRects(); const last = rects[rects.length - 1]; if (!last) return;
   pop.style.left = clamp(last.left + last.width / 2 - 70, 8, window.innerWidth - 220) + 'px';
   pop.style.top = (last.bottom + 8) + 'px';
-  pop.classList.remove('hidden');
 }
 
 /* ---------- create annotations ---------- */
@@ -1172,7 +1177,6 @@ function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
 /* ---------- screenshot capture ---------- */
 let cap = null;
 function setTool(t) {
-  if (t === 'shot' && state.ui.continuous) { toast('Switch to single-page view to capture a figure.'); return; }
   state.ui.tool = t; save();
   $$('.tool').forEach(b => b.classList.remove('active', 'hl', 'shot'));
   const map = { cursor: '#toolCursor', text: '#toolText', highlight: '#toolHi', comment: '#toolComment', shot: '#toolShot' };
@@ -1204,17 +1208,35 @@ function initCaptureMask() {
   });
 }
 async function captureRegion(l, t, w, h) {
-  const canvas = $('#pageCanvas');
-  const tmp = document.createElement('canvas'); tmp.width = w * outputScale; tmp.height = h * outputScale;
-  tmp.getContext('2d').drawImage(canvas, l * outputScale, t * outputScale, w * outputScale, h * outputScale, 0, 0, w * outputScale, h * outputScale);
+  // l,t,w,h are pixels within the capture mask (which overlays the scroll viewport).
+  const mask = $('#captureMask'); const mr = mask.getBoundingClientRect();
+  const sx = mr.left + l, sy = mr.top + t;   // selection top-left in screen coords
+  let canvas, vp, page;
+  if (state.ui.continuous) {
+    const cx = sx + w / 2, cy = sy + h / 2; let pgEl = null;
+    $$('#contPages .pg').forEach(p => { const r = p.getBoundingClientRect(); if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) pgEl = p; });
+    if (!pgEl) { toast('Draw the box over a page to capture it.', 'err'); return; }
+    if (!pgEl._rendered) await renderInto(+pgEl.dataset.page, pgEl);
+    canvas = pgEl.querySelector('canvas'); vp = pgEl._vp; page = +pgEl.dataset.page;
+  } else {
+    canvas = $('#pageCanvas'); vp = viewport; page = state.ui.page;
+  }
+  if (!canvas || !vp) { toast('Nothing to capture here.', 'err'); return; }
+  const cr = canvas.getBoundingClientRect();
+  const dx = Math.max(0, sx - cr.left), dy = Math.max(0, sy - cr.top);   // display px inside the canvas
+  const dw = Math.min(w, cr.width - dx), dh = Math.min(h, cr.height - dy);
+  if (dw < 12 || dh < 12) { toast('Draw the box over a page to capture it.', 'err'); return; }
+  const sc = canvas.width / cr.width;   // device px per display px
+  const tmp = document.createElement('canvas'); tmp.width = Math.round(dw * sc); tmp.height = Math.round(dh * sc);
+  tmp.getContext('2d').drawImage(canvas, dx * sc, dy * sc, dw * sc, dh * sc, 0, 0, dw * sc, dh * sc);
   const dataURL = tmp.toDataURL('image/png');
-  const pt = pageTextCache[state.ui.page] || { text: '' };
+  const pt = pageTextCache[page] || { text: '' };
   const figM = pt.text.match(/Figure\s+\d+[:.][^.]{0,120}/i);
   const ann = newAnnotation({
-    source_type: 'screenshot', page: state.ui.page,
+    source_type: 'screenshot', page,
     section: sectionForIndex(pt.text, 0), screenshot: dataURL,
     caption: figM ? figM[0].trim() : '',
-    rects: [{ x: l / viewport.width, y: t / viewport.height, w: w / viewport.width, h: h / viewport.height }],
+    rects: [{ x: dx / cr.width, y: dy / cr.height, w: dw / cr.width, h: dh / cr.height }],
   });
   setTool('cursor');
   selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
@@ -2748,16 +2770,26 @@ function wire() {
   $('#toolComment').onclick = () => setTool('comment');
   $('#toolShot').onclick = () => setTool('shot');
   $('#capCancel').onclick = () => setTool('cursor');
+  { const _rd = $('#reader'), _mk = $('#captureMask'), _cb = $('#capBar'); if (_rd && _mk) _rd.appendChild(_mk); if (_rd && _cb) _rd.appendChild(_cb); }
   // Comment tool: click anywhere on the page to drop a point comment
-  $('#pageWrap').addEventListener('click', e => {
-    if (state.ui.tool !== 'comment' || !viewport) return;
-    if (window.getSelection && String(window.getSelection())) return;   // ignore text selections
-    const r = $('#pageWrap').getBoundingClientRect();
-    const x = clamp((e.clientX - r.left) / viewport.width, 0, 0.97), y = clamp((e.clientY - r.top) / viewport.height, 0, 0.97);
-    const pt = pageTextCache[state.ui.page] || { text: '' };
-    const ann = newAnnotation({ source_type: 'free_comment', page: state.ui.page, section: sectionForIndex(pt.text, 0), rects: [{ x, y, w: 0.02, h: 0.02 }] });
+  const placeComment = (pageEl, pageNum, vp, cx, cy) => {
+    const r = pageEl.getBoundingClientRect();
+    const x = clamp((cx - r.left) / vp.width, 0, 0.97), y = clamp((cy - r.top) / vp.height, 0, 0.97);
+    const pt = pageTextCache[pageNum] || { text: '' };
+    const ann = newAnnotation({ source_type: 'free_comment', page: pageNum, section: sectionForIndex(pt.text, 0), rects: [{ x, y, w: 0.02, h: 0.02 }] });
     setTool('cursor'); selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
     toast('Comment placed — type your note below.');
+  };
+  // Comment tool: click any page to drop a point comment — works in single AND continuous mode.
+  $('#rdScroll').addEventListener('click', e => {
+    if (state.ui.tool !== 'comment') return;
+    if (window.getSelection && String(window.getSelection())) return;   // ignore text selections
+    if (state.ui.continuous) {
+      const pgEl = e.target.closest && e.target.closest('#contPages .pg');
+      if (pgEl && pgEl._vp) placeComment(pgEl, +pgEl.dataset.page, pgEl._vp, e.clientX, e.clientY);
+    } else if (viewport) {
+      placeComment($('#pageWrap'), state.ui.page, viewport, e.clientX, e.clientY);
+    }
   });
   $('#btnSearch').onclick = () => { const b = document.getElementById('findBar'); (b && !b.classList.contains('hidden')) ? closeFind() : openFind(); };
   document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'F') && numPages > 0) { e.preventDefault(); openFind(); } });
@@ -2767,7 +2799,7 @@ function wire() {
   $('#spHi').onclick = () => createFromSelection('yellow');
   $('#spNote').onclick = () => createFromSelection('text');
   $('#spAsk').onclick = () => createFromSelection('ask');
-  document.addEventListener('scroll', () => $('#selPop').classList.add('hidden'), true);
+  document.addEventListener('scroll', () => { if (pendingSel && window.getSelection && String(window.getSelection()).trim()) positionSelPop(); else $('#selPop').classList.add('hidden'); }, true);
   // notes header (mockup 2: funnel + search + kebab)
   $('#btnFilter').onclick = e => openFilterPopover(e.currentTarget);
   injectNotesButtons();

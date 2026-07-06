@@ -135,13 +135,13 @@ svg{display:block}
 #connectors{position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:40;overflow:visible}
 #connectors path{fill:none;stroke:var(--blue);stroke-width:2;stroke-dasharray:2 4;stroke-linecap:round;opacity:.85}
 /* screenshot capture */
-.capbar{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:20;
+.capbar{position:absolute;top:74px;left:50%;transform:translateX(-50%);z-index:31;
   background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);
   display:flex;align-items:center;gap:14px;padding:9px 12px 9px 14px;font-weight:600;color:var(--blue)}
 .capbar .x{color:var(--muted);font-weight:500;cursor:pointer;padding-left:8px;border-left:1px solid var(--line)}
 .selbox{position:absolute;border:1.5px dashed var(--blue);background:rgba(37,99,235,.08);z-index:15;pointer-events:none}
 .selhandle{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid var(--blue);border-radius:2px}
-#captureMask{position:absolute;inset:0;z-index:12;cursor:crosshair;display:none}
+#captureMask{position:absolute;left:0;right:0;top:60px;bottom:0;z-index:30;cursor:crosshair;display:none}
 
 /* ---------- Right notes panel ---------- */
 #notes{background:var(--surface);border-left:1px solid var(--line);display:flex;
