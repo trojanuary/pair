@@ -1148,6 +1148,8 @@ function onTextSelect() {
     suffix: idx >= 0 ? cleanText.slice(idx + text.length, idx + text.length + 32) : '',
     section: sectionForIndex(pt.text, idx < 0 ? 0 : idx),
   };
+  if (state.ui.tool === 'highlight') { highlightSelection(); return; }
+  if (state.ui.tool === 'text') { createFromSelection('text'); return; }
   pop.classList.remove('hidden');
   positionSelPop();
 }
@@ -1169,6 +1171,19 @@ function newAnnotation(a) {
     auto_tags: [], manual_tags: [], resolved: false, created_at: nowISO(), updated_at: nowISO(),
   }, a);
   state.annotations.push(ann); save(); return ann;
+}
+function highlightSelection() {
+  if (!pendingSel) return;
+  newAnnotation({
+    source_type: 'text', page: pendingSel.page, section: pendingSel.section,
+    selected_text: pendingSel.text, prefix: pendingSel.prefix, suffix: pendingSel.suffix,
+    rects: pendingSel.rects, hlColor: 'yellow',
+  });
+  window.getSelection().removeAllRanges();
+  $('#selPop').classList.add('hidden');
+  pendingSel = null;
+  renumber(); render(); drawHighlights(); drawPins();
+  toast('Highlighted — drag more text, or pick another tool.');
 }
 function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
   if (!pendingSel) return;
@@ -2134,7 +2149,7 @@ function render() {
   $$('[data-addtag]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); addTagFlow(b.dataset.addtag); });
   $$('[data-menu]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); annMenu(b.dataset.ann, b.dataset.menu, b); });
   // edit / delete / quote controls
-  $$('[data-edit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = b.dataset.edit; render(); const ta = list.querySelector('.edit-input'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } });
+  $$('[data-edit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = b.dataset.edit; render(); const ta = list.querySelector('.edit-input'); if (ta) { try { ta.focus({ preventScroll: true }); } catch (x) { ta.focus(); } ta.setSelectionRange(ta.value.length, ta.value.length); } });
   $$('[data-canceledit]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); state.ui.editing = null; render(); });
   $$('details[data-disc]', list).forEach(d => d.addEventListener('toggle', () => { state.ui.openDisc = state.ui.openDisc || {}; if (d.open) state.ui.openDisc[d.dataset.disc] = true; else delete state.ui.openDisc[d.dataset.disc]; save(); }));
   $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
@@ -2157,7 +2172,7 @@ function render() {
     ta.addEventListener('click', e => e.stopPropagation());
     attachMentions(ta);
   }
-  if (state.ui.autoscroll && state.ui.activeId) { list.scrollTop = scrollTop; scrollNoteIntoView(state.ui.activeId, false); }
+  if (state.ui.autoscroll && state.ui.activeId) { list.scrollTop = scrollTop; const _ed = state.ui.editing && list.querySelector('.edit-input'); if (_ed) { const lb = list.getBoundingClientRect(), eb = _ed.getBoundingClientRect(); list.scrollTop += (eb.top - lb.top) - (lb.height / 2 - eb.height / 2); } else scrollNoteIntoView(state.ui.activeId, false); }
   else list.scrollTop = scrollTop;
   // restore inline composer draft + focus
   if (draft && box) { const ta = box.querySelector('.tc-input'); ta.value = draft.v; ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; ta.dispatchEvent(new Event('input')); if (draft.focused) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(draft.caret, draft.caret); } }
@@ -2491,7 +2506,7 @@ function openSettings(note) {
       <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button><button type="button" class="settab" data-tab="storage">Storage</button></div>
       <div class="tabpane" data-pane="ai">
       ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server key by default — you don't need to enter anything. <b>OpenRouter</b> is the recommended default (it powers text, images, and the tool-using agent). Or use any <b>OpenAI-compatible API</b> by setting its URL, key, and models. Mark one as <b>Default</b>, or type <b>@ai</b> in a note to ask it.</div>
+      <div class="hint" style="margin:-2px 0 16px">AI runs through a <b>shared key</b> so you can try it instantly — but that key has a <b>small test quota</b>. For real use, add your <b>own key</b> below: it's stored only in this browser and sent per‑request as an override — <b>never saved on the server</b>. <b>OpenRouter</b> is the recommended default (text, images, and the tool‑using agent); or use any <b>OpenAI‑compatible API</b> (base URL + key + models). Mark one as <b>Default</b>, or type <b>@ai</b> in a note.</div>
       <div class="field">
         <div class="lbl-row"><label>OpenRouter <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
         <input id="kOpenrouter" type="password" placeholder="API key — sk-or-… (optional; server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
@@ -2930,7 +2945,7 @@ function wireNoteEditDblclick() {
   const enter = (annId, msgId) => {
     state.ui.activeId = annId; state.ui.editing = msgId; render();
     const ta = document.querySelector('.edit-input[data-editing="' + msgId + '"]');
-    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    if (ta) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(ta.value.length, ta.value.length); }
   };
   const target = ev => {
     if (ev.target.closest('a,button,summary,.men,.edit-wrap,textarea,input,.thread-compose,.linked-quote,.shot-thumb')) return null;
