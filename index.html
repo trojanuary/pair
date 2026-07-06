@@ -153,7 +153,7 @@ svg{display:block}
 
 /* ---------- Right notes panel ---------- */
 #notes{background:var(--surface);border-left:1px solid var(--line);display:flex;
-  flex-direction:column;min-width:0;overflow:clip}
+  flex-direction:column;min-width:0;overflow:clip;position:relative}
 .nt-top{padding:16px 16px 10px;display:flex;align-items:center;justify-content:space-between}
 .nt-top h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.3px}
 .nt-tophdr{display:flex;align-items:center;gap:6px;color:var(--muted)}
@@ -498,6 +498,19 @@ svg{display:block}
 .expand-hint{color:var(--faint);font-size:11.5px;margin-top:8px}
 
 @media (max-width:1100px){:root{--right-w:340px;--left-w:0px}}
+/* ---- draggable divider for the right notes panel ---- */
+.col-resizer{position:absolute;top:0;left:0;width:8px;height:100%;cursor:col-resize;z-index:35;touch-action:none}
+.col-resizer::before{content:"";position:absolute;top:0;bottom:0;left:0;width:2px;background:transparent;transition:background .12s}
+.col-resizer:hover::before,body.col-resizing #rightResizer::before{background:var(--blue)}
+body.col-resizing{cursor:col-resize;user-select:none}
+body.col-resizing #app{transition:none}
+/* ---- math (MathJax SVG) + fenced pseudocode inside answers/comments ---- */
+.msg .math-d{display:block;margin:8px 0;max-width:100%;overflow-x:auto;overflow-y:hidden}
+.msg pre.code-block{margin:8px 0;padding:11px 13px;background:#0B0F19;color:#E5E7EB;border-radius:8px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.5;white-space:pre;tab-size:2}
+.msg pre.code-block code{background:none;border:0;padding:0;color:inherit;font-size:inherit;white-space:pre}
+.msg mjx-container{max-width:100%}
+.msg mjx-container[display="true"]{margin:6px 0!important;overflow-x:auto;overflow-y:hidden}
+.ex-sheet pre.code-block{background:#0B0F19;color:#E5E7EB}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1799,14 +1812,14 @@ function msgCard(a, m, isFirst) {
     if (a.source_type === 'screenshot' && a.screenshot) body += `<div class="shot-thumb"><img src="${a.screenshot}"></div>`;
     else if (a.selected_text) body += quoteBlock(a.selected_text);
   }
-  if (m.type === 'comment') body += editing ? editBox(a, m) : `<div class="msg">${m.text ? esc(m.text).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`) : ''}</div>`;
+  if (m.type === 'comment') body += editing ? editBox(a, m) : `<div class="msg">${m.text ? commentHTML(m.text) : ''}</div>`;
   if (m.type === 'ai_answer') {
     if (m.pending) body += `<div class="msg"><span class="typing">${esc(m.status || 'Thinking')}<i></i><i></i><i></i></span></div>`;
     else if (m.error) body += `<div class="msg" style="color:#B91C1C">⚠ ${esc(m.error)}</div>`;
     else if (editing) body += editBox(a, m);
     else {
       // Answer first; provenance chips are tucked into a collapsed “sources” disclosure.
-      body += `<div class="msg">${mdLite(m.text)}</div>`
+      body += `<div class="msg">${mdRich(m.text)}</div>`
         + `<details class="prov" data-disc="prov:${m.id}"${(state.ui.openDisc || {})['prov:' + m.id] ? ' open' : ''}><summary><span class="disc-i">ⓘ</span> AI-generated${m.model ? ' · ' + esc(m.model) : ''}<span class="prov-more"> · sources</span></summary><div class="prov-body"><div class="prov-lbl">What this answer used</div>${chipRow((m.chips && m.chips.length) ? m.chips : chipsFor(a))}</div></details>`
         + traceHTML(m);
     }
@@ -1957,6 +1970,89 @@ function mdLite(t) {
   return out.join('');
 }
 
+/* ---------- rich content: LaTeX math (MathJax) + fenced pseudocode ---------- */
+const RICH_FENCE = /```[ \t]*([A-Za-z0-9_+#.\-]*)[ \t]*\n?([\s\S]*?)```/g;
+// Private-use sentinels (U+E000/E001) wrap protected spans; built at runtime so only ASCII
+// lives in source, and these code points never occur in real prose, LaTeX, or code.
+const RTOK0 = String.fromCharCode(0xE000), RTOK1 = String.fromCharCode(0xE001);
+const RTOK_RE = new RegExp(RTOK0 + '(\\d+)' + RTOK1, 'g');
+function codeBlockHTML(lang, code) {
+  return '<pre class="code-block"' + (lang ? ' data-lang="' + esc(lang) + '"' : '') + '><code>' + esc(String(code).replace(/\s+$/, '')) + '</code></pre>';
+}
+function mathToken(store, tex, display) {
+  const inner = esc(String(tex).trim());
+  store.push(display ? '<span class="math math-d">\\[' + inner + '\\]</span>' : '<span class="math">\\(' + inner + '\\)</span>');
+  return RTOK0 + (store.length - 1) + RTOK1;
+}
+// Pull math spans out of a (code-free) text run so markdown formatting can't mangle the LaTeX.
+// Everything is normalized to \(..\) / \[..\] — the only delimiters MathJax is configured for.
+function protectMath(t) {
+  const store = [];
+  let s = String(t == null ? '' : t).replace(/\r\n?/g, '\n');
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_, x) => mathToken(store, x, true));
+  s = s.replace(/\\\[([\s\S]+?)\\\]/g, (_, x) => mathToken(store, x, true));
+  s = s.replace(/\\\(([\s\S]+?)\\\)/g, (_, x) => mathToken(store, x, false));
+  // bare $...$ only with an unambiguous math signal (\, ^, _, {, }), so "$5 and $10" stays text
+  s = s.replace(/\$(?=\S)([^\n$]*?\S)\$/g, (m, x) => /[\\^_{}]/.test(x) ? mathToken(store, x, false) : m);
+  return { s, store };
+}
+function restoreRich(html, store) { return html.replace(RTOK_RE, (_, i) => store[+i] != null ? store[+i] : ''); }
+// Segment on fenced code first (code stays literal), then render each text run.
+function richSegments(t, renderText) {
+  const parts = String(t == null ? '' : t).replace(/\r\n?/g, '\n').split(RICH_FENCE);
+  let out = '';
+  for (let i = 0; i < parts.length; i += 3) {
+    if (parts[i]) out += renderText(parts[i]);
+    if (i + 2 < parts.length) out += codeBlockHTML(parts[i + 1] || '', parts[i + 2] || '');
+  }
+  return out;
+}
+// AI answers: full markdown + math + pseudocode.
+function mdRich(t) { return richSegments(t, run => { const { s, store } = protectMath(run); return restoreRich(mdLite(s), store); }); }
+// Comments: plain prose (no headings/bold) but still render math + code + @mentions.
+function commentHTML(t) {
+  return richSegments(t, run => {
+    const { s, store } = protectMath(run);
+    const html = esc(s).replace(/@(ai|gpt|claude|gemini)/ig, x => `<span class="men">${x}</span>`).replace(/\n/g, '<br>');
+    return restoreRich(html, store);
+  });
+}
+// MathJax (tex-svg -> self-contained SVG, no font files) loads on demand, only when an
+// answer actually contains math, so users who never see math never pay for the download.
+let _mjTypesetT = null;
+function ensureMathJax() {
+  if (window.MathJax || window.__mjLoading) return;
+  window.__mjLoading = true;
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']], processEscapes: false },
+    svg: { fontCache: 'global' },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
+    startup: { typeset: false, ready() { window.MathJax.startup.defaultReady(); typesetMath(); } },
+  };
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js';
+  s.async = true; s.id = 'mathjax-script';
+  s.onerror = () => { window.__mjLoading = false; };
+  document.head.appendChild(s);
+}
+function mathRoots() {
+  const r = [];
+  const list = document.getElementById('notesList'); if (list && /\\\(|\\\[/.test(list.innerHTML)) r.push(list);
+  const exp = document.getElementById('exportRoot'); if (exp && !exp.classList.contains('hidden') && /\\\(|\\\[/.test(exp.innerHTML)) r.push(exp);
+  return r;
+}
+function typesetMath() {
+  const roots = mathRoots(); if (!roots.length) return;
+  if (!(window.MathJax && window.MathJax.typesetPromise)) { ensureMathJax(); return; }
+  try { window.MathJax.typesetClear && window.MathJax.typesetClear(roots); } catch (e) {}
+  window.MathJax.typesetPromise(roots).catch(() => {});
+}
+function scheduleTypeset() {
+  if (!mathRoots().length) return;
+  ensureMathJax();
+  clearTimeout(_mjTypesetT); _mjTypesetT = setTimeout(typesetMath, 120);
+}
+
 function render() {
   // notes list
   renumber();
@@ -2014,6 +2110,7 @@ function render() {
   else list.scrollTop = scrollTop;
   // restore inline composer draft + focus
   if (draft && box) { const ta = box.querySelector('.tc-input'); ta.value = draft.v; ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; ta.dispatchEvent(new Event('input')); if (draft.focused) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(draft.caret, draft.caret); } }
+  scheduleTypeset();
   requestAnimationFrame(drawConnector);
 }
 function saveMsgEdit(annId, msgId) {
@@ -2350,7 +2447,7 @@ function buildSheet() {
     const right = [];
     a.messages.forEach(m => {
       if (m.type === 'comment' && inc.comments) right.push(`<div class="ex-comment"><div class="card-h" style="padding:0;margin:2px 0 4px">${actorAvatar(m)}<span class="who">${esc(actorName(m))}</span><span class="when">${new Date(m.created_at).toLocaleDateString()} · ${timeLabel(m.created_at)}</span></div><div class="msg">${esc(m.text || '')}</div></div>`);
-      if (m.type === 'ai_answer' && inc.ai && !m.pending && !m.error) right.push(`<div class="ex-resp"><div class="ex-sub">AI response · ${esc(PROVIDER_LABEL[m.provider] || 'AI')}</div><div class="msg">${mdLite(m.text)}</div>${chipRow(m.chips)}</div>`);
+      if (m.type === 'ai_answer' && inc.ai && !m.pending && !m.error) right.push(`<div class="ex-resp"><div class="ex-sub">AI response · ${esc(PROVIDER_LABEL[m.provider] || 'AI')}</div><div class="msg">${mdRich(m.text)}</div>${chipRow(m.chips)}</div>`);
       if (m.type === 'generated_visual' && inc.visuals && !m.pending && m.image) right.push(`<div class="ex-resp"><div class="ex-sub">Generated visual</div><div class="ex-shot"><img src="${m.image}"></div>${m.approximation_note ? `<div style="margin-top:6px"><span class="badge-appx">Approximate</span></div>` : ''}</div>`);
     });
     if (!left.length && !right.length) { n--; return; }
@@ -2358,6 +2455,7 @@ function buildSheet() {
   });
   if (n === 0) html += `<div class="empty">Nothing selected to export. Toggle include options or add notes.</div>`;
   sheet.innerHTML = html;
+  scheduleTypeset();
 }
 
 /* ---------- search ---------- */
@@ -2684,6 +2782,74 @@ function showReaderFallback(msg) {
 }
 
 /* ---------- boot ---------- */
+/* ---------- resizable right notes panel (drag its left edge) ---------- */
+function clampRightW(px) {
+  const max = Math.min(760, Math.max(340, window.innerWidth - 460));
+  return Math.round(Math.max(300, Math.min(max, px)));
+}
+function setRightW(px) { document.documentElement.style.setProperty('--right-w', clampRightW(px) + 'px'); }
+function curRightW() { return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--right-w'), 10) || 384; }
+function applyPanelWidths() { const w = state.settings && state.settings.rightW; if (w) setRightW(w); }
+function initPanelResize() {
+  const notes = document.getElementById('notes'); if (!notes || document.getElementById('rightResizer')) return;
+  const grip = el('<div id="rightResizer" class="col-resizer" title="Drag to resize · double-click to reset"></div>');
+  notes.insertBefore(grip, notes.firstChild);
+  let startX = 0, startW = 0, dragging = false;
+  const px = e => (e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX);
+  const onMove = e => { if (!dragging) return; setRightW(startW - (px(e) - startX)); if (e.cancelable) e.preventDefault(); };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false; document.body.classList.remove('col-resizing');
+    state.settings.rightW = curRightW(); save();
+    window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onUp);
+    requestAnimationFrame(() => { try { drawConnector(); } catch (e) {} });
+  };
+  const onDown = e => {
+    if (document.getElementById('app').classList.contains('collapse-right')) return; // no resize while collapsed
+    dragging = true; startX = px(e); startW = curRightW();
+    document.body.classList.add('col-resizing'); if (e.cancelable) e.preventDefault();
+    window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove, { passive: false }); window.addEventListener('touchend', onUp);
+  };
+  grip.addEventListener('mousedown', onDown);
+  grip.addEventListener('touchstart', onDown, { passive: false });
+  grip.addEventListener('dblclick', () => { state.settings.rightW = 384; save(); setRightW(384); requestAnimationFrame(() => { try { drawConnector(); } catch (e) {} }); });
+}
+/* ---------- double-click a comment / AI answer to edit it ---------- */
+function editableIdsFromMsg(msgEl) {
+  if (!msgEl) return null;
+  const reply = msgEl.closest('.reply');
+  let btn = null;
+  if (reply) btn = reply.querySelector('[data-edit]');
+  else { const card = msgEl.closest('.card'); btn = card ? card.querySelector(':scope > .card-h [data-edit]') : null; }
+  return btn ? { annId: btn.dataset.ann, msgId: btn.dataset.edit } : null;
+}
+let _lastMsgClick = { id: null, t: 0 };
+function wireNoteEditDblclick() {
+  const host = document.getElementById('notesList') || document.getElementById('notes');
+  if (!host || host._dblWired) return; host._dblWired = true;
+  const enter = (annId, msgId) => {
+    state.ui.activeId = annId; state.ui.editing = msgId; render();
+    const ta = document.querySelector('.edit-input[data-editing="' + msgId + '"]');
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  };
+  const target = ev => {
+    if (ev.target.closest('a,button,summary,.men,.edit-wrap,textarea,input,.thread-compose,.linked-quote,.shot-thumb')) return null;
+    const msgEl = ev.target.closest('.msg');
+    if (!msgEl || msgEl.classList.contains('clamp')) return null;
+    return editableIdsFromMsg(msgEl);
+  };
+  // Manual double-click detection: two clicks on the SAME message id within 400ms. This is
+  // immune to the re-render each single click triggers (element identity can change between clicks).
+  host.addEventListener('click', ev => {
+    const ids = target(ev);
+    if (!ids) { _lastMsgClick = { id: null, t: 0 }; return; }
+    const now = Date.now();
+    if (_lastMsgClick.id === ids.msgId && now - _lastMsgClick.t < 400) { _lastMsgClick = { id: null, t: 0 }; enter(ids.annId, ids.msgId); }
+    else _lastMsgClick = { id: ids.msgId, t: now };
+  });
+}
 async function boot() {
   // restore actor identity
   ACTORS.you.name = state.settings.actorName || 'You'; ACTORS.you.initials = state.settings.actorInitials || 'YO';
@@ -2693,6 +2859,7 @@ async function boot() {
   $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%';
   await idbOpen(); await rehydrateAssets();   // restore any offloaded screenshot/visual images
   wire(); setTool(state.ui.tool || 'cursor');
+  applyPanelWidths(); initPanelResize(); wireNoteEditDblclick();
   // Resolve the active document's bytes (sample inline, or a user PDF from IndexedDB).
   let startBytes = await loadDocBytes(state.ui.activeDoc);
   if (!startBytes) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
