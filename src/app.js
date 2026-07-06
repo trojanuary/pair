@@ -65,6 +65,7 @@ function migrateState(s) {
   if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() });
   if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
   if (!s.ui.libView) s.ui.libView = 'home';
+  if (s.ui.tool === 'text') s.ui.tool = 'cursor';
   // one-time: turn all tools on by default (respects later manual changes via the flag)
   if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings.enablePython = true; s.settings._toolsDefaulted = true; }
   // (per-provider model upgrade removed — providers are now openrouter + compat)
@@ -203,10 +204,10 @@ function trashDoc(id) {   // soft delete -> Trash view
   toast('Moved “' + d.name + '” to Trash.');
 }
 function restoreDoc(id) { const d = state.docs.find(x => x.id === id); if (d) { d.trashed = false; save(); renderTree(); toast('Restored “' + d.name + '”.'); } }
-function purgeDoc(id) {   // permanent delete
+async function purgeDoc(id) {   // permanent delete
   const d = state.docs.find(x => x.id === id); if (!d) return;
   const n = state.annotations.filter(a => docIdOf(a) === id).length;
-  if (!confirm('Permanently delete “' + d.name + '”' + (n ? ' and its ' + n + ' note' + (n === 1 ? '' : 's') : '') + '? This cannot be undone.')) return;
+  if (!(await confirmDialog('Permanently delete “' + d.name + '”' + (n ? ' and its ' + n + ' note' + (n === 1 ? '' : 's') : '') + '? This cannot be undone.', { okLabel: 'Delete', danger: true }))) return;
   state.docs = state.docs.filter(x => x.id !== id);
   state.annotations = state.annotations.filter(a => docIdOf(a) !== id);
   idbDel('pdf:' + id); delete _docBytes[id];
@@ -453,7 +454,6 @@ function onTextSelect() {
     section: sectionForIndex(pt.text, idx < 0 ? 0 : idx),
   };
   if (state.ui.tool === 'highlight') { highlightSelection(); return; }
-  if (state.ui.tool === 'text') { createFromSelection('text'); return; }
   pop.classList.remove('hidden');
   positionSelPop();
 }
@@ -510,7 +510,7 @@ let cap = null;
 function setTool(t) {
   state.ui.tool = t; save();
   $$('.tool').forEach(b => b.classList.remove('active', 'hl', 'shot'));
-  const map = { cursor: '#toolCursor', text: '#toolText', highlight: '#toolHi', comment: '#toolComment', shot: '#toolShot' };
+  const map = { cursor: '#toolCursor', highlight: '#toolHi', comment: '#toolComment', shot: '#toolShot' };
   const b = $(map[t]); if (b) { b.classList.add('active'); if (t === 'highlight') b.classList.add('hl'); if (t === 'shot') b.classList.add('shot'); }
   const mask = $('#captureMask'); const bar = $('#capBar');
   if (t === 'shot') { mask.style.display = 'block'; bar.classList.remove('hidden'); $('#textLayer').style.pointerEvents = 'none'; }
@@ -1501,12 +1501,29 @@ function saveAndReask(annId, msgId) {
   state.ui.editing = null; a.updated_at = nowISO(); save(); render();
   askAI(annId, newText.replace(/@ai\b/ig, '').trim() || newText);
 }
+function confirmDialog(message, opts) {
+  opts = opts || {};
+  return new Promise(resolve => {
+    const m = el('<div class="modal-mask confirm-mask"><div class="confirm-box"><div class="confirm-msg"></div><div class="confirm-acts"><button class="btn ghost" data-cd="0"></button><button class="btn ' + (opts.danger ? 'danger' : 'primary') + '" data-cd="1"></button></div></div></div>');
+    m.querySelector('.confirm-msg').textContent = message;
+    m.querySelector('[data-cd="0"]').textContent = opts.cancelLabel || 'Cancel';
+    m.querySelector('[data-cd="1"]').textContent = opts.okLabel || 'OK';
+    document.getElementById('modalRoot').appendChild(m);
+    const done = v => { m.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+    const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); done(false); } else if (e.key === 'Enter') { e.preventDefault(); done(true); } };
+    m.addEventListener('click', e => { if (e.target === m) done(false); });
+    m.querySelector('[data-cd="0"]').onclick = () => done(false);
+    m.querySelector('[data-cd="1"]').onclick = () => done(true);
+    document.addEventListener('keydown', onKey, true);
+    setTimeout(() => { const ok = m.querySelector('[data-cd="1"]'); if (ok) ok.focus(); }, 30);
+  });
+}
 function deleteMsg(annId, msgId) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
   a.messages = a.messages.filter(m => m.id !== msgId); a.updated_at = nowISO(); save(); render();
 }
-function deleteNote(annId) {
-  if (!confirm('Delete this note and its thread?')) return;
+async function deleteNote(annId) {
+  if (!(await confirmDialog('Delete this note and its thread?', { okLabel: 'Delete', danger: true }))) return;
   state.annotations = state.annotations.filter(x => x.id !== annId);
   if (state.ui.activeId === annId) state.ui.activeId = null;
   save(); render(); drawHighlights(); drawPins();
@@ -1527,7 +1544,7 @@ function annMenu(annId, msgId, anchorEl) {
   openPopover(anchorEl, [
     { label: a.resolved ? 'Mark unresolved' : 'Resolve', on: a.resolved, onClick: () => { a.resolved = !a.resolved; a.updated_at = nowISO(); save(); render(); drawHighlights(); drawPins(); } },
     { sep: true },
-    { label: 'Delete note', onClick: () => { if (!confirm('Delete this note and its thread?')) return; state.annotations = state.annotations.filter(x => x.id !== annId); if (state.ui.activeId === annId) state.ui.activeId = null; save(); render(); drawHighlights(); drawPins(); } },
+    { label: 'Delete note', onClick: async () => { if (!(await confirmDialog('Delete this note and its thread?', { okLabel: 'Delete', danger: true }))) return; state.annotations = state.annotations.filter(x => x.id !== annId); if (state.ui.activeId === annId) state.ui.activeId = null; save(); render(); drawHighlights(); drawPins(); } },
   ]);
 }
 
@@ -1634,7 +1651,7 @@ async function maybeOfferFolderNotes(docId, dir) {
   let fh = null;
   try { fh = await dir.getFileHandle(notesFileName(docId), { create: false }); } catch (e) { return; }
   if (!fh) return;
-  if (!confirm('Found saved notes “' + notesFileName(docId) + '” in “' + dir.name + '”. Import them for this document?')) return;
+  if (!(await confirmDialog('Found saved notes “' + notesFileName(docId) + '” in “' + dir.name + '”. Import them for this document?', { okLabel: 'Import', cancelLabel: 'Not now' }))) return;
   try { const n = applyNotesJSON(JSON.parse(await (await fh.getFile()).text()), docId); toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.'); }
   catch (e) { toast('Could not read the notes file: ' + (e.message || e), 'err'); }
 }
@@ -1684,10 +1701,10 @@ function injectNotesButtons() {
   const cr = document.getElementById('btnCollapseRight');
   mk('btnClearNotes', cr || fb, 'Delete all notes for this document', TRASH, () => clearActiveNotes());
 }
-function clearActiveNotes() {
+async function clearActiveNotes() {
   const n = state.annotations.filter(inActiveDoc).length;
   if (!n) { toast('No notes to delete for this document.'); return; }
-  if (!confirm('Delete all ' + n + ' note' + (n === 1 ? '' : 's') + ' for “' + activeDoc().name + '”? This cannot be undone.')) return;
+  if (!(await confirmDialog('Delete all ' + n + ' note' + (n === 1 ? '' : 's') + ' for “' + activeDoc().name + '”? This cannot be undone.', { okLabel: 'Delete all', danger: true }))) return;
   state.annotations = state.annotations.filter(a => !inActiveDoc(a));
   state.ui.activeId = null; save(); render(); drawHighlights(); drawPins();
   toast('Deleted all notes for this document.');
@@ -2117,7 +2134,6 @@ function wire() {
   $('#zoomIn').onclick = () => { state.ui.zoom = clamp(state.ui.zoom + 0.15, 0.5, 3); updateZoom(); };
   $('#zoomOut').onclick = () => { state.ui.zoom = clamp(state.ui.zoom - 0.15, 0.5, 3); updateZoom(); };
   $('#toolCursor').onclick = () => setTool('cursor');
-  $('#toolText').onclick = () => setTool('text');
   $('#toolHi').onclick = () => setTool('highlight');
   $('#toolComment').onclick = () => setTool('comment');
   $('#toolShot').onclick = () => setTool('shot');

@@ -3,7 +3,7 @@
 // `compat` (any OpenAI-compatible /images/generations endpoint — base URL + key from the request).
 const ENV = { openrouter: 'OPENROUTER_API_KEY', compat: 'OPENAI_API_KEY' };
 const DEFAULT_IMG = { openrouter: 'google/gemini-3.1-flash-lite-image', compat: 'gpt-image-1' };
-const OR_HEADERS = { 'HTTP-Referer': 'https://pair-liart.vercel.app', 'X-Title': 'Source-Linked AI Reading Workspace' };
+const OR_HEADERS = { 'HTTP-Referer': 'https://peerreview.app', 'X-Title': 'Source-Linked AI Reading Workspace' };
 const baseOf = (u) => (u && String(u).trim() ? String(u).trim() : 'https://api.openai.com/v1').replace(/\/+$/, '');
 
 async function readBody(req) {

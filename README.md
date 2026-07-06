@@ -2,7 +2,7 @@
 
 > Read papers and reports with an AI that stays **pinned to the source**. Every highlight, note, screenshot, and AI answer is anchored to the exact spot in the PDF it came from — so nothing floats free of its evidence.
 
-**▶ Try it now: [peereview.app](https://peereview.app)** — no signup, no install. Open the bundled *Attention Is All You Need* sample, or drop in your own PDF.
+**▶ Try it now: [peerreview.app](https://peerreview.app)** — no signup, no install. Open the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
 ![Overview — the reader, a source-linked note, and an AI answer with rendered math](docs/screenshots/01-overview.png)
 
@@ -69,7 +69,7 @@ The app is a static `index.html` plus two serverless functions in `api/` — no 
    - `OPENROUTER_API_KEY` — your OpenRouter key (used as the default shared key).
    - `OPENAI_API_KEY` — *(optional)* used when the provider is “OpenAI-compatible” with the default OpenAI base URL.
 5. **Deploy.** You’ll get a `*.vercel.app` URL.
-6. *(Optional)* Add a custom domain (e.g. `peereview.app`) in **Project → Settings → Domains**.
+6. *(Optional)* Add a custom domain (e.g. `peerreview.app`) in **Project → Settings → Domains**.
 
 > Tip: keep the server key’s spending cap **low** — anyone using your public URL draws on it until they add their own key.
 
