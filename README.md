@@ -2,9 +2,9 @@
 
 > Read papers and reports with an AI that stays **pinned to the source**. Every highlight, note, screenshot, and AI answer is anchored to the exact spot in the PDF it came from — so nothing floats free of its evidence.
 
-**▶ Try it now: [peerreview.app](https://peerreview.app)** — no signup, no install. Open the bundled *Attention Is All You Need* sample, or drop in your own PDF.
+**▶ Try it now: [peerreview.app](https://peerreview.app)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
-![Overview — the reader, a source-linked note, and an AI answer with rendered math](docs/screenshots/01-overview.png)
+![Overview — the reader, a source-linked note, and an AI answer with rendered math](https://pub.hyperagent.com/api/published/pbf01KWWWFHFB_XWBRK6BD1SZ0ZTWE/01-overview.webp)
 
 ---
 
@@ -27,17 +27,14 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 
 **2. Pick a tool** (top toolbar):
 
-![Toolbar: cursor, text, highlight, comment, screenshot](docs/screenshots/03-toolbar.png)
-
 - **Cursor** — select text to get a small popover: **Highlight · Note · Ask AI**.
-- **A (Text)** — drag over text to create a linked note and open it, ready to comment or ask.
 - **Highlight (pen)** — drag to drop a yellow highlight instantly.
 - **Comment** — click anywhere on the page to drop a point comment.
 - **Screenshot** — box a figure or equation to capture it (works in single-page and continuous scroll).
 
 **3. Ask the AI.** In any note, type a question (or just `@ai`) and send. The answer renders with math/code and stays linked to the source; open **“Show the agent’s work”** to see which tools it used.
 
-![A source-linked AI answer with rendered LaTeX](docs/screenshots/02-ai-math-answer.png)
+![A source-linked AI answer with rendered LaTeX](https://pub.hyperagent.com/api/published/pbf01KWWWFMWW_GQX6BK1QQNX57E3Q/02-ai-math-answer.webp)
 
 **4. Save / move your notes.** In **Settings → Storage**, optionally choose a folder to auto-save a portable `<doc>.notes.json` next to your PDF, or export/import notes as JSON.
 
@@ -45,7 +42,7 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 
 Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
-![Settings — two providers, recommended OpenRouter](docs/screenshots/04-settings-ai.png)
+![Settings — two providers, recommended OpenRouter](https://pub.hyperagent.com/api/published/pbf01KWWWFRBZ_PW0KH11EF5C9Y15G/04-settings-ai.webp)
 
 - **OpenRouter** (recommended) — one key for hundreds of models; powers text, images, and the tool-using agent.
 - **OpenAI-compatible API** — point it at any endpoint (OpenAI, Together, Groq, a local model…) with a base URL + key + text/image models.
@@ -54,13 +51,13 @@ Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
 Every prompt — including the 7 agent tool descriptions — is editable and exportable under **Settings → Templates**:
 
-![Settings — editable prompt templates](docs/screenshots/05-settings-templates.png)
+![Settings — editable prompt templates](https://pub.hyperagent.com/api/published/pbf01KWWWFW9E_5B371PAE209V4Q22/05-settings-templates.webp)
 
 ---
 
 ## Deploy your own (Vercel)
 
-The app is a static `index.html` plus two serverless functions in `api/` — no build step required.
+The site is static — a landing page (`index.html`), the app itself (`app.html`, served at `/app`), and two serverless functions in `api/`. No build step required.
 
 1. **Fork** this repo (or “Use this template”).
 2. Go to **[vercel.com/new](https://vercel.com/new)** → **Import** your fork.
@@ -94,13 +91,16 @@ You can also just open `index.html` directly to browse the reader UI, but the AI
 ## How it works (codebase)
 
 ```
-index.html            # the deployed app — self-contained: inlined CSS, PDF.js,
+index.html            # the landing page — self-contained: inlined fonts, CSS,
+                       # SVG art, an animated product demo, and real screenshots
+app.html              # the app — self-contained: inlined CSS, PDF.js,
                        # the sample PDF + notes, and the app JS (one IIFE)
+vercel.json           # routing: /app → /app.html
 api/
   ai.js               # serverless proxy: text/vision + one tool-calling agent step
   ai-image.js         # serverless proxy: image generation
 src/
-  app.js              # app logic (source of the inlined <script> in index.html)
+  app.js              # app logic (source of the inlined <script> in app.html)
   styles.css          # styles (source of the inlined <style>)
 build.js              # inlines the src/ pieces into the bundled HTML
 make_sample_pdf.py    # generates the bundled sample PDF
