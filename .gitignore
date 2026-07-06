@@ -1,0 +1,15 @@
+# dependencies / build output
+node_modules/
+dist/
+
+# Vercel
+.vercel/
+
+# secrets — never commit keys
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
+*.log
