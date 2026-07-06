@@ -1493,7 +1493,7 @@ async function agentOutline() {
 async function agentWeb(query) {
   try {
     const r = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: 'openai', web: true, system: 'Search the web and answer concisely with source links.', user: String(query), userKey: keyFor('openai') || undefined }) });
+      body: JSON.stringify({ provider: 'openai', web: true, system: promptFor('web'), user: String(query), userKey: keyFor('openai') || undefined }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error || 'web search failed');
     return j.text || '(no web results)';
   } catch (e) { return 'Web search error: ' + (e.message || e); }
@@ -1660,7 +1660,7 @@ async function generateVisual(annId, prompt) {
       if (!art) {
         // Planner JSON was unusable (e.g. truncated before the diagram) — ask for the diagram as plain text so there's no JSON to break.
         msg.status = 'Drawing the diagram…'; save(); render();
-        try { const rawDiagram = await aiText(tp, { system: DIAGRAM_PROMPT, user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
+        try { const rawDiagram = await aiText(tp, { system: promptFor('diagram'), user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
       }
       if (art) msg.ascii = art;
       else { msg.error = 'Could not render the diagram — please try again.'; msg.title = 'Visual unavailable'; }
@@ -2389,12 +2389,15 @@ Answer style — this matters:
 4) If ambiguous → "ascii".
 For "ascii" build a faithful monospace diagram from the document (never invent numbers). For "image" write a vivid image_prompt.
 Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}`,
+  diagram: `Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.`,
+  web: `Search the web and answer concisely with source links.`,
 };
-const DIAGRAM_PROMPT = 'Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.';
-const PROMPT_KEYS = ['text', 'image'];
+const PROMPT_KEYS = ['text', 'image', 'diagram', 'web'];
 const PROMPT_META = {
   text: { label: 'Text answers', desc: 'The system prompt used for every text answer, whatever model you pick — set the assistant’s voice and answer style here.' },
   image: { label: 'Images & diagrams', desc: 'Decides whether a request becomes a diagram or an image, and how. The strict-JSON output contract is always enforced automatically, so you can safely reword the guidance.' },
+  diagram: { label: 'Diagram (text fallback)', desc: 'Redraws a monospace/ASCII diagram when the visual planner returns an empty one.' },
+  web: { label: 'Web search', desc: 'System prompt for the web-search tool (used when “Allow external web search” is on).' },
 };
 function promptFor(key) {
   const o = state.settings && state.settings.prompts;
