@@ -54,9 +54,9 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .nav-cta{display:flex;gap:10px}
 
 /* hero */
-.hero{padding:74px 0 20px}
+.hero{padding:38px 0 10px}
 .hero .wrap{display:grid;grid-template-columns:1.06fr .94fr;gap:40px;align-items:center}
-.hero h1{font-size:clamp(46px,7.4vw,90px);line-height:.98;margin:16px 0 26px}
+.hero h1{font-size:clamp(42px,6.4vw,78px);line-height:1.0;margin:10px 0 20px}
 .hero .lead{max-width:520px;display:flex;flex-direction:column;gap:18px}
 .hrow{display:flex;gap:14px;align-items:flex-start}
 .hrow .ic{color:var(--ink);margin-top:3px}
@@ -73,20 +73,20 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .mindart .trail{stroke:var(--ink);stroke-width:2;opacity:.6}
 
 /* chip row */
-.chiprow{padding:26px 0 8px}
+.chiprow{padding:14px 0 6px}
 .chiprow .wrap{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
 .chip{display:inline-flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:13.5px;font-weight:500;color:var(--ink);box-shadow:var(--sh-sm)}
 .chip .ic{color:var(--blue)}
 
 /* key note (under hero) */
-.keytop{padding:24px 0 6px}
+.keytop{padding:12px 0 4px}
 .keytop .wrap{max-width:768px;display:flex;gap:12px;align-items:center;justify-content:center;text-align:left;background:var(--blue-wash);border:1px solid #dbe4fd;border-radius:14px;padding:14px 20px}
 .keytop .keyic{color:var(--blue);flex:none;display:inline-flex}
 .keytop p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.5}
 .keytop b{color:var(--ink);font-weight:600}
 
 /* scroll hint */
-.scrollhint{display:flex;flex-direction:column;align-items:center;gap:7px;padding:22px 0 6px;color:var(--ink-2)}
+.scrollhint{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0 6px;color:var(--ink-2)}
 .scrollhint:hover{color:var(--ink)}
 .scrollhint span{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase}
 .scrollhint .chev{width:22px;height:22px;color:var(--blue);animation:bob 1.7s ease-in-out infinite}
@@ -178,7 +178,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   .btn,.card{transition:none}
   .scrollhint .chev{animation:none}
 }
-.demo{width:100%;max-width:1040px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);overflow:hidden}
+.demo{width:100%;max-width:1040px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);overflow:hidden}
 .demo-bar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(0,0,0,.015)}
 .demo-bar .d{width:11px;height:11px;border-radius:50%}
 .demo-url{margin:0 auto;font-size:12.5px;color:var(--ink-2);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:4px 40px}
@@ -244,7 +244,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .d-line{font-size:12px;line-height:1.55;color:#2c2822;margin:5px 0;opacity:0;transform:translateY(5px);transition:opacity .45s,transform .45s}
 .d-line.on{opacity:1;transform:none}
 .d-math{font-family:'Times New Roman',serif;font-size:12.5px;background:#faf9f6;border:1px solid #f0ebe1;border-radius:7px;padding:8px 10px;margin:6px 0;line-height:1.7}
-.d-vals{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#333}
+.d-vals{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#333;white-space:nowrap}
 .d-work{font-size:11px;color:var(--blue);font-weight:600;margin-top:8px;opacity:0;transition:opacity .4s}
 .d-work.on{opacity:1}
 .d-meta{font-size:10px;color:#b3ab9c;margin-top:6px;opacity:0;transition:opacity .4s}
@@ -285,7 +285,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   <section class="hero">
     <div class="wrap">
       <div class="hero-copy" data-stagger>
-        <div class="eyebrow" data-reveal>Your AI peer reviewer</div>
+        <div class="eyebrow" data-reveal>Active learning in the age of AI</div>
         <h1 data-reveal>This is your<br><span class="mark">peer reviewer<svg class="uline" viewBox="0 0 300 16" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M4 10 C 58 3, 116 15, 172 7 S 264 4, 296 11" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span>.</h1>
         <div class="lead">
           <div class="hrow" data-reveal><svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6c-1.6-1-4.2-1.7-6.7-1.5C4 4.6 3 5.2 3 6v12c0 .8 1 1 2.3.9C7.8 18.7 10.4 19.3 12 20"/><path d="M12 6c1.6-1 4.2-1.7 6.7-1.5C20 4.6 21 5.2 21 6v12c0 .8-1 1-2.3.9C16.2 18.7 13.6 19.3 12 20"/><path d="M12 6.2v13.6"/></svg><p><b>Read, highlight, and summarize.</b> Search the web, ask the AI, make diagrams, illustrate — even doodle. All from inside the PDF.</p></div>
@@ -418,9 +418,9 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   <section class="cta">
     <div class="wrap">
       <div class="ctapanel" data-reveal>
-        <h2>Don't just read the paper.<br><span class="mark">Keep the paper<svg class="uline" viewBox="0 0 300 16" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M4 10 C 58 3, 116 15, 172 7 S 264 4, 296 11" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span>.</h2>
+        <h2>Active learning<br>in the <span class="mark">age of AI<svg class="uline" viewBox="0 0 300 16" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M4 10 C 58 3, 116 15, 172 7 S 264 4, 296 11" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span>.</h2>
         <div class="cta-right">
-          <p>Export your notes and highlights and keep the useful part — without ever rereading.</p>
+          <p>Don't just read — question it, summarize it, and keep what you learn. Every note stays linked to its source.</p>
           <div class="cta-actions">
             <a class="btn primary lg" href="/app.html">Enter</a>
             <a class="btn ghost lg" href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer">Clone from GitHub</a>
@@ -477,8 +477,8 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
     '<div class="d-line">The four components at position <i>pos</i> are:</div>',
     '<div class="d-line"><div class="d-math">PE(pos,&nbsp;0)&nbsp;=&nbsp;sin(pos)<br>PE(pos,&nbsp;1)&nbsp;=&nbsp;cos(pos)<br>PE(pos,&nbsp;2)&nbsp;=&nbsp;sin(pos&nbsp;/&nbsp;100)<br>PE(pos,&nbsp;3)&nbsp;=&nbsp;cos(pos&nbsp;/&nbsp;100)</div></div>',
     '<div class="d-line">For the first few positions:</div>',
-    '<div class="d-line"><span class="d-vals">pos = 0 → [ 0.00, 1.00, 0.00, 1.00 ]</span></div>',
-    '<div class="d-line"><span class="d-vals">pos = 1 → [ 0.84, 0.54, 0.01, 1.00 ]</span></div>',
+    '<div class="d-line"><span class="d-vals">pos = 0 → [0.00, 1.00, 0.00, 1.00]</span></div>',
+    '<div class="d-line"><span class="d-vals">pos = 1 → [0.84, 0.54, 0.01, 1.00]</span></div>',
     '<div class="d-line">Each dimension oscillates at its own frequency, so every position gets a unique pattern.</div>'
   ];
   var $=function(id){return document.getElementById(id);};
