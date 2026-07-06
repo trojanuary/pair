@@ -49,12 +49,16 @@ async function openaiAgentStep(key, { messages, tools, model }) {
 }
 
 // ---- OpenRouter (OpenAI-compatible chat completions; the default provider) ----
+// Gemma and several OpenRouter models reject a separate `system` role, so fold the system
+// prompt into a single multimodal user turn — matching OpenRouter's documented call shape.
 async function openrouterCall(key, { system, user, image, model, maxTokens }) {
-  const content = image ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.b64}` } }] : user;
+  const text = system ? (system + '\n\n' + user) : user;
+  const content = [{ type: 'text', text }];
+  if (image) content.push({ type: 'image_url', image_url: { url: `data:${image.mime};base64,${image.b64}` } });
   const m = model || DEFAULT_MODEL.openrouter;
   const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, ...OR_HEADERS },
-    body: JSON.stringify({ model: m, messages: [{ role: 'system', content: system }, { role: 'user', content }], max_tokens: maxTokens || 2000 }),
+    body: JSON.stringify({ model: m, messages: [{ role: 'user', content }], max_tokens: maxTokens || 2000 }),
   });
   const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || j.error || 'OpenRouter error');
   return (j.choices?.[0]?.message?.content || '').trim();

@@ -1,7 +1,7 @@
 // Vercel serverless function: server-side image generation proxy.
 // Env key by default, or BYO key from the request. OpenRouter (default), OpenAI (gpt-image), or Google (Imagen).
 const ENV = { openrouter: 'OPENROUTER_API_KEY', openai: 'OPENAI_API_KEY', gemini: 'GEMINI_API_KEY' };
-const DEFAULT_IMG = { openrouter: 'x-ai/grok-imagine-image-quality', openai: 'gpt-image-1', gemini: 'imagen-3.0-generate-002' };
+const DEFAULT_IMG = { openrouter: 'google/gemini-3.1-flash-lite-image', openai: 'gpt-image-1', gemini: 'imagen-3.0-generate-002' };
 const OR_HEADERS = { 'HTTP-Referer': 'https://pair-liart.vercel.app', 'X-Title': 'Source-Linked AI Reading Workspace' };
 
 async function readBody(req) {
@@ -21,14 +21,19 @@ module.exports = async function handler(req, res) {
     let image = null;
 
     if (provider === 'openrouter') {
-      // OpenRouter generates images through the chat-completions endpoint with the image modality.
+      // OpenRouter image models generate through chat-completions; request the image output
+      // modality (models like gemini-*-image advertise ["image","text"]). The image comes back
+      // on the assistant message (images[] by convention, or embedded in the text content).
       const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, ...OR_HEADERS },
-        body: JSON.stringify({ model: m, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text'] }),
+        body: JSON.stringify({ model: m, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }], modalities: ['image', 'text'] }),
       });
       const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || j.error || 'OpenRouter image error');
-      const img = j.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (!img) throw new Error('No image returned by OpenRouter');
+      const msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+      let img = msg.images?.[0]?.image_url?.url || msg.images?.[0]?.url || null;
+      if (!img && Array.isArray(msg.content)) { const part = msg.content.find(p => p && (p.type === 'image_url' || p.image_url)); if (part) img = (part.image_url && part.image_url.url) || part.url || null; }
+      if (!img && typeof msg.content === 'string') { const mm = msg.content.match(/data:image\/[a-zA-Z+.\-]+;base64,[A-Za-z0-9+/=]+|https?:\/\/\S+?\.(?:png|jpe?g|webp|gif)/i); if (mm) img = mm[0]; }
+      if (!img) throw new Error('OpenRouter returned no image. Model may not generate images. Response: ' + (typeof msg.content === 'string' ? msg.content.slice(0, 140) : JSON.stringify(msg.content || msg).slice(0, 140)));
       image = img;
     } else if (provider === 'openai') {
       const r = await fetch('https://api.openai.com/v1/images/generations', {
