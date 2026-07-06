@@ -314,5 +314,9 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   setTimeout(function(){ els.forEach(function(e){ e.classList.add('in'); }); }, 1400);
 })();
 </script>
+<script type="module">
+  import { inject } from 'https://cdn.jsdelivr.net/npm/@vercel/analytics@2/+esm';
+  inject();
+</script>
 </body>
 </html>

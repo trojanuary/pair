@@ -3,5 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "description": "Source-Linked AI Reading Workspace — static frontend + Vercel serverless AI proxy",
-  "engines": { "node": "20.x" }
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
 }
