@@ -160,6 +160,10 @@ async function switchDoc(id) {
 }
 async function openPdfFile(f) {
   if (!f) return;
+  // Grab folder access now, while the file-open click still counts as a user gesture, so we can
+  // auto-offer matching notes even on a fresh session (re-granting needs a gesture).
+  let noteDir = null;
+  if (storageCfg().mode === 'folder') { try { noteDir = await notesDirHandle(true); } catch (e) {} }
   const buf = new Uint8Array(await f.arrayBuffer());
   const id = uid('doc'), name = f.name || 'Document.pdf';
   _docBytes[id] = buf; idbPut('pdf:' + id, buf);
@@ -168,7 +172,7 @@ async function openPdfFile(f) {
   await switchDoc(id);
   updateStorage();
   toast('Opened ' + name + ' — highlight text or capture a figure to start.');
-  maybeOfferFolderNotes(id);
+  maybeOfferFolderNotes(id, noteDir);
 }
 function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
 function trashDoc(id) {   // soft delete -> Trash view
@@ -1506,16 +1510,16 @@ async function loadNotesFromFolder(docId, interactive) {
   } catch (e) { if (interactive) toast('No saved notes for this document in that folder yet.', 'err'); return false; }
 }
 // On opening a PDF, if the chosen notes folder already holds "<name>.notes.json", offer to import it.
-async function maybeOfferFolderNotes(docId) {
+async function maybeOfferFolderNotes(docId, dir) {
   if (storageCfg().mode !== 'folder') return;
-  let dir = null; try { dir = await notesDirHandle(false); } catch (e) {}
-  if (!dir) return;   // folder access not granted right now (re-grant once via Save/Load this session)
-  let exists = false;
-  try { await dir.getFileHandle(notesFileName(docId), { create: false }); exists = true; } catch (e) {}
-  if (!exists) return;
-  if (confirm('Found saved notes “' + notesFileName(docId) + '” in “' + dir.name + '”. Import them for this document?')) {
-    await loadNotesFromFolder(docId, true);
-  }
+  if (!dir) { try { dir = await notesDirHandle(false); } catch (e) {} }
+  if (!dir) return;
+  let fh = null;
+  try { fh = await dir.getFileHandle(notesFileName(docId), { create: false }); } catch (e) { return; }
+  if (!fh) return;
+  if (!confirm('Found saved notes “' + notesFileName(docId) + '” in “' + dir.name + '”. Import them for this document?')) return;
+  try { const n = applyNotesJSON(JSON.parse(await (await fh.getFile()).text()), docId); toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.'); }
+  catch (e) { toast('Could not read the notes file: ' + (e.message || e), 'err'); }
 }
 let _folderSyncT;
 function scheduleFolderSync() {
@@ -1600,7 +1604,6 @@ function openSettings(note) {
         <div class="chk"><div class="sw ${s.enablePython ? 'on' : ''}" id="tgPy"><i></i></div> Enable Python tool use (stub)</div>
       </div>
       <div class="hint">Your own keys (if entered) are stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's keys are used and never exposed to the browser.</div>
-    </div>
       <div class="field"><label>Notes storage</label>
         <div class="hint" style="margin-top:0">Notes are always kept in this browser. Optionally choose a folder to also auto-save a portable <b>.notes.json</b> next to your PDFs (Chrome/Edge) — ideal for backups, other computers, and Google Drive folders. Export / Import works in any browser.</div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
@@ -1611,6 +1614,7 @@ function openSettings(note) {
           ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stBrowserOnly">Stop folder sync</button>' : ''}
         </div>
       </div>
+    </div>
     <div class="foot"><button class="btn ghost" id="mCancel">Close</button><button class="btn primary" id="mSave">Save</button></div>
   </div></div>`);
   $('#modalRoot').appendChild(m);
