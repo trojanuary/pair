@@ -48,6 +48,17 @@ async function openaiAgentStep(key, { messages, tools, model }) {
   return { content: (msg.content || '').trim(), tool_calls: msg.tool_calls || null };
 }
 
+// ---- OpenRouter agent step (OpenAI-compatible tool-calling) ----
+async function openrouterAgentStep(key, { messages, tools, model }) {
+  const body = { model: model || DEFAULT_MODEL.openrouter, messages, max_tokens: 2500 };
+  if (tools && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
+  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, ...OR_HEADERS }, body: JSON.stringify(body),
+  });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || j.error || 'OpenRouter error');
+  const msg = j.choices?.[0]?.message || {};
+  return { content: (msg.content || '').trim(), tool_calls: msg.tool_calls || null };
+}
 // ---- OpenRouter (OpenAI-compatible chat completions; the default provider) ----
 // Gemma and several OpenRouter models reject a separate `system` role, so fold the system
 // prompt into a single multimodal user turn — matching OpenRouter's documented call shape.
@@ -99,7 +110,7 @@ module.exports = async function handler(req, res) {
     if (!key) return res.status(400).json({ error: `No ${provider} key available. Add your own key in Settings, or ask the site owner to set ${ENV[provider] || 'the API key'}.` });
     // Agent mode: one ReAct step (OpenAI tool-calling). Returns {content, tool_calls}.
     if (mode === 'agent' && Array.isArray(messages)) {
-      const step = await openaiAgentStep(key, { messages, tools, model });
+      const step = provider === 'openrouter' ? await openrouterAgentStep(key, { messages, tools, model }) : await openaiAgentStep(key, { messages, tools, model });
       return res.status(200).json(step);
     }
     const { system = '', user = '', image = null, web = false, maxTokens } = body;

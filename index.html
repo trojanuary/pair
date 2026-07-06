@@ -530,6 +530,16 @@ mjx-container svg{display:inline-block}
 .pt-item textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;min-height:94px;color:var(--ink);background:var(--surface-2)}
 .pt-item textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak);background:var(--surface)}
 .pt-item .hint{margin-top:5px}
+details.pt-item{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--surface);overflow:hidden}
+details.pt-item>summary{list-style:none;cursor:pointer;padding:9px 12px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink);user-select:none}
+details.pt-item>summary::-webkit-details-marker{display:none}
+details.pt-item>summary .pt-cx{color:var(--muted);font-size:11px;width:10px;display:inline-block;transition:transform .12s}
+details.pt-item[open]>summary .pt-cx{transform:rotate(90deg)}
+details.pt-item>summary:hover{background:var(--surface-2)}
+details.pt-item .pt-badge{margin-left:auto;color:var(--violet);font-weight:700;font-size:10.5px;background:var(--violet-weak);padding:1px 9px;border-radius:99px}
+details.pt-item .pt-body{padding:0 12px 12px}
+.pt-actions-row{display:flex;justify-content:flex-end;margin:2px 0 6px}
+.pt-sec{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1442,7 +1452,7 @@ async function askAI(annId, question, providerOverride) {
     chips: chipsFor(a), external: state.settings.enableWeb, tools: [] };
   a.messages.push(msg); a.updated_at = nowISO(); save(); render();
   // OpenAI text notes use the agentic ReAct loop (it can pull more of the document as needed).
-  if (provider === 'openai' && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg); return; }
+  if ((provider === 'openrouter' || provider === 'openai') && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg, provider); return; }
   const ctx = buildContext(a);
   const passages = retrievePassages(question, a.page);
   const system = promptFor('text');
@@ -1500,14 +1510,14 @@ async function agentWeb(query) {
 }
 function agentTools() {
   const t = [
-    { type: 'function', function: { name: 'read_selection_context', description: "Re-read the reader's highlighted selection plus the text immediately around it on its page.", parameters: { type: 'object', properties: {} } } },
-    { type: 'function', function: { name: 'read_page', description: 'Read the full text of a specific page (use for the previous/next section or a referenced page).', parameters: { type: 'object', properties: { page: { type: 'integer', description: '1-based page number' } }, required: ['page'] } } },
-    { type: 'function', function: { name: 'search_document', description: 'Keyword-search the whole document; returns matching snippets with page numbers.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
-    { type: 'function', function: { name: 'document_outline', description: 'List detected section headings with their page numbers to navigate the paper.', parameters: { type: 'object', properties: {} } } },
-    { type: 'function', function: { name: 'read_full_document', description: 'Read the entire document text (use for whole-paper summaries; may be truncated if very long).', parameters: { type: 'object', properties: {} } } },
+    { type: 'function', function: { name: 'read_selection_context', description: toolDesc('read_selection_context'), parameters: { type: 'object', properties: {} } } },
+    { type: 'function', function: { name: 'read_page', description: toolDesc('read_page'), parameters: { type: 'object', properties: { page: { type: 'integer', description: '1-based page number' } }, required: ['page'] } } },
+    { type: 'function', function: { name: 'search_document', description: toolDesc('search_document'), parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+    { type: 'function', function: { name: 'document_outline', description: toolDesc('document_outline'), parameters: { type: 'object', properties: {} } } },
+    { type: 'function', function: { name: 'read_full_document', description: toolDesc('read_full_document'), parameters: { type: 'object', properties: {} } } },
   ];
-  if (state.settings.enableVisuals) t.push({ type: 'function', function: { name: 'create_visual', description: 'Generate a visual to help answer: an AI-rendered image (for illustrations, physical scenes, mechanisms, or concepts) or a monospace diagram built from the document (for structure, process, data, or comparisons). Call this when a picture or diagram would materially help — e.g. the reader asks to see, draw, illustrate, or visualize something. Provide a clear description of what to depict.', parameters: { type: 'object', properties: { description: { type: 'string', description: 'What the visual should depict.' } }, required: ['description'] } } });
-  if (state.settings.enableWeb) t.push({ type: 'function', function: { name: 'web_search', description: 'Search the public web for facts beyond this document. Returns text with source links.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } });
+  if (state.settings.enableVisuals) t.push({ type: 'function', function: { name: 'create_visual', description: toolDesc('create_visual'), parameters: { type: 'object', properties: { description: { type: 'string', description: 'What the visual should depict.' } }, required: ['description'] } } });
+  if (state.settings.enableWeb) t.push({ type: 'function', function: { name: 'web_search', description: toolDesc('web_search'), parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } });
   return t;
 }
 const TOOL_LABEL = { read_selection_context: 'Re-reading the selection…', read_page: 'Reading a page…', search_document: 'Searching the document…', document_outline: 'Scanning the outline…', read_full_document: 'Reading the full paper…', create_visual: 'Creating a visual…', web_search: 'Searching the web…' };
@@ -1523,9 +1533,9 @@ async function runAgentTool(a, name, args) {
   } catch (e) { return 'Tool error: ' + (e.message || e); }
   return 'Unknown tool: ' + name;
 }
-async function aiAgentStep(model, messages, tools) {
+async function aiAgentStep(provider, model, messages, tools) {
   const r = await fetch('/api/ai', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider: 'openai', mode: 'agent', model, messages, tools, userKey: keyFor('openai') || undefined }) });
+    body: JSON.stringify({ provider, mode: 'agent', model, messages, tools, userKey: keyFor(provider) || undefined }) });
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || `Agent step failed (${r.status})`);
   return j;
@@ -1541,8 +1551,8 @@ function agentChips(a, used) {
   chips.push(used.has('web_search') ? 'Used web search' : 'No external sources');
   return chips;
 }
-async function askAIAgent(a, question, msg) {
-  const model = state.settings.models.openai || 'gpt-5.4';
+async function askAIAgent(a, question, msg, provider) {
+  const model = state.settings.models[provider] || DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter;
   const c = buildContext(a);
   const system = promptFor('text');
   const userContext = [
@@ -1558,7 +1568,7 @@ async function askAIAgent(a, question, msg) {
     let answer = '';
     for (let i = 0; i < 7 && !answer; i++) {
       msg.status = i === 0 ? 'Thinking…' : 'Gathering context…'; save(); render();
-      const step = await aiAgentStep(model, messages, tools);
+      const step = await aiAgentStep(provider, model, messages, tools);
       if (step.tool_calls && step.tool_calls.length) {
         messages.push({ role: 'assistant', content: step.content || '', tool_calls: step.tool_calls });
         if (step.content && step.content.trim()) msg.trace.push({ type: 'thought', title: 'Model reasoning', text: step.content.trim() });
@@ -2404,30 +2414,56 @@ function promptFor(key) {
   const v = o && o[key];
   return (v && String(v).trim()) ? String(v) : (DEFAULT_PROMPTS[key] || '');
 }
+/* ---- ReAct tool descriptions (the tool-using agent reads these to decide when to call each tool) ---- */
+const TOOL_KEYS = ['read_selection_context', 'read_page', 'search_document', 'document_outline', 'read_full_document', 'create_visual', 'web_search'];
+const DEFAULT_TOOLS = {
+  read_selection_context: "Re-read the reader's highlighted selection plus the text immediately around it on its page.",
+  read_page: 'Read the full text of a specific page (use for the previous/next section or a referenced page).',
+  search_document: 'Keyword-search the whole document; returns matching snippets with page numbers.',
+  document_outline: 'List detected section headings with their page numbers to navigate the paper.',
+  read_full_document: 'Read the entire document text (use for whole-paper summaries; may be truncated if very long).',
+  create_visual: 'Generate a visual to help answer: an AI-rendered image (for illustrations, physical scenes, mechanisms, or concepts) or a monospace diagram built from the document (for structure, process, data, or comparisons). Call this when a picture or diagram would materially help — e.g. the reader asks to see, draw, illustrate, or visualize something. Provide a clear description of what to depict.',
+  web_search: 'Search the public web for facts beyond this document. Returns text with source links.',
+};
+const TOOL_META = {
+  read_selection_context: 'read_selection_context', read_page: 'read_page', search_document: 'search_document',
+  document_outline: 'document_outline', read_full_document: 'read_full_document', create_visual: 'create_visual', web_search: 'web_search',
+};
+function toolDesc(name) {
+  const t = state.settings && state.settings.prompts && state.settings.prompts.tools;
+  const v = t && t[name];
+  return (v && String(v).trim()) ? String(v) : (DEFAULT_TOOLS[name] || '');
+}
+// One collapsible editor row (title shown; expand to view/edit). id is a prompt key or "tool_<name>".
+function ptItemHTML(id, label, value, def, desc) {
+  const overridden = value != null && String(value).trim() && String(value) !== def;
+  return `<details class="pt-item" data-pt="${id}"><summary><span class="pt-cx">▸</span><span class="pt-title">${esc(label)}</span>${overridden ? '<span class="pt-badge">customized</span>' : ''}</summary>
+    <div class="pt-body"><div class="pt-actions-row"><button type="button" class="pt-reset" data-reset="${id}">Reset to default</button></div>
+    <textarea id="pt_${id}" spellcheck="false">${esc(value)}</textarea>
+    <div class="hint">${esc(desc)}</div></div></details>`;
+}
 function templatesPaneHTML() {
-  const items = PROMPT_KEYS.map(k => {
-    const meta = PROMPT_META[k] || { label: k, desc: '' };
-    const overridden = !!(state.settings.prompts && state.settings.prompts[k] && String(state.settings.prompts[k]).trim());
-    return `<div class="pt-item">
-      <div class="pt-head"><label>${esc(meta.label)}${overridden ? ' <span style="color:var(--violet);font-weight:700">· customized</span>' : ''}</label>
-        <button type="button" class="pt-reset" data-reset="${k}">Reset to default</button></div>
-      <textarea id="pt_${k}" spellcheck="false">${esc(promptFor(k))}</textarea>
-      <div class="hint">${esc(meta.desc)}</div>
-    </div>`;
-  }).join('');
-  return `<div class="hint" style="margin:-2px 0 14px">Make the assistant your own — edit any prompt below. The per-request context (your selection, question, and page) is always added by the app, so restyling the voice here won’t break how answers are built. Changes apply after you press <b>Save</b>. Export a set to reuse it across machines, or import one you’ve saved.</div>
-    <div class="pt-actions"><button type="button" class="btn ghost" id="ptExport">Export prompts (JSON)</button><button type="button" class="btn ghost" id="ptImport">Import prompts (JSON)</button><button type="button" class="btn ghost" id="ptResetAll">Reset all to default</button></div>
-    ${items}`;
+  const prompts = PROMPT_KEYS.map(k => ptItemHTML(k, (PROMPT_META[k] || {}).label || k, promptFor(k), DEFAULT_PROMPTS[k], (PROMPT_META[k] || {}).desc || '')).join('');
+  const tools = TOOL_KEYS.map(k => ptItemHTML('tool_' + k, (TOOL_META[k] || k), toolDesc(k), DEFAULT_TOOLS[k], 'What the tool-using agent reads to decide when to call this tool. Only used when the tool-calling agent runs (OpenRouter or OpenAI).')).join('');
+  return `<div class="hint" style="margin:-2px 0 14px">Make the assistant your own — expand any prompt below to view or edit it. The per-request context (your selection, question, and page) is always added by the app, so restyling here won’t break how answers are built. Changes apply after you press <b>Save</b>.</div>
+    <div class="pt-actions"><button type="button" class="btn ghost" id="ptExport">Export (JSON)</button><button type="button" class="btn ghost" id="ptImport">Import (JSON)</button><button type="button" class="btn ghost" id="ptResetAll">Reset all to default</button></div>
+    <div class="pt-sec">System prompts</div>
+    ${prompts}
+    <div class="pt-sec">Agent tools · ReAct — how the tool-using agent decides when to call each tool</div>
+    ${tools}`;
 }
 function collectPrompts(m) {
-  const out = {};
+  const out = {}; const tools = {};
   PROMPT_KEYS.forEach(k => { const ta = document.getElementById('pt_' + k); if (ta && ta.value.trim() && ta.value !== DEFAULT_PROMPTS[k]) out[k] = ta.value; });
+  TOOL_KEYS.forEach(k => { const ta = document.getElementById('pt_tool_' + k); if (ta && ta.value.trim() && ta.value !== DEFAULT_TOOLS[k]) tools[k] = ta.value; });
+  if (Object.keys(tools).length) out.tools = tools;
   return out;
 }
 function exportPrompts(m) {
   try {
-    const data = { app: 'Source-Linked AI Reading Workspace', kind: 'prompt-templates', schema: 1, exportedAt: nowISO(), prompts: {} };
+    const data = { app: 'Source-Linked AI Reading Workspace', kind: 'prompt-templates', schema: 2, exportedAt: nowISO(), prompts: {}, tools: {} };
     PROMPT_KEYS.forEach(k => { const ta = document.getElementById('pt_' + k); data.prompts[k] = ta ? ta.value : promptFor(k); });
+    TOOL_KEYS.forEach(k => { const ta = document.getElementById('pt_tool_' + k); data.tools[k] = ta ? ta.value : toolDesc(k); });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a');
     a.href = url; a.download = 'reading-workspace-prompts.json'; document.body.appendChild(a); a.click(); a.remove();
@@ -2441,8 +2477,9 @@ function importPrompts(m) {
     const f = inp.files && inp.files[0]; if (!f) return;
     try {
       const obj = JSON.parse(await f.text());
-      const p = obj && (obj.prompts || obj); let n = 0;
-      PROMPT_KEYS.forEach(k => { if (p && typeof p[k] === 'string') { const ta = document.getElementById('pt_' + k); if (ta) { ta.value = p[k]; n++; } } });
+      const p = (obj && obj.prompts) || obj || {}; const tls = (obj && obj.tools) || (p && p.tools) || {}; let n = 0;
+      PROMPT_KEYS.forEach(k => { if (typeof p[k] === 'string') { const ta = document.getElementById('pt_' + k); if (ta) { ta.value = p[k]; n++; } } });
+      TOOL_KEYS.forEach(k => { if (tls && typeof tls[k] === 'string') { const ta = document.getElementById('pt_tool_' + k); if (ta) { ta.value = tls[k]; n++; } } });
       toast(n ? n + ' prompt' + (n === 1 ? '' : 's') + ' imported — review and press Save.' : 'No matching prompts in that file.', n ? '' : 'err');
     } catch (e) { toast('Could not read that JSON: ' + (e.message || e), 'err'); }
   };
@@ -2456,9 +2493,9 @@ function openSettings(note) {
       <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button></div>
       <div class="tabpane" data-pane="ai">
       ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. <b>OpenRouter</b> is the default provider. Optionally paste your <b>own</b> key for any provider (BYO override) and mark one as <b>Default</b>; target others inline with @gpt / @claude / @gemini.</div>
+      <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. <b>OpenRouter</b> is the recommended default — it powers text answers, image generation, and the tool-using agent. Optionally paste your <b>own</b> key for any provider (BYO override) and mark one as <b>Default</b>; target others inline with @gpt / @claude / @gemini.</div>
       <div class="field">
-        <div class="lbl-row"><label>OpenRouter API key</label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
+        <div class="lbl-row"><label>OpenRouter API key <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
         <input id="kOpenrouter" type="password" placeholder="sk-or-… (optional — server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Default provider. Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
       </div>
       <div class="field">
@@ -2503,8 +2540,8 @@ function openSettings(note) {
   $$('.def-radio', m).forEach(b => b.onclick = () => { $$('.def-radio', m).forEach(x => x.classList.remove('on')); b.classList.add('on'); });
   ['tgVis', 'tgWeb', 'tgPy'].forEach(id => $('#' + id, m).onclick = () => $('#' + id, m).classList.toggle('on'));
   $$('.settab', m).forEach(t => t.onclick = () => { $$('.settab', m).forEach(x => x.classList.toggle('on', x === t)); $$('.tabpane', m).forEach(p => p.classList.toggle('hidden', p.dataset.pane !== t.dataset.tab)); });
-  $$('[data-reset]', m).forEach(b => b.onclick = () => { const ta = $('#pt_' + b.dataset.reset, m); if (ta) ta.value = DEFAULT_PROMPTS[b.dataset.reset]; });
-  { const pe = $('#ptExport', m); if (pe) pe.onclick = () => exportPrompts(m); const pi = $('#ptImport', m); if (pi) pi.onclick = () => importPrompts(m); const pr = $('#ptResetAll', m); if (pr) pr.onclick = () => PROMPT_KEYS.forEach(k => { const ta = $('#pt_' + k, m); if (ta) ta.value = DEFAULT_PROMPTS[k]; }); }
+  $$('[data-reset]', m).forEach(b => b.onclick = () => { const key = b.dataset.reset; const ta = $('#pt_' + key, m); if (ta) ta.value = key.indexOf('tool_') === 0 ? DEFAULT_TOOLS[key.slice(5)] : DEFAULT_PROMPTS[key]; });
+  { const pe = $('#ptExport', m); if (pe) pe.onclick = () => exportPrompts(m); const pi = $('#ptImport', m); if (pi) pi.onclick = () => importPrompts(m); const pr = $('#ptResetAll', m); if (pr) pr.onclick = () => { PROMPT_KEYS.forEach(k => { const ta = $('#pt_' + k, m); if (ta) ta.value = DEFAULT_PROMPTS[k]; }); TOOL_KEYS.forEach(k => { const ta = $('#pt_tool_' + k, m); if (ta) ta.value = DEFAULT_TOOLS[k]; }); }; }
   { const stF = $('#stFolder', m); if (stF) stF.onclick = async () => { if (await chooseNotesFolder()) close(); }; }
   { const stE = $('#stExport', m); if (stE) stE.onclick = () => downloadNotesJSON(state.ui.activeDoc); }
   { const stI = $('#stImport', m); if (stI) stI.onclick = () => importNotesJSON(); }
