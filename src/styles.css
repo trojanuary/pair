@@ -503,4 +503,22 @@ body.col-resizing #app{transition:none}
 .msg mjx-container{max-width:100%}
 .msg mjx-container[display="true"]{margin:6px 0!important;overflow-x:auto;overflow-y:hidden}
 .ex-sheet pre.code-block{background:#0B0F19;color:#E5E7EB}
+/* MathJax inline SVGs must render inline: the global svg{display:block} reset would otherwise force every inline equation onto its own line (breaking sentence flow). */
+mjx-container svg{display:inline-block}
+.msg mjx-container[display="true"] svg,.ex-sheet mjx-container[display="true"] svg{display:block;margin:0 auto}
+/* ---- Settings tabs + Templates (prompt) editors ---- */
+.settabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-2px 0 16px}
+.settab{padding:8px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0}
+.settab:hover{color:var(--ink);background:var(--surface-2)}
+.settab.on{color:var(--blue);border-bottom-color:var(--blue)}
+.tabpane.hidden{display:none}
+.pt-actions{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.pt-item{margin-bottom:18px}
+.pt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px}
+.pt-head label{font-weight:600;font-size:13px}
+.pt-reset{font-size:11.5px;font-weight:600;color:var(--blue);padding:3px 9px;border-radius:7px}
+.pt-reset:hover{background:var(--blue-weak)}
+.pt-item textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;min-height:94px;color:var(--ink);background:var(--surface-2)}
+.pt-item textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak);background:var(--surface)}
+.pt-item .hint{margin-top:5px}
 

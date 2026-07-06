@@ -511,6 +511,24 @@ body.col-resizing #app{transition:none}
 .msg mjx-container{max-width:100%}
 .msg mjx-container[display="true"]{margin:6px 0!important;overflow-x:auto;overflow-y:hidden}
 .ex-sheet pre.code-block{background:#0B0F19;color:#E5E7EB}
+/* MathJax inline SVGs must render inline: the global svg{display:block} reset would otherwise force every inline equation onto its own line (breaking sentence flow). */
+mjx-container svg{display:inline-block}
+.msg mjx-container[display="true"] svg,.ex-sheet mjx-container[display="true"] svg{display:block;margin:0 auto}
+/* ---- Settings tabs + Templates (prompt) editors ---- */
+.settabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-2px 0 16px}
+.settab{padding:8px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0}
+.settab:hover{color:var(--ink);background:var(--surface-2)}
+.settab.on{color:var(--blue);border-bottom-color:var(--blue)}
+.tabpane.hidden{display:none}
+.pt-actions{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.pt-item{margin-bottom:18px}
+.pt-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px}
+.pt-head label{font-weight:600;font-size:13px}
+.pt-reset{font-size:11.5px;font-weight:600;color:var(--blue);padding:3px 9px;border-radius:7px}
+.pt-reset:hover{background:var(--blue-weak)}
+.pt-item textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;min-height:94px;color:var(--ink);background:var(--surface-2)}
+.pt-item textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak);background:var(--surface)}
+.pt-item .hint{margin-top:5px}
 
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -707,6 +725,7 @@ function defaultState() {
       enableVisuals: true, enableWeb: true, enablePython: true,
       actorName: 'You', actorInitials: 'YO',
       storage: { mode: 'browser', folderName: '' },
+      prompts: {},
     },
     annotations: [],
     docs: [{ id: 'sample', name: 'Turbulence_review.pdf', kind: 'sample', addedAt: nowISO() }],
@@ -734,6 +753,7 @@ function migrateState(s) {
   }
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
   if (s.settings && !s.settings.storage) s.settings.storage = { mode: 'browser', folderName: '' };
+  if (s.settings && !s.settings.prompts) s.settings.prompts = {};
   (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
   return s;
 }
@@ -1383,17 +1403,7 @@ async function askAI(annId, question, providerOverride) {
   if (provider === 'openai' && a.source_type !== 'screenshot') { await askAIAgent(a, question, msg); return; }
   const ctx = buildContext(a);
   const passages = retrievePassages(question, a.page);
-  const system = [
-    `You are a precise reading assistant embedded in a source-linked research workspace, answering about the SELECTED SOURCE and its surrounding context from the SAME document.`,
-    `Answer style — this matters:`,
-    `- Lead with the direct answer in the first sentence. No preamble, no restating the question, no throat-clearing ("Great question", "The selected text discusses…", "Sure!", "Based on the provided context…").`,
-    `- Be brief: 1–3 sentences, or a tight bullet list for multi-part answers. Add length only when the question truly needs it.`,
-    `- Plain, concrete language. No filler, no hedging, no summary of what you just said.`,
-    `- Ground claims in the reader's document; prefer it over generic knowledge. If the context is insufficient, say in one line exactly what's missing.`,
-    state.settings.enableWeb
-      ? `- Web search is ON: you may look up facts beyond the document when needed, and briefly note when an answer relies on the web.`
-      : `- Web search is OFF: rely only on the provided context; do not use outside knowledge.`,
-  ].join('\n');
+  const system = promptFor('answer_direct');
   const user = [
     `SELECTED SOURCE — page ${ctx.page}${ctx.section ? `, ${ctx.section}` : ''}${a.source_type === 'screenshot' ? ' (screenshot)' : ''}:`,
     `"""${ctx.evidence || '(see attached image)'}"""`,
@@ -1492,11 +1502,7 @@ function agentChips(a, used) {
 async function askAIAgent(a, question, msg) {
   const model = state.settings.models.openai || 'gpt-5.4';
   const c = buildContext(a);
-  const system = [
-    `You are a precise research assistant embedded in a source-linked reading workspace, answering about the document the reader is viewing.`,
-    `You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page, search the document, get the outline, read the whole paper${state.settings.enableWeb ? ', search the web' : ''}${state.settings.enableVisuals ? ', or generate a visual (an image, or a monospace diagram built from the document)' : ''}. Use them when they help — e.g. to summarize the whole paper, verify a claim elsewhere, pull an adjacent section, or produce a picture/diagram when the reader asks to see or visualize something. Prefer the smallest sufficient context; call tools only as needed, then answer.`,
-    `Answer style: lead with the direct answer, be concise (no preamble or fluff), and ground claims in the document.`,
-  ].join('\n');
+  const system = promptFor('answer_agent');
   const userContext = [
     c.evidence ? `The reader selected this passage on page ${c.page}${c.section ? `, ${c.section}` : ''}:\n"""${c.evidence}"""` : `The reader is on page ${c.page}${c.section ? `, ${c.section}` : ''} (no text selected).`,
     c.surrounding ? `Immediate surrounding text: ${c.surrounding.slice(0, 700)}` : '',
@@ -1581,16 +1587,9 @@ async function generateVisual(annId, prompt) {
   const { ctx, passages, docText } = visualContext(a, prompt);
   const tp = activeProvider();
   // 1) Let the model choose the RIGHT format and produce it, grounded in the document.
-  const planSys = [
-    'You turn a reader\'s request into the most useful visual. Choose the FORMAT ("ascii" = monospace text diagram built only from the document; "image" = an AI-rendered picture) using this PRIORITY ORDER:',
-    '1) If the request depicts the paper\'s RESULTS, findings, data, numbers, statistics, a table, comparisons, equations, or a "summary of results" → "ascii". This wins EVEN IF the reader wrote "image" or "picture" (an image would fabricate the specifics). Example: "create an image of the main results" → ascii.',
-    '2) Else if the reader says diagram / flowchart / schematic / chart / pipeline / tree / table → "ascii".',
-    '3) Else if the reader asks to illustrate / draw / sketch / picture a phenomenon, physical scene, mechanism, object, analogy, or concept → "image". Examples: "illustrate eddies breaking into smaller eddies" → image; "draw the experimental setup" → image; "picture of a hairpin vortex" → image.',
-    '4) If ambiguous → "ascii".',
-    'For "ascii" build a faithful monospace diagram from the document (never invent numbers). For "image" write a vivid image_prompt.',
-    (canImage ? '' : 'NOTE: image generation is unavailable, so you must use "ascii".'),
-    'Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}',
-  ].filter(Boolean).join('\n');
+  let planSys = promptFor('visual_planner');
+  if (!canImage && !/image generation is unavailable/i.test(planSys)) planSys += '\nNOTE: image generation is unavailable, so you must use "ascii".';
+  if (!/STRICT JSON/i.test(planSys)) planSys += '\nReturn STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}';
   const planUser = [
     `Reader's request: ${prompt || 'Make a helpful visual of this.'}`,
     ctx.evidence ? `Selected source (page ${ctx.page}${ctx.section ? ', ' + ctx.section : ''}): """${ctx.evidence}"""` : `Location: page ${ctx.page}${ctx.section ? ', ' + ctx.section : ''}`,
@@ -1619,7 +1618,7 @@ async function generateVisual(annId, prompt) {
       if (!art) {
         // Planner JSON was unusable (e.g. truncated before the diagram) — ask for the diagram as plain text so there's no JSON to break.
         msg.status = 'Drawing the diagram…'; save(); render();
-        try { const rawDiagram = await aiText(tp, { system: 'Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.', user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
+        try { const rawDiagram = await aiText(tp, { system: promptFor('diagram'), user: planUser, image: ctx.image, maxTokens: 2200 }); art = String(rawDiagram || '').replace(/```[a-z]*|```/g, '').trim(); } catch (e) {}
       }
       if (art) msg.ascii = art;
       else { msg.error = 'Could not render the diagram — please try again.'; msg.title = 'Visual unavailable'; }
@@ -2325,11 +2324,95 @@ function clearActiveNotes() {
 }
 
 /* ---------- settings modal ---------- */
+/* ---------- editable prompt templates (Settings → Templates) ----------
+   The prompts below are the app's built-in defaults. A user can override any of them in
+   Settings → Templates (stored in state.settings.prompts) and export/import the set as JSON.
+   Only the WORDING is user-owned — the dynamic per-request context (selection, question,
+   page info) and the tool wiring are always supplied by the app, so overrides can restyle
+   the assistant without breaking how it works. */
+const DEFAULT_PROMPTS = {
+  answer_agent: `You are a precise research assistant embedded in a source-linked reading workspace, answering about the document the reader is viewing.
+You have tools to fetch exactly the context you need before answering: re-read the selection, read a specific page, search the document, get the outline, read the whole paper, search the web, or generate a visual (an image, or a monospace diagram built from the document). Use them when they help — e.g. to summarize the whole paper, verify a claim elsewhere, pull an adjacent section, or produce a picture/diagram when the reader asks to see or visualize something. Prefer the smallest sufficient context; call tools only as needed, then answer.
+Answer style: lead with the direct answer, be concise (no preamble or fluff), and ground claims in the document.`,
+  answer_direct: `You are a precise reading assistant embedded in a source-linked research workspace, answering about the SELECTED SOURCE and its surrounding context from the SAME document.
+Answer style — this matters:
+- Lead with the direct answer in the first sentence. No preamble, no restating the question, no throat-clearing ("Great question", "The selected text discusses…", "Sure!", "Based on the provided context…").
+- Be brief: 1–3 sentences, or a tight bullet list for multi-part answers. Add length only when the question truly needs it.
+- Plain, concrete language. No filler, no hedging, no summary of what you just said.
+- Ground claims in the reader's document; prefer it over generic knowledge. If the context is insufficient, say in one line exactly what's missing.
+- If web search is available you may look up facts beyond the document and briefly note when an answer relies on the web; otherwise rely only on the provided context.`,
+  visual_planner: `You turn a reader's request into the most useful visual. Choose the FORMAT ("ascii" = monospace text diagram built only from the document; "image" = an AI-rendered picture) using this PRIORITY ORDER:
+1) If the request depicts the paper's RESULTS, findings, data, numbers, statistics, a table, comparisons, equations, or a "summary of results" → "ascii". This wins EVEN IF the reader wrote "image" or "picture" (an image would fabricate the specifics). Example: "create an image of the main results" → ascii.
+2) Else if the reader says diagram / flowchart / schematic / chart / pipeline / tree / table → "ascii".
+3) Else if the reader asks to illustrate / draw / sketch / picture a phenomenon, physical scene, mechanism, object, analogy, or concept → "image". Examples: "illustrate eddies breaking into smaller eddies" → image; "draw the experimental setup" → image; "picture of a hairpin vortex" → image.
+4) If ambiguous → "ascii".
+For "ascii" build a faithful monospace diagram from the document (never invent numbers). For "image" write a vivid image_prompt.
+Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}`,
+  diagram: `Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.`,
+};
+const PROMPT_KEYS = ['answer_agent', 'answer_direct', 'visual_planner', 'diagram'];
+const PROMPT_META = {
+  answer_agent: { label: 'AI answer — agent (OpenAI)', desc: 'System prompt for OpenAI text notes, which use the tool-calling agent. Sets the assistant’s persona and answer style.' },
+  answer_direct: { label: 'AI answer — direct (Claude · Gemini · screenshots)', desc: 'System prompt for single-shot answers (Anthropic, Gemini, and questions about a captured figure).' },
+  visual_planner: { label: 'Visual planner', desc: 'Decides whether a request becomes a diagram or an image, and how. The strict-JSON output contract is always enforced automatically, so you can safely reword the guidance.' },
+  diagram: { label: 'Diagram (text fallback)', desc: 'Used to redraw a monospace/ASCII diagram if the planner’s diagram came back empty.' },
+};
+function promptFor(key) {
+  const o = state.settings && state.settings.prompts;
+  const v = o && o[key];
+  return (v && String(v).trim()) ? String(v) : (DEFAULT_PROMPTS[key] || '');
+}
+function templatesPaneHTML() {
+  const items = PROMPT_KEYS.map(k => {
+    const meta = PROMPT_META[k] || { label: k, desc: '' };
+    const overridden = !!(state.settings.prompts && state.settings.prompts[k] && String(state.settings.prompts[k]).trim());
+    return `<div class="pt-item">
+      <div class="pt-head"><label>${esc(meta.label)}${overridden ? ' <span style="color:var(--violet);font-weight:700">· customized</span>' : ''}</label>
+        <button type="button" class="pt-reset" data-reset="${k}">Reset to default</button></div>
+      <textarea id="pt_${k}" spellcheck="false">${esc(promptFor(k))}</textarea>
+      <div class="hint">${esc(meta.desc)}</div>
+    </div>`;
+  }).join('');
+  return `<div class="hint" style="margin:-2px 0 14px">Make the assistant your own — edit any prompt below. The per-request context (your selection, question, and page) is always added by the app, so restyling the voice here won’t break how answers are built. Changes apply after you press <b>Save</b>. Export a set to reuse it across machines, or import one you’ve saved.</div>
+    <div class="pt-actions"><button type="button" class="btn ghost" id="ptExport">Export prompts (JSON)</button><button type="button" class="btn ghost" id="ptImport">Import prompts (JSON)</button><button type="button" class="btn ghost" id="ptResetAll">Reset all to default</button></div>
+    ${items}`;
+}
+function collectPrompts(m) {
+  const out = {};
+  PROMPT_KEYS.forEach(k => { const ta = document.getElementById('pt_' + k); if (ta && ta.value.trim() && ta.value !== DEFAULT_PROMPTS[k]) out[k] = ta.value; });
+  return out;
+}
+function exportPrompts(m) {
+  try {
+    const data = { app: 'Source-Linked AI Reading Workspace', kind: 'prompt-templates', schema: 1, exportedAt: nowISO(), prompts: {} };
+    PROMPT_KEYS.forEach(k => { const ta = document.getElementById('pt_' + k); data.prompts[k] = ta ? ta.value : promptFor(k); });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'reading-workspace-prompts.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast('Exported prompt templates.');
+  } catch (e) { toast('Could not export prompts: ' + (e.message || e), 'err'); }
+}
+function importPrompts(m) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    try {
+      const obj = JSON.parse(await f.text());
+      const p = obj && (obj.prompts || obj); let n = 0;
+      PROMPT_KEYS.forEach(k => { if (p && typeof p[k] === 'string') { const ta = document.getElementById('pt_' + k); if (ta) { ta.value = p[k]; n++; } } });
+      toast(n ? n + ' prompt' + (n === 1 ? '' : 's') + ' imported — review and press Save.' : 'No matching prompts in that file.', n ? '' : 'err');
+    } catch (e) { toast('Could not read that JSON: ' + (e.message || e), 'err'); }
+  };
+  inp.click();
+}
 function openSettings(note) {
   const s = state.settings;
   const m = el(`<div class="modal-mask"><div class="modal">
     <h3>Settings <span class="icon-btn" id="mClose">✕</span></h3>
     <div class="body">
+      <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button></div>
+      <div class="tabpane" data-pane="ai">
       ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
       <div class="hint" style="margin:-2px 0 16px">AI runs through the site's server keys by default — you don't need to enter anything. Optionally paste your <b>own</b> key below to use your account (BYO override). Mark one provider as <b>Default</b> for the composer; target any inline with @gpt / @claude / @gemini.</div>
       <div class="field">
@@ -2362,6 +2445,8 @@ function openSettings(note) {
           ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stBrowserOnly">Stop folder sync</button>' : ''}
         </div>
       </div>
+      </div>
+      <div class="tabpane hidden" data-pane="templates">${templatesPaneHTML()}</div>
     </div>
     <div class="foot"><button class="btn ghost" id="mCancel">Close</button><button class="btn primary" id="mSave">Save</button></div>
   </div></div>`);
@@ -2371,6 +2456,9 @@ function openSettings(note) {
   m.addEventListener('click', e => { if (e.target === m) close(); });
   $$('.def-radio', m).forEach(b => b.onclick = () => { $$('.def-radio', m).forEach(x => x.classList.remove('on')); b.classList.add('on'); });
   ['tgVis', 'tgWeb', 'tgPy'].forEach(id => $('#' + id, m).onclick = () => $('#' + id, m).classList.toggle('on'));
+  $$('.settab', m).forEach(t => t.onclick = () => { $$('.settab', m).forEach(x => x.classList.toggle('on', x === t)); $$('.tabpane', m).forEach(p => p.classList.toggle('hidden', p.dataset.pane !== t.dataset.tab)); });
+  $$('[data-reset]', m).forEach(b => b.onclick = () => { const ta = $('#pt_' + b.dataset.reset, m); if (ta) ta.value = DEFAULT_PROMPTS[b.dataset.reset]; });
+  { const pe = $('#ptExport', m); if (pe) pe.onclick = () => exportPrompts(m); const pi = $('#ptImport', m); if (pi) pi.onclick = () => importPrompts(m); const pr = $('#ptResetAll', m); if (pr) pr.onclick = () => PROMPT_KEYS.forEach(k => { const ta = $('#pt_' + k, m); if (ta) ta.value = DEFAULT_PROMPTS[k]; }); }
   { const stF = $('#stFolder', m); if (stF) stF.onclick = async () => { if (await chooseNotesFolder()) close(); }; }
   { const stE = $('#stExport', m); if (stE) stE.onclick = () => downloadNotesJSON(state.ui.activeDoc); }
   { const stI = $('#stImport', m); if (stI) stI.onclick = () => importNotesJSON(); }
@@ -2390,6 +2478,7 @@ function openSettings(note) {
     s.enableVisuals = $('#tgVis', m).classList.contains('on');
     s.enableWeb = $('#tgWeb', m).classList.contains('on');
     s.enablePython = $('#tgPy', m).classList.contains('on');
+    s.prompts = collectPrompts(m);
     save(); close(); render(); toast('Settings saved.');
   };
 }
