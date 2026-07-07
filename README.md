@@ -1,4 +1,4 @@
-# PeerReview — a source-linked AI reading workspace
+# Pair Reader — a source-linked AI reading workspace
 
 > Read papers and reports with an AI that stays **pinned to the source**. Every highlight, note, screenshot, and AI answer is anchored to the exact spot in the PDF it came from — so nothing floats free of its evidence.
 
