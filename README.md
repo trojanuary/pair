@@ -21,6 +21,14 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 - **Portable storage** — notes stay in the browser and can auto-save to a folder as `<doc>.notes.json` (Chrome/Edge), so they travel with the PDF (great for Drive folders and other machines). Export/Import works in any browser.
 - **Fully customizable prompts** — edit every system prompt and even the agent’s tool descriptions in **Settings → Templates**, and export/import them as JSON.
 
+## Every note stays linked to its source
+
+A connector line ties each note in the side panel to the exact spot it came from — a **highlighted passage** or a **captured figure** — so you can always trace a claim back to the page.
+
+<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWZ96P7S_7ZGYWV69FE94PE9G/conn-text.webp" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
+
+<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWZ96WT0_R5W397MRGK2JWVM5/conn-figure.webp" alt="A note joined by a connector line to a figure captured from the PDF" width="820"></div>
+
 ## Using the app
 
 **1. Open a document.** The sample paper loads automatically; use **New** (left sidebar) to open your own PDF. It’s cached in your browser — nothing is uploaded to a server.
@@ -116,8 +124,10 @@ make_sample_pdf.py    # generates the sample paper
 
 ## Privacy & keys
 
-- Your PDFs and notes stay in your browser (and any folder you choose). Nothing is uploaded to a backend.
-- API keys you enter are kept in `localStorage` and sent per-request to this app’s own `/api` proxy as an override — never persisted server-side, never exposed to other users.
+- **We never see your PDF.** Your documents and notes live in your browser (and any folder you choose) — the app has no backend database and never uploads your file.
+- **AI questions go to your model provider.** When you ask the AI, your question *plus the passage or figure you selected* is sent through the app’s `/api` proxy to your chosen model (OpenRouter by default) to generate the answer. The proxy doesn’t store it; the provider processes it under its own policy — on OpenRouter you can tighten data retention in your account settings.
+- **Keys** you enter stay in `localStorage` and are sent per-request as an override — never persisted server-side, never exposed to other users.
+- **Analytics:** privacy-friendly, cookieless page analytics (Vercel Web Analytics) — no accounts, no tracking cookies, no personal data, no access to your notes or prompts.
 
 ## License
 
