@@ -29,7 +29,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);f
 a{color:inherit;text-decoration:none}
 img{max-width:100%;display:block}
 h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;letter-spacing:-.015em;margin:0}
-.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px}
 .mark{position:relative;white-space:nowrap}
 .uline{position:absolute;left:-.04em;right:-.04em;bottom:-.16em;width:calc(100% + .08em);height:.34em;color:var(--blue);overflow:visible}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--blue)}
@@ -54,8 +54,8 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .nav-cta{display:flex;gap:10px}
 
 /* hero */
-.hero{padding:38px 0 10px}
-.hero .wrap{display:grid;grid-template-columns:1.2fr .8fr;gap:44px;align-items:center}
+.hero{padding:52px 0 10px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center}
 .hero h1{font-size:clamp(40px,5.9vw,74px);line-height:1.02;margin:10px 0 32px}
 .hero .lead{max-width:600px;display:flex;flex-direction:column;gap:18px}
 .hrow{display:flex;gap:14px;align-items:flex-start}
@@ -64,7 +64,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .hrow b{color:var(--ink);font-weight:600}
 .mindwrap{position:relative;color:var(--ink)}
 .mindwrap::before{content:"";position:absolute;inset:8% 3% 12% 8%;background:radial-gradient(58% 58% at 56% 44%,var(--clay) 0%,rgba(234,220,200,.34) 55%,transparent 78%);filter:blur(8px);z-index:0}
-.heroimg{position:relative;z-index:1;width:100%;max-width:475px;margin-left:auto;display:block;height:auto}
+.heroimg{position:relative;z-index:1;width:100%;max-width:505px;margin-left:auto;display:block;height:auto}
 .mindart{width:100%;max-width:440px;margin-left:auto;display:block;overflow:visible}
 .mindart .blob{fill:var(--clay);opacity:.55}
 .mindart .ink{stroke:var(--ink);stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round}
@@ -211,6 +211,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .d-page h5{font-family:var(--serif);font-size:13px;margin:12px 0 6px;color:#333}
 .d-page p{margin:0 0 9px;font-size:11.5px;line-height:1.6;color:#3a352e}
 .d-hl{background:#cfe0ff;box-shadow:0 0 0 2px #cfe0ff}
+.d-hl2{background:#FEF08A;box-shadow:0 0 0 2px #FEF08A;border-radius:2px}
 .d-eq{margin:14px 0;padding:12px 14px;border-radius:8px;background:#fbfaf7;border:1px solid #eee7db;font-family:'Times New Roman',serif;font-size:13px;color:#222;text-align:center;position:relative}
 .d-eq .r{margin:5px 0}
 .d-marq{position:absolute;inset:6px;border:2px dashed var(--blue);border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none}
@@ -250,7 +251,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .d-meta{font-size:10px;color:#b3ab9c;margin-top:6px;opacity:0;transition:opacity .4s}
 .d-meta.on{opacity:1}
 .d-compose{border-top:1px solid var(--line);padding:11px 14px;display:flex;gap:8px;align-items:center}
-.d-input{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:12px;color:var(--ink);min-height:34px;background:#fff;overflow:hidden;white-space:nowrap}
+.d-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;padding:8px 11px;font-size:12px;color:var(--ink);min-height:34px;background:#fff;overflow:hidden;white-space:nowrap}
 .d-input .ph{color:#b3ab9c}
 .d-caret{display:inline-block;width:1.5px;height:14px;background:var(--blue);vertical-align:-2px;margin-left:1px;animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
@@ -304,7 +305,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   <a class="scrollhint" href="#app" data-reveal aria-label="Scroll to see the live demo"><span>See it in action</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></a>
 
   <section class="shot" id="app">
-    <div class="demo-outer" data-reveal><div class="demo" id="demo"><div class="demo-bar"><span class="d" style="background:#E5B94E"></span><span class="d" style="background:#D9A03F"></span><span class="d" style="background:#C9922F"></span><span class="demo-url">peereview.app</span></div>
+    <div class="demo-outer" data-reveal><div class="demo" id="demo"><div class="demo-bar"><span class="d" style="background:#E5B94E"></span><span class="d" style="background:#D9A03F"></span><span class="d" style="background:#C9922F"></span><span class="demo-url">pairedx.com</span></div>
   <div class="demo-body">
     <!-- sidebar -->
     <aside class="d-side">
@@ -325,7 +326,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
       <div class="d-page">
         <h4>3&nbsp;&nbsp;The Model</h4>
         <h5>3.1&nbsp;&nbsp;Positional Encoding</h5>
-        <p>Since our model contains no recurrence and no convolution, we inject information about the relative or absolute position of the tokens in the sequence.</p>
+        <p>Since our model contains no recurrence and no convolution, <span class="d-hl2">we inject information about the relative or absolute position</span> of the tokens in the sequence.</p>
         <p class="d-hl">To this end, we add “positional encodings” to the input embeddings at the bottoms of the encoder and decoder stacks.</p>
         <p>We use sine and cosine functions of different frequencies:</p>
         <div class="d-eq">
@@ -444,7 +445,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
     </nav>
     <div class="social">
       <a href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2.2A9.8 9.8 0 0 0 8.9 21.3c.5.1.68-.22.68-.48v-1.7c-2.77.6-3.35-1.34-3.35-1.34-.45-1.15-1.1-1.46-1.1-1.46-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.9.83.1-.65.35-1.1.63-1.35-2.2-.25-4.53-1.1-4.53-4.9 0-1.08.39-1.97 1.03-2.66-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.9-1.3 2.74-1.02 2.74-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.58 1.03 2.66 0 3.8-2.34 4.64-4.57 4.88.36.31.68.92.68 1.85v2.74c0 .27.18.59.69.48A9.8 9.8 0 0 0 12 2.2z"/></svg></a>
-      <a href="https://twitter.com/intent/tweet?text=PeerReview%20%E2%80%94%20a%20source-linked%20AI%20reading%20workspace&url=https://peereview.app" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4l7 9.2L4.3 20H6l6-6.4L16.8 20H20l-7.3-9.6L19.6 4H18l-5.6 6L8 4z"/></svg></a>
+      <a href="https://twitter.com/intent/tweet?text=PeerReview%20%E2%80%94%20a%20source-linked%20AI%20reading%20workspace&url=https://pairedx.com" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4l7 9.2L4.3 20H6l6-6.4L16.8 20H20l-7.3-9.6L19.6 4H18l-5.6 6L8 4z"/></svg></a>
     </div>
   </div>
 </footer>
@@ -498,7 +499,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   async function typeQ(){
     input.innerHTML='<span id="typed"></span><span class="d-caret"></span>';
     var t=document.getElementById('typed');
-    for(var i=0;i<Q.length;i++){ t.textContent+=Q[i]; await sleep(20+Math.random()*40); }
+    for(var i=0;i<Q.length;i++){ t.textContent+=Q[i]; input.scrollLeft=input.scrollWidth; await sleep(20+Math.random()*40); }
     await sleep(350);
   }
   async function run(){

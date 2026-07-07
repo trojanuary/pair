@@ -2,7 +2,7 @@
 
 > Read papers and reports with an AI that stays **pinned to the source**. Every highlight, note, screenshot, and AI answer is anchored to the exact spot in the PDF it came from — so nothing floats free of its evidence.
 
-**▶ Try it now: [peereview.app](https://peereview.app)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
+**▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
 ![Overview — the reader, a source-linked note, and an AI answer with rendered math](https://pub.hyperagent.com/api/published/pbf01KWWWFHFB_XWBRK6BD1SZ0ZTWE/01-overview.webp)
 
@@ -66,7 +66,7 @@ The site is static — a landing page (`index.html`), the app itself (`app.html`
    - `OPENROUTER_API_KEY` — your OpenRouter key (used as the default shared key).
    - `OPENAI_API_KEY` — *(optional)* used when the provider is “OpenAI-compatible” with the default OpenAI base URL.
 5. **Deploy.** You’ll get a `*.vercel.app` URL.
-6. *(Optional)* Add a custom domain (e.g. `peereview.app`) in **Project → Settings → Domains**.
+6. *(Optional)* Add a custom domain (e.g. `pairedx.com`) in **Project → Settings → Domains**.
 
 > Tip: keep the server key’s spending cap **low** — anyone using your public URL draws on it until they add their own key.
 

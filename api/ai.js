@@ -6,7 +6,7 @@
 const ENV = { openrouter: 'OPENROUTER_API_KEY', compat: 'OPENAI_API_KEY' };
 const DEFAULT_MODEL = { openrouter: 'openai/gpt-5.4-mini', compat: 'gpt-5.4-mini' };
 const OR_BASE = 'https://openrouter.ai/api/v1';
-const OR_HEADERS = { 'HTTP-Referer': 'https://peereview.app', 'X-Title': 'Source-Linked AI Reading Workspace' };
+const OR_HEADERS = { 'HTTP-Referer': 'https://pairedx.com', 'X-Title': 'Source-Linked AI Reading Workspace' };
 // GPT-5+/o-series are reasoning models: reasoning tokens bill against max_completion_tokens,
 // so add a generous reasoning buffer or the visible answer can come back empty.
 const capTokens = (m, n) => (/(^|\/)(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n + 4000 } : { max_tokens: n });
