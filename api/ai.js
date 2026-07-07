@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// redeploy nudge 2026-07-05T20:12:51.929Z
+// redeploy nudge 2026-07-07T17:44:30.855Z
 // Vercel serverless function: server-side AI proxy (text/vision + tool-calling agent step).
 // Two providers, both OpenAI-compatible: `openrouter` (default) and `compat` (any OpenAI-compatible
 // endpoint — OpenAI, Together, Groq, a local LLM… — with a user-supplied base URL + key + model).
