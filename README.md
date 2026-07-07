@@ -93,17 +93,21 @@ You can also just open `index.html` directly to browse the reader UI, but the AI
 ```
 index.html            # the landing page — self-contained: inlined fonts, CSS,
                        # SVG art, real screenshots, and the product reel video
-app.html              # the app — self-contained: inlined CSS, PDF.js,
-                       # the sample PDF + notes, and the app JS (one IIFE)
-vercel.json           # routing: /app → /app.html
+app.html              # the app — a thin shell (~10 KB) that loads the files below
+src/
+  app.js              # the whole app — one vanilla-JS IIFE
+  styles.css          # styles
+vendor/
+  pdf.min.js          # PDF.js library
+  pdf.worker.b64.js   # PDF.js worker (base64 → turned into a blob at runtime)
+assets/
+  sample-pdf.js       # the bundled sample paper (base64)
+  sample-notes.js     # the bundled sample notes
 api/
   ai.js               # serverless proxy: text/vision + one tool-calling agent step
   ai-image.js         # serverless proxy: image generation
-src/
-  app.js              # app logic (source of the inlined <script> in app.html)
-  styles.css          # styles (source of the inlined <style>)
-build.js              # inlines the src/ pieces into the bundled HTML
-make_sample_pdf.py    # generates the bundled sample PDF
+vercel.json           # routing: /app → /app.html
+make_sample_pdf.py    # generates the sample paper
 ```
 
 - **Frontend:** vanilla JS + [PDF.js](https://mozilla.github.io/pdf.js/), no framework. State (notes, settings) persists in `localStorage`; large images offload to IndexedDB. Math via MathJax (loaded on demand).
