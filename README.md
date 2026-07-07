@@ -1,4 +1,4 @@
-# Pair Reader — a source-linked AI reading workspace
+# PairedX — a source-linked AI reading workspace
 
 > **Not another chat‑with‑your‑PDF.** An AI reading workspace that stays **pinned to the source**: every highlight, note, screenshot, and answer anchors to the exact spot it came from, so nothing floats free of its evidence. Your PDF never leaves your machine, you bring your own model, and your notes are a portable file you own — open‑source and self‑hostable (AGPL).
 
@@ -31,11 +31,11 @@ A connector line ties each note in the side panel to the exact spot it came from
 
 ## Why it's different
 
-“Chat with your PDF” is a saturated, commodity category — ChatPDF, NotebookLM, SciSpace, Elicit, Adobe Acrobat AI, and a dozen others all do it. Pair Reader isn't trying to win that race. Its point is the **combination** the mainstream tools don't offer: notes pinned to an exact spot in the PDF, your file staying on your machine, your own model and prompts, an inspectable agent trace, notes as a portable file you keep, and the whole thing open-source and self-hostable.
+“Chat with your PDF” is a saturated, commodity category — ChatPDF, NotebookLM, SciSpace, Elicit, Adobe Acrobat AI, and a dozen others all do it. PairedX isn't trying to win that race. Its point is the **combination** the mainstream tools don't offer: notes pinned to an exact spot in the PDF, your file staying on your machine, your own model and prompts, an inspectable agent trace, notes as a portable file you keep, and the whole thing open-source and self-hostable.
 
 Any one of these exists somewhere — having them **together** is the wedge. (We're not claiming to be the *only* open-source PDF reader; small self-hostable projects exist. The bet is being a *polished, mainstream* one that's pinned, private, and yours out of the box.)
 
-| | **Pair Reader** | NotebookLM | ChatPDF | Beaver&nbsp;¹ | Readwise |
+| | **PairedX** | NotebookLM | ChatPDF | Beaver&nbsp;¹ | Readwise |
 |---|:---:|:---:|:---:|:---:|:---:|
 | Notes pin to an exact spot in the PDF | ✅ | — | — | ~ | — |
 | Opens your local file — no full-file upload | ✅ | — | — | ✅ | — |
@@ -151,4 +151,4 @@ make_sample_pdf.py    # generates the sample paper
 
 [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
 
-PairdX.com is free software — you can use, study, share, and modify it under the terms of the AGPL-3.0. Note the network clause (section 13): if you run a modified version as a network service, you must make the corresponding source available to its users. Copyright (C) 2026 PairdX.com.
+PairedX.com is free software — you can use, study, share, and modify it under the terms of the AGPL-3.0. Note the network clause (section 13): if you run a modified version as a network service, you must make the corresponding source available to its users. Copyright (C) 2026 PairedX.com.
