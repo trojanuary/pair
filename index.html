@@ -178,10 +178,8 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   .btn,.card{transition:none}
   .scrollhint .chev{animation:none}
 }
-/* embedded live demo (its own animation lives in demo.html) */
-.demoframe{display:block;width:100%;max-width:1100px;height:672px;margin:0 auto;border:0;background:transparent}
-@media (max-width:820px){.demoframe{height:604px}}
-@media (max-width:560px){.demoframe{height:560px}}
+/* product reel video */
+.reelvid{display:block;width:100%;max-width:1040px;margin:0 auto;border-radius:14px;border:1px solid var(--line);box-shadow:var(--sh);background:#fff}
 </style>
 </head>
 <body>
@@ -225,7 +223,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   <a class="scrollhint" href="#app" data-reveal aria-label="Scroll to see the live demo"><span>See it in action</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></a>
 
   <section class="shot" id="app">
-    <div class="demo-outer" data-reveal><iframe class="demoframe" src="/demo.html" title="PeerReview — live demo of the reading workspace" loading="lazy" scrolling="no"></iframe></div>
+    <div class="demo-outer" data-reveal><video class="reelvid" src="https://pub.hyperagent.com/api/published/pbf01KWYSN0WB_HP0AM3QD12K3FX7D/reel-web.mp4" poster="https://pub.hyperagent.com/api/published/pbf01KWYSN4W4_Z6AH3C3K8HB9CB5P/reel-poster.jpg" autoplay loop muted playsinline preload="metadata"></video></div>
     <p class="cap">Type a question, hit Ask&nbsp;AI, and the answer appears — pinned to the exact spot it came from. This is the live workflow.</p>
   </section>
 

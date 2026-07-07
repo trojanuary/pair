@@ -4,7 +4,7 @@
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
-<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWYP4M3R_VEWNE016S50G5SE4/demo-reel.gif" alt="PeerReview in action — highlight a passage, ask the AI, and get a source-linked answer with rendered math and a generated image" width="820"></div>
+<div align="center"><video src="https://pub.hyperagent.com/api/published/pbf01KWYSN0WB_HP0AM3QD12K3FX7D/reel-web.mp4" poster="https://pub.hyperagent.com/api/published/pbf01KWYSN4W4_Z6AH3C3K8HB9CB5P/reel-poster.jpg" controls muted loop autoplay playsinline width="820"></video></div>
 
 ---
 
@@ -92,9 +92,7 @@ You can also just open `index.html` directly to browse the reader UI, but the AI
 
 ```
 index.html            # the landing page — self-contained: inlined fonts, CSS,
-                       # SVG art, real screenshots; embeds demo.html in an iframe
-demo.html             # standalone animated product demo — self-contained
-                       # (embedded by the landing, and recorded for this README)
+                       # SVG art, real screenshots, and the product reel video
 app.html              # the app — self-contained: inlined CSS, PDF.js,
                        # the sample PDF + notes, and the app JS (one IIFE)
 vercel.json           # routing: /app → /app.html
