@@ -752,7 +752,7 @@ function defaultState() {
     annotations: [],
     docs: [{ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() }],
     ui: { page: 1, zoom: 1.15, tool: 'cursor', filter: 'all', autoscroll: true, sort: 'time',
-          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample', libView: 'home', continuous: false },
+          collapseLeft: false, collapseRight: false, activeId: null, activeDoc: 'sample', libView: 'home', continuous: true, _contDefaulted: true },
     seeded: false,
   };
 }
@@ -767,6 +767,7 @@ function migrateState(s) {
   if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
   if (!s.ui.libView) s.ui.libView = 'home';
   if (s.ui.tool === 'text') s.ui.tool = 'cursor';
+  if (!s.ui._contDefaulted) { s.ui.continuous = true; s.ui._contDefaulted = true; }
   // one-time: turn all tools on by default (respects later manual changes via the flag)
   if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings.enablePython = true; s.settings._toolsDefaulted = true; }
   // (per-provider model upgrade removed — providers are now openrouter + compat)
