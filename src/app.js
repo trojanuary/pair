@@ -650,8 +650,21 @@ function scrollNoteIntoView(id, center) {
   const list = $('#notesList'), c = $(`.card[data-ann="${id}"]`);
   if (!list || !c) return;
   const lb = list.getBoundingClientRect(), cb = c.getBoundingClientRect();
-  if (center) list.scrollTop += (cb.top - lb.top) - (lb.height / 2 - cb.height / 2);
-  else if (cb.top < lb.top + 8 || cb.bottom > lb.bottom - 8) list.scrollTop += (cb.top - lb.top) - 12;
+  if (center) { list.scrollTop += (cb.top - lb.top) - (lb.height / 2 - cb.height / 2); return; }
+  if (cb.height > lb.height) {
+    // Card is taller than the panel: only move if it's fully out of view — never yank a
+    // card that already fills the viewport (that was the "jump to the top" bug).
+    if (cb.top > lb.bottom - 40) list.scrollTop += (cb.top - lb.top) - 12;          // below → bring its top up
+    else if (cb.bottom < lb.top + 40) list.scrollTop += (cb.bottom - lb.bottom) + 12; // above → bring its bottom up
+  } else if (cb.top < lb.top + 8 || cb.bottom > lb.bottom - 8) list.scrollTop += (cb.top - lb.top) - 12; // short → bring fully into view
+}
+// Stick-to-bottom: keep the newest content of a growing/streaming note in view.
+function followNoteBottom(id) {
+  const list = $('#notesList'), c = $(`.card[data-ann="${id}"]`);
+  if (!list || !c) return;
+  const lb = list.getBoundingClientRect(), cb = c.getBoundingClientRect();
+  if (cb.height > lb.height) list.scrollTop += (cb.bottom - lb.bottom) + 12;            // tall → show the bottom (latest content)
+  else if (cb.top < lb.top + 8 || cb.bottom > lb.bottom - 8) list.scrollTop += (cb.top - lb.top) - 12; // short → bring into view
 }
 function selectAnnotation(id, scrollCard, scrollPage) {
   state.ui.activeId = id; save();
@@ -874,6 +887,7 @@ function agentChips(a, used) {
   return chips;
 }
 async function askAIAgent(a, question, msg, provider) {
+  state.ui.streamingId = a.id;   // let render() follow this note's newest content while the AI works
   const model = state.settings.models[provider] || DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter;
   const c = buildContext(a);
   const system = promptFor('text');
@@ -923,7 +937,7 @@ async function askAIAgent(a, question, msg, provider) {
   } catch (e) {
     msg.pending = false; msg.status = null; msg.text = ''; msg.error = e.message;
     save(); render(); toast(errHint(e.message), 'err');
-  }
+  } finally { if (state.ui.streamingId === a.id) state.ui.streamingId = null; }
 }
 function stripJson(s) {
   const raw = String(s == null ? '' : s).replace(/```json|```/g, '').trim();
@@ -951,6 +965,7 @@ function visualContext(a, prompt) {
 }
 async function generateVisual(annId, prompt) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
+  state.ui.streamingId = a.id;   // follow this note's newest content while the visual generates
   const ip = pickImageProvider();
   const canImage = state.settings.enableVisuals && ip;
   const msg = { id: uid('m'), actor: 'ai', provider: ip || activeProvider(), model: '',
@@ -1003,7 +1018,7 @@ async function generateVisual(annId, prompt) {
   } catch (e) {
     msg.pending = false; msg.status = null; msg.error = e.message; msg.title = 'Visual generation failed';
     save(); render(); toast(errHint(e.message), 'err');
-  }
+  } finally { if (state.ui.streamingId === a.id) state.ui.streamingId = null; }
 }
 function errHint(m) {
   if (/failed to fetch|networkerror|load failed/i.test(m)) return 'Could not reach the AI endpoint (/api/ai). This works on the deployed site; when opening the file locally without the server, add a key in Settings or run it via the deployment.';
@@ -1428,6 +1443,7 @@ function render() {
   // notes list
   renumber();
   const list = $('#notesList'); const scrollTop = list.scrollTop;
+  const wasAtBottom = (list.scrollHeight - scrollTop - list.clientHeight) < 40; // "stick to bottom" only if already there
   // preserve the inline composer's in-progress text + focus across re-renders (e.g. while the AI replies)
   const prevTa = list.querySelector('.card.sel .tc-input');
   const draft = prevTa ? { v: prevTa.value, focused: document.activeElement === prevTa, caret: prevTa.selectionStart } : null;
@@ -1477,7 +1493,19 @@ function render() {
     ta.addEventListener('click', e => e.stopPropagation());
     attachMentions(ta);
   }
-  if (state.ui.autoscroll && state.ui.activeId) { list.scrollTop = scrollTop; const _ed = state.ui.editing && list.querySelector('.edit-input'); if (_ed) { const lb = list.getBoundingClientRect(), eb = _ed.getBoundingClientRect(); list.scrollTop += (eb.top - lb.top) - (lb.height / 2 - eb.height / 2); } else scrollNoteIntoView(state.ui.activeId, false); }
+  if (state.ui.autoscroll && state.ui.activeId) {
+    list.scrollTop = scrollTop;
+    const _ed = state.ui.editing && list.querySelector('.edit-input');
+    if (_ed) { const lb = list.getBoundingClientRect(), eb = _ed.getBoundingClientRect(); list.scrollTop += (eb.top - lb.top) - (lb.height / 2 - eb.height / 2); }
+    else if (state.ui.streamingId === state.ui.activeId) {
+      // The AI is producing content in this note — follow the newest content at the bottom,
+      // but only if the user was already near the bottom (don't yank them while they read).
+      if (wasAtBottom) followNoteBottom(state.ui.activeId);
+      // Re-anchor once a late-decoding generated image reports its real height (avoids a second jump).
+      list.querySelectorAll('.card.sel img').forEach(img => { if (!img.complete) img.addEventListener('load', () => { if (wasAtBottom && state.ui.streamingId === state.ui.activeId) followNoteBottom(state.ui.activeId); }, { once: true }); });
+    }
+    else scrollNoteIntoView(state.ui.activeId, false);
+  }
   else list.scrollTop = scrollTop;
   // restore inline composer draft + focus
   if (draft && box) { const ta = box.querySelector('.tc-input'); ta.value = draft.v; ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px'; ta.dispatchEvent(new Event('input')); if (draft.focused) { try { ta.focus({ preventScroll: true }); } catch (e) { ta.focus(); } ta.setSelectionRange(draft.caret, draft.caret); } }
