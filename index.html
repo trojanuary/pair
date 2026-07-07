@@ -29,7 +29,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);f
 a{color:inherit;text-decoration:none}
 img{max-width:100%;display:block}
 h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;letter-spacing:-.015em;margin:0}
-.wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
 .mark{position:relative;white-space:nowrap}
 .uline{position:absolute;left:-.04em;right:-.04em;bottom:-.16em;width:calc(100% + .08em);height:.34em;color:var(--blue);overflow:visible}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--blue)}
@@ -55,9 +55,9 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 
 /* hero */
 .hero{padding:38px 0 10px}
-.hero .wrap{display:grid;grid-template-columns:1.06fr .94fr;gap:40px;align-items:center}
-.hero h1{font-size:clamp(42px,6.4vw,78px);line-height:1.0;margin:10px 0 20px}
-.hero .lead{max-width:520px;display:flex;flex-direction:column;gap:18px}
+.hero .wrap{display:grid;grid-template-columns:1.2fr .8fr;gap:44px;align-items:center}
+.hero h1{font-size:clamp(40px,5.9vw,74px);line-height:1.02;margin:10px 0 32px}
+.hero .lead{max-width:600px;display:flex;flex-direction:column;gap:18px}
 .hrow{display:flex;gap:14px;align-items:flex-start}
 .hrow .ic{color:var(--ink);margin-top:3px}
 .hrow p{margin:0;font-size:16px;color:var(--ink-2)}
@@ -116,11 +116,11 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 
 /* settings split */
 .split{padding:70px 0 30px}
-.split .wrap{display:grid;grid-template-columns:.9fr 1.1fr;gap:48px;align-items:center}
+.split .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
 .split h2{font-size:clamp(30px,4.2vw,44px);line-height:1.04;margin:12px 0 18px}
 .split p{color:var(--ink-2);max-width:400px;margin:0 0 24px}
 .split .doodle{color:var(--blue);width:130px;opacity:.7;margin-top:10px}
-.setframe{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--sh);overflow:hidden}
+.setframe{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--sh);overflow:hidden;max-width:390px;margin:0 auto}
 .setframe img{width:100%}
 
 /* privacy chips */
@@ -285,8 +285,8 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   <section class="hero">
     <div class="wrap">
       <div class="hero-copy" data-stagger>
-        <div class="eyebrow" data-reveal>Active learning in the age of AI</div>
-        <h1 data-reveal>This is your<br><span class="mark">peer reviewer<svg class="uline" viewBox="0 0 300 16" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M4 10 C 58 3, 116 15, 172 7 S 264 4, 296 11" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span>.</h1>
+        <div class="eyebrow" data-reveal>This is your personal peer reviewer</div>
+        <h1 data-reveal>Active Learning<br><span class="mark">with AI<svg class="uline" viewBox="0 0 300 16" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M4 10 C 58 3, 116 15, 172 7 S 264 4, 296 11" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span></h1>
         <div class="lead">
           <div class="hrow" data-reveal><svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6c-1.6-1-4.2-1.7-6.7-1.5C4 4.6 3 5.2 3 6v12c0 .8 1 1 2.3.9C7.8 18.7 10.4 19.3 12 20"/><path d="M12 6c1.6-1 4.2-1.7 6.7-1.5C20 4.6 21 5.2 21 6v12c0 .8-1 1-2.3.9C16.2 18.7 13.6 19.3 12 20"/><path d="M12 6.2v13.6"/></svg><p><b>Read, highlight, and summarize.</b> Search the web, ask the AI, make diagrams, illustrate — even doodle. All from inside the PDF.</p></div>
           <div class="hrow" data-reveal><svg class="ic" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v10.5"/><path d="M8 10l4 4 4-4"/><path d="M4.5 20.5h15"/></svg><p><b>Export every note and highlight</b> to JSON or PDF, so you never have to reread the whole paper.</p></div>
@@ -304,7 +304,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
   <a class="scrollhint" href="#app" data-reveal aria-label="Scroll to see the live demo"><span>See it in action</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></a>
 
   <section class="shot" id="app">
-    <div class="demo-outer" data-reveal><div class="demo" id="demo"><div class="demo-bar"><span class="d" style="background:#E5B94E"></span><span class="d" style="background:#D9A03F"></span><span class="d" style="background:#C9922F"></span><span class="demo-url">peerreview.app</span></div>
+    <div class="demo-outer" data-reveal><div class="demo" id="demo"><div class="demo-bar"><span class="d" style="background:#E5B94E"></span><span class="d" style="background:#D9A03F"></span><span class="d" style="background:#C9922F"></span><span class="demo-url">peereview.app</span></div>
   <div class="demo-body">
     <!-- sidebar -->
     <aside class="d-side">
@@ -444,7 +444,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
     </nav>
     <div class="social">
       <a href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2.2A9.8 9.8 0 0 0 8.9 21.3c.5.1.68-.22.68-.48v-1.7c-2.77.6-3.35-1.34-3.35-1.34-.45-1.15-1.1-1.46-1.1-1.46-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.9.83.1-.65.35-1.1.63-1.35-2.2-.25-4.53-1.1-4.53-4.9 0-1.08.39-1.97 1.03-2.66-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.9-1.3 2.74-1.02 2.74-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.58 1.03 2.66 0 3.8-2.34 4.64-4.57 4.88.36.31.68.92.68 1.85v2.74c0 .27.18.59.69.48A9.8 9.8 0 0 0 12 2.2z"/></svg></a>
-      <a href="https://twitter.com/intent/tweet?text=PeerReview%20%E2%80%94%20a%20source-linked%20AI%20reading%20workspace&url=https://peerreview.app" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4l7 9.2L4.3 20H6l6-6.4L16.8 20H20l-7.3-9.6L19.6 4H18l-5.6 6L8 4z"/></svg></a>
+      <a href="https://twitter.com/intent/tweet?text=PeerReview%20%E2%80%94%20a%20source-linked%20AI%20reading%20workspace&url=https://peereview.app" target="_blank" rel="noopener noreferrer" aria-label="Share on X"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4l7 9.2L4.3 20H6l6-6.4L16.8 20H20l-7.3-9.6L19.6 4H18l-5.6 6L8 4z"/></svg></a>
     </div>
   </div>
 </footer>
