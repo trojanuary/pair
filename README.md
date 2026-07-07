@@ -119,4 +119,4 @@ make_sample_pdf.py    # generates the bundled sample PDF
 
 [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
 
-PeerReview is free software — you can use, study, share, and modify it under the terms of the AGPL-3.0. Note the network clause (section 13): if you run a modified version as a network service, you must make the corresponding source available to its users. Copyright (C) 2026 PeerReview.
+PairdX.com is free software — you can use, study, share, and modify it under the terms of the AGPL-3.0. Note the network clause (section 13): if you run a modified version as a network service, you must make the corresponding source available to its users. Copyright (C) 2026 PairdX.com.
