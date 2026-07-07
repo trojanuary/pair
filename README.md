@@ -1,6 +1,6 @@
 # Pair Reader — a source-linked AI reading workspace
 
-> Read papers and reports with an AI that stays **pinned to the source**. Every highlight, note, screenshot, and AI answer is anchored to the exact spot in the PDF it came from — so nothing floats free of its evidence.
+> **Not another chat‑with‑your‑PDF.** An AI reading workspace that stays **pinned to the source**: every highlight, note, screenshot, and answer anchors to the exact spot it came from, so nothing floats free of its evidence. Your PDF never leaves your machine, you bring your own model, and your notes are a portable file you own — open‑source and self‑hostable (AGPL).
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
@@ -28,6 +28,24 @@ A connector line ties each note in the side panel to the exact spot it came from
 <div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWZ96P7S_7ZGYWV69FE94PE9G/conn-text.webp" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
 
 <div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWZ96WT0_R5W397MRGK2JWVM5/conn-figure.webp" alt="A note joined by a connector line to a figure captured from the PDF" width="820"></div>
+
+## Why it's different
+
+“Chat with your PDF” is a saturated, commodity category — ChatPDF, NotebookLM, SciSpace, Elicit, Adobe Acrobat AI, and a dozen others all do it. Pair Reader isn't trying to win that race. Its point is the **combination** the mainstream tools don't offer: notes pinned to an exact spot in the PDF, your file staying on your machine, your own model and prompts, an inspectable agent trace, notes as a portable file you keep, and the whole thing open-source and self-hostable.
+
+Any one of these exists somewhere — having them **together** is the wedge. (We're not claiming to be the *only* open-source PDF reader; small self-hostable projects exist. The bet is being a *polished, mainstream* one that's pinned, private, and yours out of the box.)
+
+| | **Pair Reader** | NotebookLM | ChatPDF | Beaver&nbsp;¹ | Readwise |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Notes pin to an exact spot in the PDF | ✅ | — | — | ~ | — |
+| Opens your local file — no full-file upload | ✅ | — | — | ✅ | — |
+| Bring your own model / key | ✅ | — | — | — | ~ |
+| Inspectable agent trace | ✅ | — | — | — | — |
+| Notes are a portable file you own | ✅ | — | — | ~ | ~ |
+| Open-source & self-hostable | ✅ | — | — | — | — |
+| **Price** | **Free** | Free | Freemium | Free | ~$120/yr |
+
+<sub>Compared with the mainstream tools we're most often asked about, to the best of our knowledge as of July 2026 — corrections welcome via a GitHub issue. **~** = partial. **¹ Beaver** is a free Zotero plugin (so it needs Zotero, and pins via Zotero's own annotations) but routes AI through its own cloud and isn't self-hostable. **Readwise Reader** lets you bring your own OpenAI key only (not other providers) and isn't self-hostable; portable-notes support varies by export.</sub>
 
 ## Using the app
 
