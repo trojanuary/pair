@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Vercel serverless function: server-side image generation proxy.
 // Two providers: `openrouter` (default; images via the chat-completions image modality) and
 // `compat` (any OpenAI-compatible /images/generations endpoint — base URL + key from the request).

@@ -4,7 +4,7 @@
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
-![Overview — the reader, a source-linked note, and an AI answer with rendered math](https://pub.hyperagent.com/api/published/pbf01KWWWFHFB_XWBRK6BD1SZ0ZTWE/01-overview.webp)
+<img src="https://pub.hyperagent.com/api/published/pbf01KWWWFHFB_XWBRK6BD1SZ0ZTWE/01-overview.webp" alt="Overview — the reader, a source-linked note, and an AI answer with rendered math" width="760">
 
 ---
 
@@ -34,7 +34,7 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 
 **3. Ask the AI.** In any note, type a question (or just `@ai`) and send. The answer renders with math/code and stays linked to the source; open **“Show the agent’s work”** to see which tools it used.
 
-![A source-linked AI answer with rendered LaTeX](https://pub.hyperagent.com/api/published/pbf01KWWWFMWW_GQX6BK1QQNX57E3Q/02-ai-math-answer.webp)
+<img src="https://pub.hyperagent.com/api/published/pbf01KWWWFMWW_GQX6BK1QQNX57E3Q/02-ai-math-answer.webp" alt="A source-linked AI answer with rendered LaTeX" width="340">
 
 **4. Save / move your notes.** In **Settings → Storage**, optionally choose a folder to auto-save a portable `<doc>.notes.json` next to your PDF, or export/import notes as JSON.
 
@@ -42,7 +42,7 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 
 Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
-![Settings — two providers, recommended OpenRouter](https://pub.hyperagent.com/api/published/pbf01KWWWFRBZ_PW0KH11EF5C9Y15G/04-settings-ai.webp)
+<img src="https://pub.hyperagent.com/api/published/pbf01KWWWFRBZ_PW0KH11EF5C9Y15G/04-settings-ai.webp" alt="Settings — two providers, recommended OpenRouter" width="340">
 
 - **OpenRouter** (recommended) — one key for hundreds of models; powers text, images, and the tool-using agent.
 - **OpenAI-compatible API** — point it at any endpoint (OpenAI, Together, Groq, a local model…) with a base URL + key + text/image models.
@@ -51,7 +51,7 @@ Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
 Every prompt — including the 7 agent tool descriptions — is editable and exportable under **Settings → Templates**:
 
-![Settings — editable prompt templates](https://pub.hyperagent.com/api/published/pbf01KWWWFW9E_5B371PAE209V4Q22/05-settings-templates.webp)
+<img src="https://pub.hyperagent.com/api/published/pbf01KWWWFW9E_5B371PAE209V4Q22/05-settings-templates.webp" alt="Settings — editable prompt templates" width="340">
 
 ---
 
@@ -117,4 +117,6 @@ make_sample_pdf.py    # generates the bundled sample PDF
 
 ## License
 
-[MIT](LICENSE).
+[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+
+PeerReview is free software — you can use, study, share, and modify it under the terms of the AGPL-3.0. Note the network clause (section 13): if you run a modified version as a network service, you must make the corresponding source available to its users. Copyright (C) 2026 PeerReview.
