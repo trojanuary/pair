@@ -1388,6 +1388,13 @@ function plainPreview(t) {
 function fullMsgHTML(m) {
   if (m.type === 'ai_answer') return mdRich(m.text || '');
   if (m.type === 'comment') return commentHTML(m.text || '');
+  if (m.type === 'generated_visual') {
+    let h = `<div class="vis-card cc-vis"><h4>${esc(m.title || 'Visual')}</h4>`;
+    if (m.image) h += `<img src="${m.image}">`;
+    else if (m.ascii) h += `<pre class="ascii">${esc(m.ascii)}</pre>`;
+    if (m.takeaways?.length) h += `<ul class="vis-take">${m.takeaways.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
+    return h + `</div>`;
+  }
   return esc(msgPreviewText(m));
 }
 function compactCard(a) {
