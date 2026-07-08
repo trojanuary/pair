@@ -1383,6 +1383,13 @@ function plainPreview(t) {
   return String(t || '').replace(/`{1,3}/g, '').replace(/[*_#>]/g, '')
     .replace(/^\s*[-•]\s+/gm, '• ').replace(/\s*\n+\s*/g, '  ').trim();
 }
+// Full, formatted render of a message for a "shown on card" preview (bullets/markdown/line breaks
+// preserved) — so a checked AI summary reads in full on the card without expanding the thread.
+function fullMsgHTML(m) {
+  if (m.type === 'ai_answer') return mdRich(m.text || '');
+  if (m.type === 'comment') return commentHTML(m.text || '');
+  return esc(msgPreviewText(m));
+}
 function compactCard(a) {
   // Compact card: number badge inline with the preview, time top-right, then location.
   // Preview = the message(s) the user checked "Show on card" (e.g. the AI answer); if none are
@@ -1391,14 +1398,17 @@ function compactCard(a) {
   const when = timeLabel(m0 ? m0.created_at : a.created_at);
   const badge = a.source_type === 'screenshot' ? 'var(--green)' : 'var(--blue)';
   const shown = (a.messages || []).filter(m => m.showOnCard && msgPreviewText(m).trim());
+  // Checked messages show IN FULL (no 2-line clamp); the default fallback stays a clamped preview.
+  const full = shown.length > 0;
   let items;
-  if (shown.length) items = shown.map(m => ({ m, tag: m.actor === 'ai' ? 'ai' : 'you' }));
+  if (full) items = shown.map(m => ({ m, tag: m.actor === 'ai' ? 'ai' : 'you' }));
   else {
     const first = (a.messages || []).find(m => (m.type === 'comment' || m.type === 'ai_answer') && (m.text || '').trim());
     items = first ? [{ m: first, tag: null }] : [];
   }
   let previews = items.map(({ m, tag }) => {
     const tagHTML = tag === 'ai' ? '<span class="cc-tag ai">AI</span>' : tag === 'you' ? '<span class="cc-tag you">You</span>' : '';
+    if (full) return `<div class="msg cc-full">${tagHTML}${fullMsgHTML(m)}</div>`;
     return `<div class="msg clamp">${tagHTML}${esc(plainPreview(msgPreviewText(m))).replace(/@ai\b/ig, x => `<span class="men">${x}</span>`)}</div>`;
   }).join('');
   if (!previews && a.selected_text) previews = `<div class="msg clamp">${esc(a.selected_text)}</div>`;

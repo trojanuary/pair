@@ -506,6 +506,9 @@ svg{display:block}
 .cc-tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.03em;padding:1px 5px;border-radius:5px;margin-right:6px;vertical-align:1.5px}
 .cc-tag.ai{background:#DCFCE7;color:#059669}
 .cc-tag.you{background:#DBEAFE;color:#2563EB}
+/* Checked "show on card" messages render in full (no 2-line clamp), with markdown/bullets intact. */
+.card.compact .cc-full{white-space:normal;overflow:visible}
+.card.compact .cc-full > .cc-tag{margin-bottom:4px}
 .mact.showtog{opacity:.5}
 .card-h:hover .mact.showtog{opacity:.8}
 .mact.showtog:hover{opacity:1}
