@@ -1343,9 +1343,9 @@ function cardKind(a) {
   return 'hl';
 }
 function compactCard(a) {
-  // compact by default (mockup 2): number badge + type label + time; clamped preview + location.
+  // compact by default (mockup 2): number badge + time; clamped preview + location. (The source-type
+  // label — "Linked text" / "Screenshot" — was dropped: the badge + preview already say enough.)
   const m0 = a.messages[0];
-  const label = srcLabel(a);
   const preview = (a.messages.find(m => m.type === 'comment') || {}).text
     || (a.messages.find(m => m.type === 'ai_answer') || {}).text
     || a.selected_text || '';
@@ -1354,7 +1354,7 @@ function compactCard(a) {
   const wrap = el(`<div class="card compact k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${!a.resolved ? '<span class="unread-dot"></span>' : ''}
     <div class="card-h"><span style="width:22px;height:22px;border-radius:50%;background:${badge};color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto">${a.anchor}</span>
-      <span class="who">${label}</span><span class="when">${when}</span></div>
+      <span class="when">${when}</span></div>
     <div class="card-b">
       ${preview ? `<div class="msg clamp">${esc(preview).replace(/@ai\b/ig, x => `<span class="men">${x}</span>`)}</div>` : ''}
       ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
