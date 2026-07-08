@@ -37,8 +37,8 @@ const ACTORS = {
 };
 const PROVIDER_LABEL = { openrouter: 'OpenRouter', compat: 'OpenAI-compatible' };
 const DEFAULT_MODELS = {
-  openrouter: 'openai/gpt-5.4-mini', openrouterImage: 'google/gemini-3.1-flash-lite-image',
-  compat: 'gpt-5.4-mini', compatImage: 'gpt-image-1',
+  openrouter: 'openai/gpt-5.4', openrouterImage: 'google/gemini-3.1-flash-lite-image',
+  compat: 'gpt-5.4', compatImage: 'gpt-image-1',
 };
 function defaultState() {
   return {
@@ -84,10 +84,12 @@ function migrateState(s) {
     s.settings.models = s.settings.models || {};
     if (!s.settings.models.openrouter) s.settings.models.openrouter = DEFAULT_MODELS.openrouter;
     if (s.settings.models.openrouter === 'google/gemma-4-31b-it:free') s.settings.models.openrouter = DEFAULT_MODELS.openrouter;
+    if (s.settings.models.openrouter === 'openai/gpt-5.4-mini') s.settings.models.openrouter = DEFAULT_MODELS.openrouter;   // 5.4-mini erred too often — bump the old default up to 5.4
     if (!s.settings.models.openrouterImage) s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
     if (s.settings.models.openrouterImage === 'x-ai/grok-imagine-image-quality') s.settings.models.openrouterImage = DEFAULT_MODELS.openrouterImage;
     if (!('compat' in s.settings.keys)) s.settings.keys.compat = '';
     if (!s.settings.models.compat) s.settings.models.compat = DEFAULT_MODELS.compat;
+    if (s.settings.models.compat === 'gpt-5.4-mini') s.settings.models.compat = DEFAULT_MODELS.compat;   // bump the old default up to 5.4
     if (!s.settings.models.compatImage) s.settings.models.compatImage = DEFAULT_MODELS.compatImage;
     if (!s.settings.compatBaseUrl) s.settings.compatBaseUrl = 'https://api.openai.com/v1';
     if (!s.settings._orDefaulted) { s.settings.provider = 'openrouter'; s.settings._orDefaulted = true; }
