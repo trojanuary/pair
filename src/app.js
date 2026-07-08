@@ -262,6 +262,51 @@ async function attachNotesFile(obj, fileName, preferIds) {
   const n = applyNotesJSON(obj, doc.id, { merge: true });
   if (n) toast(n + ' note' + (n === 1 ? '' : 's') + ' attached to “' + doc.name + '”.');
 }
+/* ---------- open a whole folder (so a PDF and its same-folder .notes.json load together) ----------
+   A file <input> only exposes the chosen files' bytes, never their folder — so it physically cannot
+   read a sibling ".notes.json". The File System Access directory API can: pick (or drag) the folder,
+   and we enumerate the PDFs and their notes ourselves, then hand the flat list to openFiles() which
+   already pairs them by SHA / name. */
+async function filesFromDirectoryHandle(dir, depth = 1) {
+  const out = [];
+  try {
+    for await (const handle of dir.values()) {
+      const name = handle.name || '';
+      if (handle.kind === 'file' && /\.(pdf|json)$/i.test(name)) { try { out.push(await handle.getFile()); } catch (e) {} }
+      else if (handle.kind === 'directory' && depth > 0) { out.push(...await filesFromDirectoryHandle(handle, depth - 1)); }
+    }
+  } catch (e) {}
+  return out;
+}
+// Traverse dropped folder entries (webkitGetAsEntry) into a flat File[]. Entries must be captured
+// synchronously in the drop handler before any await, or the DataTransfer is emptied.
+function fileFromEntry(entry) { return new Promise(res => { entry.file(f => res(f), () => res(null)); }); }
+async function filesFromEntry(entry, depth = 1) {
+  if (!entry) return [];
+  if (entry.isFile) { const f = await fileFromEntry(entry); return f ? [f] : []; }
+  if (entry.isDirectory && depth >= 0) {
+    const reader = entry.createReader();
+    const readBatch = () => new Promise(res => reader.readEntries(res, () => res([])));
+    let all = [], batch; do { batch = await readBatch(); all = all.concat(batch); } while (batch.length);
+    return (await Promise.all(all.map(e => filesFromEntry(e, depth - 1)))).flat();
+  }
+  return [];
+}
+async function openFolder() {
+  if (!fsSupported()) { toast('Opening a folder needs Chrome or Edge. Otherwise, select the PDF and its .notes.json together.', 'err'); return; }
+  let dir;
+  try { dir = await window.showDirectoryPicker({ id: 'srw-notes', mode: 'readwrite', startIn: 'documents' }); }
+  catch (e) { if (e && e.name !== 'AbortError') toast('Could not open that folder: ' + (e.message || e), 'err'); return; }
+  const files = await filesFromDirectoryHandle(dir);
+  const pdfs = files.filter(f => /\.pdf$/i.test(f.name));
+  if (!pdfs.length) { toast('No PDFs found in “' + dir.name + '”.', 'err'); return; }
+  if (pdfs.length > 8 && !(await confirmDialog('Open all ' + pdfs.length + ' PDFs from “' + dir.name + '” and attach their notes?', { okLabel: 'Open all' }))) return;
+  // Remember the folder: notes now auto-save here and reload next time this paper is opened.
+  try { idbPut('dir:notes', dir); state.settings.storage = { mode: 'folder', folderName: dir.name }; save(); } catch (e) {}
+  await openFiles(files);
+  updateStorage();
+  toast('Opened “' + dir.name + '” — ' + pdfs.length + ' PDF' + (pdfs.length === 1 ? '' : 's') + ' with matching notes.');
+}
 function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
 function trashDoc(id) {   // soft delete -> Trash view
   const d = state.docs.find(x => x.id === id); if (!d || d.kind === 'sample') return;
@@ -2285,8 +2330,12 @@ function wire() {
   $('#btnSettings').onclick = () => openSettings();
   $('#newBtn').onclick = () => $('#fileInput').click();
   $('#fileInput').onchange = async e => { const files = [...e.target.files]; e.target.value = ''; try { await openFiles(files); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
-  // Drag-and-drop a PDF (and, optionally, its ".notes.json") anywhere on the reader to open them
-  // together — the one gesture that makes a paper and its notes travel as a pair in any browser.
+  // "Open folder" reads a PDF together with its same-folder .notes.json — the only way a browser can
+  // pick up a sibling notes file (a plain file picker never sees the folder). Chromium only; hidden
+  // elsewhere, where multi-select / drag-both is the path.
+  { const ofb = $('#openFolderBtn'); if (ofb) { if (fsSupported()) ofb.onclick = () => openFolder(); else ofb.style.display = 'none'; } }
+  // Drag-and-drop onto the reader: a PDF and its ".notes.json" together, or the whole folder — the
+  // one gesture that makes a paper and its notes travel as a pair.
   if (!READONLY) {
     const rd = $('#reader');
     if (rd && !rd._dropWired) {
@@ -2296,7 +2345,12 @@ function wire() {
       ['dragleave', 'dragend'].forEach(ev => rd.addEventListener(ev, e => { stop(e); rd.classList.remove('drop-hint'); }));
       rd.addEventListener('drop', async e => {
         stop(e); rd.classList.remove('drop-hint');
-        const files = e.dataTransfer && e.dataTransfer.files ? [...e.dataTransfer.files] : [];
+        // Capture directory entries synchronously (the DataTransfer empties after the first await).
+        const items = e.dataTransfer && e.dataTransfer.items ? [...e.dataTransfer.items] : [];
+        const entries = items.map(it => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
+        let files;
+        if (entries.some(en => en.isDirectory)) files = (await Promise.all(entries.map(en => filesFromEntry(en)))).flat();
+        else files = e.dataTransfer && e.dataTransfer.files ? [...e.dataTransfer.files] : [];
         if (files.length) { try { await openFiles(files); } catch (err) { toast('Could not open dropped files: ' + (err && err.message || err), 'err'); } }
       });
     }
@@ -2476,7 +2530,7 @@ function initBundleState() {
 // Strip the read-only viewer down to reading: hide every editing affordance, show a made-with banner.
 function applyReadOnly() {
   document.body.classList.add('readonly');
-  ['newBtn', 'fileInput', 'toolHi', 'toolText', 'toolComment', 'toolShot', 'composer',
+  ['newBtn', 'fileInput', 'openFolderBtn', 'toolHi', 'toolText', 'toolComment', 'toolShot', 'composer',
    'btnSaveNotes', 'btnImportNotes', 'btnClearNotes', 'btnShareHtml', 'btnSettings'
   ].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
   $$('.sb-storage').forEach(e => e.style.display = 'none');
