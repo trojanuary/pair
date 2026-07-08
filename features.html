@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PairedX — Features</title>
+<meta name="description" content="Every feature of PairedX, the source-linked AI reading workspace — at a glance.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%232555F5'/%3E%3Ctext x='12' y='17' font-size='13' font-family='Georgia,serif' font-weight='700' fill='white' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F3EA; --card:#FDFBF6; --ink:#191510; --ink-2:#6E655A; --faint:#9A9082;
+  --line:#E7DECD; --blue:#2555F5; --blue-2:#1B44D6; --blue-wash:#E9EEFE; --green:#0E9F6E;
+  --serif:'Fraunces',Georgia,serif; --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --sh-sm:0 1px 2px rgba(30,24,14,.05); --sh:0 18px 44px -20px rgba(46,36,20,.28); --radius:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+svg{display:block}
+
+/* header */
+header{position:sticky;top:0;z-index:50;background:rgba(247,243,234,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+header .wrap{display:flex;align-items:center;gap:14px;height:62px}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-weight:700;font-size:20px;color:var(--ink)}
+.brand .logo{width:26px;height:26px;border-radius:7px;background:var(--blue);color:#fff;display:grid;place-items:center;font-size:15px}
+header nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-weight:600;font-size:14.5px}
+header nav a{color:var(--ink-2)}
+header .enter{background:var(--blue);color:#fff;padding:8px 16px;border-radius:10px}
+header .enter:hover{background:var(--blue-2);text-decoration:none}
+@media(max-width:640px){header nav a.hide-sm{display:none}}
+
+/* hero */
+.hero{text-align:center;padding:64px 0 26px}
+.eyebrow{color:var(--blue);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:12px}
+.hero h1{font-family:var(--serif);font-weight:600;font-size:clamp(34px,5vw,54px);line-height:1.05;margin:12px 0 10px}
+.hero p{color:var(--ink-2);font-size:18px;max-width:640px;margin:0 auto}
+.hero .tocbar{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:22px}
+.hero .tocbar a{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 14px;font-weight:600;font-size:13px;color:var(--ink)}
+.hero .tocbar a:hover{border-color:var(--blue);color:var(--blue);text-decoration:none}
+
+/* annotated hero image */
+.annot{max-width:1000px;margin:34px auto 0;position:relative}
+.annot img{width:100%;border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);display:block}
+.dot{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:#3E9266;color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center;border:2.5px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.28)}
+/* soft-green gradient across the five callouts */
+.annot .dot:nth-of-type(1),.legend span:nth-child(1) b{background:#6BB48C}
+.annot .dot:nth-of-type(2),.legend span:nth-child(2) b{background:#52A279}
+.annot .dot:nth-of-type(3),.legend span:nth-child(3) b{background:#3E9266}
+.annot .dot:nth-of-type(4),.legend span:nth-child(4) b{background:#2F8155}
+.annot .dot:nth-of-type(5),.legend span:nth-child(5) b{background:#246E47}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin:16px auto 0;max-width:900px;color:var(--ink-2);font-size:13.5px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.legend b{width:20px;height:20px;border-radius:50%;background:#3E9266;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;flex:0 0 auto}
+
+/* feature rows */
+.feat{padding:30px 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;padding:34px 0;border-top:1px solid var(--line)}
+.row.rev .copy{order:2}
+.copy h2{font-family:var(--serif);font-weight:600;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:8px 0 8px}
+.copy .lead{color:var(--ink-2);font-size:16.5px;margin:0 0 14px;max-width:460px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chips span{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink)}
+.shot{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);overflow:hidden;line-height:0}
+.shot img{width:100%;display:block}
+.shot.tall{max-height:520px;overflow:hidden;position:relative}
+.shot.tall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(to bottom,transparent,var(--card))}
+.shot.pad{padding:14px;background:var(--paper);border:1px solid var(--line)}
+.shot.pad img{border-radius:10px;border:1px solid var(--line)}
+
+/* everything-else grid */
+.all{background:var(--card);border-top:1px solid var(--line)}
+.all .wrap{padding:52px 24px 60px}
+.all h2{font-family:var(--serif);font-weight:600;font-size:30px;text-align:center;margin:0 0 6px}
+.all .sub{text-align:center;color:var(--ink-2);margin:0 0 30px}
+.cols{columns:3;column-gap:34px}
+@media(max-width:900px){.cols{columns:2}}
+@media(max-width:560px){.cols{columns:1}}
+.cat{break-inside:avoid;margin-bottom:22px}
+.cat h3{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);margin:0 0 8px}
+.cat ul{list-style:none;margin:0;padding:0}
+.cat li{font-size:14px;color:var(--ink);padding:3px 0 3px 16px;position:relative;line-height:1.35}
+.cat li::before{content:"";position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;background:var(--blue)}
+.cat li b{font-weight:600}
+.cat li em{font-style:normal;color:var(--ink-2)}
+
+/* cta + footer */
+.cta{text-align:center;padding:58px 24px}
+.cta h2{font-family:var(--serif);font-weight:600;font-size:32px;margin:0 0 16px}
+.btn{display:inline-block;background:var(--blue);color:#fff;font-weight:700;padding:12px 26px;border-radius:12px;font-size:16px}
+.btn:hover{background:var(--blue-2);text-decoration:none}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);margin-left:8px}
+footer{border-top:1px solid var(--line);color:var(--ink-2);font-size:13.5px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:14px;align-items:center;height:auto;padding:22px 24px}
+footer nav{margin-left:auto;display:flex;gap:18px}
+@media(max-width:820px){.row,.row.rev .copy{grid-template-columns:1fr;order:0}.row{gap:22px}}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <a class="brand" href="/"><span class="logo">P</span> PairedX</a>
+  <nav>
+    <a class="hide-sm" href="/#features">Home</a>
+    <a class="hide-sm" href="https://github.com/trojanuary/pair">GitHub</a>
+    <a class="enter" href="/app">Open app</a>
+  </nav>
+</div></header>
+
+<section class="hero"><div class="wrap">
+  <div class="eyebrow">Everything it does</div>
+  <h1>The whole feature set,<br>at a glance.</h1>
+  <p>A source-linked AI reading workspace — every highlight, note, screenshot, and answer stays pinned to the exact spot it came from. Private, portable, yours.</p>
+  <div class="tocbar">
+    <a href="#annotate">Annotate</a><a href="#linked">Source-linked</a><a href="#ai">Ask AI</a><a href="#agent">Agent</a><a href="#notes">Notes</a><a href="#library">Library</a><a href="#share">Share &amp; export</a><a href="#byo">Your model</a><a href="#all">Everything else</a>
+  </div>
+
+  <div class="annot">
+    <img src="docs/screenshots/01-workspace.jpg" alt="The PairedX workspace">
+    <div class="dot" style="left:8%;top:34%">1</div>
+    <div class="dot" style="left:50%;top:3.5%">2</div>
+    <div class="dot" style="left:34%;top:52%">3</div>
+    <div class="dot" style="left:71.5%;top:40%">4</div>
+    <div class="dot" style="left:88%;top:95%">5</div>
+  </div>
+  <div class="legend">
+    <span><b>1</b> Library — your documents</span>
+    <span><b>2</b> Tools — highlight, comment, screenshot</span>
+    <span><b>3</b> The paper, with highlights &amp; numbered pins</span>
+    <span><b>4</b> Source-linked notes &amp; AI answers</span>
+    <span><b>5</b> Ask about the whole document</span>
+  </div>
+</div></section>
+
+<section class="feat"><div class="wrap">
+
+  <div class="row" id="annotate">
+    <div class="copy">
+      <div class="eyebrow">Read &amp; annotate</div>
+      <h2>Highlight text or box a figure.</h2>
+      <p class="lead">Select text for a quick <b>Highlight · Note · Ask&nbsp;AI</b> popover, drop a point comment anywhere, or screenshot a figure/equation to ask about it directly.</p>
+      <div class="chips"><span>Highlight</span><span>Comment</span><span>Screenshot a region</span><span>Continuous or single page</span><span>Find in document</span></div>
+    </div>
+    <div class="shot pad"><img src="docs/screenshots/03-toolbar.png" alt="The reader toolbar: select, highlight, comment, screenshot tools"></div>
+  </div>
+
+  <div class="row rev" id="linked">
+    <div class="copy">
+      <div class="eyebrow">Source-linked</div>
+      <h2>Every note ties back to its exact spot.</h2>
+      <p class="lead">A connector line joins each card in the panel to the highlighted passage or captured figure it came from — click a note and the reader jumps right to it.</p>
+      <div class="chips"><span>Connector line</span><span>Numbered pins</span><span>Jump to source</span></div>
+    </div>
+    <div class="shot"><img src="docs/screenshots/04-connector.jpg" alt="A connector line joining a note to its highlighted passage on the page"></div>
+  </div>
+
+  <div class="row" id="ai">
+    <div class="copy">
+      <div class="eyebrow">Ask AI</div>
+      <h2>Answers pinned to the source.</h2>
+      <p class="lead">Ask about any selection; the answer is saved as a note linked to that passage, with rendered <b>math &amp; code</b> and a <b>provenance</b> panel showing exactly what it used.</p>
+      <div class="chips"><span>Source-linked answers</span><span>LaTeX &amp; code</span><span>@ai mentions</span><span>Provenance chips</span></div>
+    </div>
+    <div class="shot tall"><img src="docs/screenshots/05-ai-answer.jpg" alt="An AI answer with rendered content and a provenance panel"></div>
+  </div>
+
+  <div class="row rev" id="agent">
+    <div class="copy">
+      <div class="eyebrow">Inspectable agent</div>
+      <h2>Watch every step it took.</h2>
+      <p class="lead">For deeper questions the AI reads other pages, searches the document, scans the outline, or searches the web — and you can open <b>“the agent's work”</b> to see each call.</p>
+      <div class="chips"><span>Read page</span><span>Search document</span><span>Outline</span><span>Web search</span><span>Create visual</span></div>
+    </div>
+    <div class="shot tall"><img src="docs/screenshots/06-agent-trace.jpg" alt="The agent trace showing each tool call the AI made"></div>
+  </div>
+
+  <div class="row" id="figures">
+    <div class="copy">
+      <div class="eyebrow">Figures &amp; visuals</div>
+      <h2>Capture a figure — or generate one.</h2>
+      <p class="lead">Screenshot any figure or equation and ask about it. The AI can also <b>generate an image</b> or a text/ASCII diagram to explain a concept, grounded in the paper.</p>
+      <div class="chips"><span>Figure capture</span><span>Generated images</span><span>ASCII diagrams</span><span>Takeaways</span></div>
+    </div>
+    <div class="shot tall"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a captured figure, with an AI answer about it"></div>
+  </div>
+
+  <div class="row rev" id="notes">
+    <div class="copy">
+      <div class="eyebrow">Notes your way</div>
+      <h2>Show what matters on the card.</h2>
+      <p class="lead">Check any message — say the AI's summary instead of your question — to show it <b>in full</b> on the collapsed card. Plus tags, resolve, filters, search, and sort.</p>
+      <div class="chips"><span>Show on card</span><span>Tags</span><span>Resolve</span><span>Filter &amp; search</span><span>Sort by time / page</span></div>
+    </div>
+    <div class="shot tall"><img src="docs/screenshots/feat-show-on-card.jpg" alt="A collapsed card showing the full AI answer, tagged AI"></div>
+  </div>
+
+  <div class="row" id="library">
+    <div class="copy">
+      <div class="eyebrow">Your library</div>
+      <h2>A real multi-document library.</h2>
+      <p class="lead">Home, Recents, Starred, and Trash. Star, trash, restore, or delete — the same PDF opened again is recognized by content (SHA-256) so its notes just re-attach.</p>
+      <div class="chips"><span>Home / Recents / Starred / Trash</span><span>Content-addressed</span><span>Notes auto-attach</span></div>
+    </div>
+    <div class="shot tall"><img src="docs/screenshots/feat-library.jpg" alt="The library sidebar with documents and star/trash actions"></div>
+  </div>
+
+  <div class="row rev" id="share">
+    <div class="copy">
+      <div class="eyebrow">Share &amp; export</div>
+      <h2>Send a whole annotated paper.</h2>
+      <p class="lead"><b>Share as HTML</b> bundles the PDF + notes into one self-contained file that opens anywhere (read-only) and re-opens in PairedX to keep editing. Or export a clean annotations <b>PDF</b>.</p>
+      <div class="chips"><span>Single-file HTML</span><span>Round-trip editing</span><span>Export to PDF</span><span>Save / import notes JSON</span></div>
+    </div>
+    <div class="shot"><img src="docs/screenshots/feat-export-pdf.jpg" alt="The Export annotations screen with include options and a live preview"></div>
+  </div>
+
+  <div class="row" id="byo">
+    <div class="copy">
+      <div class="eyebrow">Bring your own model</div>
+      <h2>Your model, your key.</h2>
+      <p class="lead">OpenRouter (default) or any OpenAI-compatible endpoint. Your key stays <b>in your browser</b> and is sent per-request — never saved on a server. Toggle visuals and web search.</p>
+      <div class="chips"><span>OpenRouter</span><span>OpenAI-compatible</span><span>BYO key</span><span>Tool toggles</span></div>
+    </div>
+    <div class="shot tall pad"><img src="docs/screenshots/feat-settings-ai.jpg" alt="Settings — AI &amp; Tools: providers, models, and keys"></div>
+  </div>
+
+  <div class="row rev" id="templates">
+    <div class="copy">
+      <div class="eyebrow">Editable prompts</div>
+      <h2>Tune every prompt.</h2>
+      <p class="lead">Edit the system prompts — even the agent's tool descriptions — under <b>Settings&nbsp;→&nbsp;Templates</b>, then export or import your whole set as JSON.</p>
+      <div class="chips"><span>System prompts</span><span>Tool descriptions</span><span>Export / import</span><span>Reset to default</span></div>
+    </div>
+    <div class="shot tall pad"><img src="docs/screenshots/settings-templates.jpg" alt="Settings — Templates: editable system prompts and tool descriptions"></div>
+  </div>
+
+  <div class="row" id="storage">
+    <div class="copy">
+      <div class="eyebrow">Portable &amp; private</div>
+      <h2>Notes you own, on your machine.</h2>
+      <p class="lead">Everything stays in your browser. Optionally sync a portable <b>.notes.json</b> to a folder (Chrome/Edge) so notes travel with your PDFs — great for Drive and other devices.</p>
+      <div class="chips"><span>Browser-only by default</span><span>Folder sync</span><span>No cloud upload</span><span>No login</span></div>
+    </div>
+    <div class="shot pad"><img src="docs/screenshots/feat-settings-storage.jpg" alt="Settings — Storage: browser-only notes with optional folder sync"></div>
+  </div>
+
+</div></section>
+
+<section class="all" id="all"><div class="wrap">
+  <h2>And everything else</h2>
+  <p class="sub">The full list, grouped — every one of these ships today.</p>
+  <div class="cols">
+
+    <div class="cat"><h3>Reading</h3><ul>
+      <li>Single-page &amp; continuous scroll</li>
+      <li>Zoom, page jump, page thumbnails</li>
+      <li>Find in document <em>(⌘/Ctrl-F)</em></li>
+      <li>Collapse / resize panels</li>
+    </ul></div>
+
+    <div class="cat"><h3>Annotating</h3><ul>
+      <li>Highlight text</li>
+      <li>Point comments</li>
+      <li>Screenshot a region</li>
+      <li>Selection popover: Highlight · Note · Ask&nbsp;AI</li>
+      <li>Numbered pins in reading order</li>
+    </ul></div>
+
+    <div class="cat"><h3>AI &amp; agent</h3><ul>
+      <li>Ask about a selection or the whole doc</li>
+      <li>Tool-using agent (ReAct)</li>
+      <li>Read page · search · outline · full read</li>
+      <li>Web search · create visual</li>
+      <li>Streaming answers &amp; agent trace</li>
+      <li>Generated images &amp; ASCII diagrams</li>
+      <li>LaTeX, Markdown &amp; code rendering</li>
+    </ul></div>
+
+    <div class="cat"><h3>Notes</h3><ul>
+      <li>Compact ↔ expanded cards</li>
+      <li>“Show on card” full-length preview</li>
+      <li>Reply / follow-up in-thread</li>
+      <li>Auto &amp; manual tags</li>
+      <li>Resolve, copy, edit, delete</li>
+      <li>Edit question &amp; re-ask AI</li>
+    </ul></div>
+
+    <div class="cat"><h3>Notes panel</h3><ul>
+      <li>Filters: all · unresolved · screenshots · AI · questions</li>
+      <li>Search notes</li>
+      <li>Sort by time or page</li>
+      <li>Auto-scroll to active note</li>
+    </ul></div>
+
+    <div class="cat"><h3>Library</h3><ul>
+      <li>Home · Recents · Starred · Trash</li>
+      <li>Star · trash · restore · delete</li>
+      <li>Remove the bundled sample</li>
+      <li>SHA-256 content addressing</li>
+      <li>Storage meter</li>
+    </ul></div>
+
+    <div class="cat"><h3>Open &amp; attach</h3><ul>
+      <li>Open a PDF, notes, or shared .html</li>
+      <li>Multi-file &amp; drag-and-drop</li>
+      <li>Notes auto-attach by content</li>
+      <li>“Found notes for this PDF” prompt</li>
+    </ul></div>
+
+    <div class="cat"><h3>Share &amp; export</h3><ul>
+      <li>Share as self-contained .html</li>
+      <li>Read-only viewer + made-with banner</li>
+      <li>Re-open shared file to keep editing</li>
+      <li>Export annotations to PDF</li>
+      <li>Save / import notes JSON</li>
+    </ul></div>
+
+    <div class="cat"><h3>Model &amp; prompts</h3><ul>
+      <li>OpenRouter or OpenAI-compatible</li>
+      <li>Bring your own key (browser-only)</li>
+      <li>Pick text &amp; image models</li>
+      <li>Editable prompt templates</li>
+      <li>Editable agent tool descriptions</li>
+      <li>Export / import / reset prompts</li>
+    </ul></div>
+
+    <div class="cat"><h3>Storage &amp; privacy</h3><ul>
+      <li>Browser-only (IndexedDB + localStorage)</li>
+      <li>Optional folder sync (File System Access)</li>
+      <li>No cloud upload of your PDF</li>
+      <li>No login, no tracking cookies</li>
+    </ul></div>
+
+    <div class="cat"><h3>Your identity</h3><ul>
+      <li>Set your name &amp; initials</li>
+      <li>Toggle visuals / web search</li>
+    </ul></div>
+
+    <div class="cat"><h3>Open &amp; free</h3><ul>
+      <li>AGPL-3.0, self-hostable</li>
+      <li>Static frontend + serverless AI proxy</li>
+      <li>One-click Vercel deploy</li>
+    </ul></div>
+
+  </div>
+</div></section>
+
+<section class="cta"><div class="wrap">
+  <h2>Try it — no signup, no install.</h2>
+  <a class="btn" href="/app">Open the app</a><a class="btn ghost" href="https://github.com/trojanuary/pair">View on GitHub</a>
+</div></section>
+
+<footer><div class="wrap">
+  <span>© 2026 PairedX.com · AGPL-3.0</span>
+  <nav><a href="/#features">Home</a><a href="/app">App</a><a href="https://github.com/trojanuary/pair">GitHub</a><a href="/#privacy">Privacy</a></nav>
+</div></footer>
+
+</body>
+</html>

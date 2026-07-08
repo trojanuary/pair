@@ -2,7 +2,7 @@
 
 > **Not another chat‑with‑your‑PDF.** An AI reading workspace that stays **pinned to the source**: every highlight, note, screenshot, and answer anchors to the exact spot it came from, so nothing floats free of its evidence. Your PDF never leaves your machine, you bring your own model, and your notes are a portable file you own — open‑source and self‑hostable (AGPL).
 
-**▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
+**▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF. · **[See every feature →](https://pairedx.com/features.html)**
 
 <div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></div>
 
@@ -16,6 +16,8 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 - **A tool-using AI agent** — for questions it needs more context for, the AI can read other pages, search the whole document, pull the outline, and generate diagrams/images — you can watch every step under *“Show the agent’s work.”*
 - **Renders math & code** — LaTeX (`\( … \)`, `\[ … \]`, `$$ … $$`) is typeset with MathJax; fenced code blocks render as code.
 - **Screenshots of figures** — box any figure/equation and ask about it directly.
+- **Share a whole annotated paper** — export the document + notes as one self-contained `.html` that opens anywhere (read-only) and re-opens in PairedX to keep editing.
+- **Notes re-attach by content** — a PDF is identified by the SHA-256 of its bytes, so the same paper opened under a different name, folder, or machine picks its notes back up automatically.
 - **Continuous or single-page** reading, with find-in-document, filters, and tags.
 - **Bring your own model** — OpenRouter (default) or any OpenAI-compatible endpoint. Your key is stored only in your browser.
 - **Portable storage** — notes stay in the browser and can auto-save to a folder as `<doc>.notes.json` (Chrome/Edge), so they travel with the PDF (great for Drive folders and other machines). Export/Import works in any browser.
@@ -25,9 +27,9 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 
 A connector line ties each note in the side panel to the exact spot it came from — a **highlighted passage** or a **captured figure** — so you can always trace a claim back to the page.
 
-<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWZ96P7S_7ZGYWV69FE94PE9G/conn-text.webp" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
+<div align="center"><img src="docs/screenshots/04-connector.jpg" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
 
-<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWZ96WT0_R5W397MRGK2JWVM5/conn-figure.webp" alt="A note joined by a connector line to a figure captured from the PDF" width="820"></div>
+<div align="center"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a figure captured out of the PDF, with an AI answer about it" width="820"></div>
 
 ## Why it's different
 
@@ -60,7 +62,7 @@ Any one of these exists somewhere — having them **together** is the wedge. (We
 
 **3. Ask the AI.** In any note, type a question (or just `@ai`) and send. The answer renders with math/code and stays linked to the source; open **“Show the agent’s work”** to see which tools it used.
 
-<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWXBFPEJ_0F5AWE52VVH518MM/02-ai-math-answer.webp" alt="A source-linked AI answer with rendered LaTeX" width="360"></div>
+<div align="center"><img src="docs/screenshots/05-ai-answer.jpg" alt="A source-linked AI answer with rendered LaTeX and a provenance panel" width="420"></div>
 
 **4. Save / move your notes.** In **Settings → Storage**, optionally choose a folder to auto-save a portable `<doc>.notes.json` next to your PDF, or export/import notes as JSON.
 
@@ -68,7 +70,7 @@ Any one of these exists somewhere — having them **together** is the wedge. (We
 
 Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
-<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWXBFS40_GZYWNYBKMNYGFQRD/04-settings-ai.webp" alt="Settings — two providers, recommended OpenRouter" width="360"></div>
+<div align="center"><img src="docs/screenshots/feat-settings-ai.jpg" alt="Settings — two providers, recommended OpenRouter" width="420"></div>
 
 - **OpenRouter** (recommended) — one key for hundreds of models; powers text, images, and the tool-using agent.
 - **OpenAI-compatible API** — point it at any endpoint (OpenAI, Together, Groq, a local model…) with a base URL + key + text/image models.
@@ -77,7 +79,7 @@ Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
 Every prompt — including the 7 agent tool descriptions — is editable and exportable under **Settings → Templates**:
 
-<div align="center"><img src="https://pub.hyperagent.com/api/published/pbf01KWXBFWH4_0JPX0HMM2D69VQ5S/05-settings-templates.webp" alt="Settings — editable prompt templates" width="360"></div>
+<div align="center"><img src="docs/screenshots/settings-templates.jpg" alt="Settings — editable prompt templates" width="420"></div>
 
 ---
 
