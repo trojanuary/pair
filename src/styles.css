@@ -539,3 +539,13 @@ details.pt-item .pt-body{padding:0 12px 12px}
 .pt-actions-row{display:flex;justify-content:flex-end;margin:2px 0 6px}
 .pt-sec{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
 
+
+/* ---------- drag-and-drop a PDF (+ its .notes.json) onto the reader ---------- */
+#reader.drop-hint{outline:2.5px dashed var(--violet, #7c3aed);outline-offset:-10px;background:var(--violet-weak, rgba(124,58,237,.06))}
+#reader.drop-hint::after{content:"Drop a PDF — add its .notes.json to load them together";position:absolute;left:50%;top:18px;transform:translateX(-50%);z-index:40;background:#0B0F19;color:#fff;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:99px;box-shadow:0 6px 20px rgba(0,0,0,.28);pointer-events:none}
+
+/* ---------- read-only shared file (single-file annotated paper) ---------- */
+body.readonly #roBanner{position:fixed;left:0;right:0;bottom:0;z-index:80;background:#0B0F19;color:#cbd5e1;font-size:12.5px;text-align:center;padding:7px 12px;letter-spacing:.01em}
+body.readonly #roBanner a{color:#C4B5FD;font-weight:700;text-decoration:none}
+body.readonly #roBanner a:hover{text-decoration:underline}
+body.readonly #rdScroll{padding-bottom:44px}

@@ -26,6 +26,10 @@ function toast(msg, kind) {
 const LS = 'srw_state_v1';
 const SAMPLE_DOC_NAME = 'NIPS-2017-attention-is-all-you-need-Paper.pdf';
 const SEED_VERSION = 2;
+/* Self-contained share file: a single .html carrying one document + its notes. When present,
+   the app boots into a read-only viewer of that embedded paper (see boot()/initBundleState). */
+const PAIR_BUNDLE = (typeof window !== 'undefined' && window.__PAIR_BUNDLE__) || null;
+const READONLY = !!(PAIR_BUNDLE && PAIR_BUNDLE.readOnly);
 const ACTORS = {
   you:   { name: 'You',            initials: 'YO', color: '#2563EB', type: 'human' },
   sara:  { name: 'Sara Davis',     initials: 'SD', color: '#059669', type: 'human' },
@@ -128,6 +132,7 @@ async function rehydrateAssets() {
 }
 let saveT;
 function save() {
+  if (READONLY) return;   // a shared read-only file never mutates storage
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     try {
@@ -153,6 +158,16 @@ const pageTextCache = {};               // pageNum -> {text, items, viewport}
 let rendering = false, renderQueued = null;
 
 function b64ToBytes(b64) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
+function bytesToB64(bytes) { let bin = ''; const CH = 0x8000; for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH)); return btoa(bin); }
+// Content identity of a PDF: the SHA-256 of its bytes. Stable across filename, folder, machine,
+// and Drive copy — so notes re-attach by content, and the same paper never duplicates.
+async function sha256Hex(bytes) {
+  try {
+    const view = (bytes instanceof Uint8Array) ? bytes : new Uint8Array(bytes);
+    const h = await crypto.subtle.digest('SHA-256', view);
+    return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) { return null; }   // crypto.subtle needs a secure context; degrade gracefully
+}
 
 /* ---------- documents (real multi-doc library) ----------
    Sample PDF ships inline; user-opened PDFs persist as bytes in IndexedDB (key `pdf:<id>`)
@@ -163,6 +178,7 @@ function inActiveDoc(a) { return docIdOf(a) === state.ui.activeDoc; }
 function activeDoc() { return state.docs.find(d => d.id === state.ui.activeDoc) || state.docs[0]; }
 async function loadDocBytes(id) {
   const doc = state.docs.find(d => d.id === id); if (!doc) return null;
+  if (doc.kind === 'bundle') return PAIR_BUNDLE ? b64ToBytes(PAIR_BUNDLE.pdfB64) : null;
   if (doc.kind === 'sample') return b64ToBytes(window.SAMPLE_PDF_B64);
   if (!_docBytes[id]) { const v = await idbGet('pdf:' + id); if (v) _docBytes[id] = (v instanceof Uint8Array) ? v : new Uint8Array(v); }
   return _docBytes[id] ? _docBytes[id].slice() : null;   // hand PDF.js a copy so the cache can't be detached
@@ -181,20 +197,70 @@ async function switchDoc(id) {
   setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 500);
 }
 async function openPdfFile(f) {
-  if (!f) return;
+  if (!f) return null;
   // Grab folder access now, while the file-open click still counts as a user gesture, so we can
   // auto-offer matching notes even on a fresh session (re-granting needs a gesture).
   let noteDir = null;
   if (storageCfg().mode === 'folder') { try { noteDir = await notesDirHandle(true); } catch (e) {} }
   const buf = new Uint8Array(await f.arrayBuffer());
-  const id = uid('doc'), name = f.name || 'Document.pdf';
+  const name = f.name || 'Document.pdf';
+  const sha = await sha256Hex(buf);
+  // Content addressing: if this exact PDF (by bytes) is already in the library — regardless of its
+  // filename or which folder/machine it came from — reopen that entry instead of duplicating, so
+  // its notes come with it automatically.
+  const dup = sha && state.docs.find(d => d.sha === sha && !d.trashed);
+  if (dup) {
+    if (!_docBytes[dup.id]) { _docBytes[dup.id] = buf; idbPut('pdf:' + dup.id, buf); }  // refresh bytes if they were evicted
+    state.ui.libView = 'home'; save();
+    await switchDoc(dup.id);
+    updateStorage();
+    toast('Reopened ' + dup.name + ' — same paper, your notes are here.');
+    maybeOfferFolderNotes(dup.id, noteDir);
+    return dup.id;
+  }
+  const id = uid('doc');
   _docBytes[id] = buf; idbPut('pdf:' + id, buf);
-  state.docs.push({ id, name, kind: 'user', addedAt: nowISO(), lastOpened: nowISO() });
+  state.docs.push({ id, name, sha, kind: 'user', addedAt: nowISO(), lastOpened: nowISO() });
   state.ui.libView = 'home'; save();
   await switchDoc(id);
   updateStorage();
   toast('Opened ' + name + ' — highlight text or capture a figure to start.');
   maybeOfferFolderNotes(id, noteDir);
+  return id;
+}
+// Open a mix of files in one gesture — PDFs plus their ".notes.json" sidecars. Each PDF opens (or
+// re-attaches by content); each notes file is merged into the document it belongs to, matched by
+// SHA-256 first, then "opened alongside", then filename. This is what makes a paper and its notes
+// travel together across a plain file picker or a drag-and-drop.
+async function openFiles(files) {
+  files = [...(files || [])].filter(Boolean);
+  if (!files.length) return;
+  const isJson = f => /\.json$/i.test(f.name) || f.type === 'application/json';
+  const isPdf = f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+  const pdfs = files.filter(isPdf);
+  const notes = files.filter(f => isJson(f) && !isPdf(f));
+  const openedIds = [];
+  for (const f of pdfs) { try { const id = await openPdfFile(f); if (id) openedIds.push(id); } catch (e) { toast('Could not open ' + f.name + ': ' + (e && e.message || e), 'err'); } }
+  for (const nf of notes) {
+    let obj; try { obj = JSON.parse(await nf.text()); } catch (e) { toast('Could not read ' + nf.name + ' — not valid JSON.', 'err'); continue; }
+    await attachNotesFile(obj, nf.name, openedIds);
+  }
+}
+// Merge a parsed notes object into the library document it belongs to.
+async function attachNotesFile(obj, fileName, preferIds) {
+  if (!obj || !Array.isArray(obj.annotations)) { toast('“' + fileName + '” has no notes to import.', 'err'); return; }
+  const sha = obj.document && obj.document.sha256;
+  let doc = null;
+  if (sha) doc = state.docs.find(d => d.sha && d.sha === sha && !d.trashed);           // bulletproof: by content
+  if (!doc && preferIds && preferIds.length) doc = state.docs.find(d => preferIds.includes(d.id));  // dropped alongside its PDF
+  if (!doc) {                                                                          // legacy fallback: by filename
+    const want = (String(fileName || '').replace(/\.notes\.json$/i, '').replace(/\.json$/i, '').replace(/[^\w.\- ]+/g, '_').trim() || 'document').toLowerCase();
+    doc = state.docs.find(d => !d.trashed && notesFileName(d.id).replace(/\.notes\.json$/i, '').toLowerCase() === want);
+  }
+  if (!doc) { toast('Notes “' + fileName + '” don’t match an open document — open its PDF too.', 'err'); return; }
+  if (doc.id !== state.ui.activeDoc) await switchDoc(doc.id);
+  const n = applyNotesJSON(obj, doc.id, { merge: true });
+  if (n) toast(n + ' note' + (n === 1 ? '' : 's') + ' attached to “' + doc.name + '”.');
 }
 function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
 function trashDoc(id) {   // soft delete -> Trash view
@@ -427,7 +493,7 @@ function sectionForIndex(pageText, idx) {
 let pendingSel = null;
 let askNextId = null;   // when set, the next composer message on this note is routed to the AI
 function onTextSelect() {
-  if (state.ui.tool === 'shot') return;
+  if (READONLY || state.ui.tool === 'shot') return;
   const sel = window.getSelection();
   const text = sel && sel.toString().trim();
   const pop = $('#selPop');
@@ -1623,13 +1689,23 @@ function docNotesJSON(docId) {
   const anns = state.annotations.filter(a => docIdOf(a) === docId).map(a => JSON.parse(JSON.stringify(a)));
   const d = state.docs.find(x => x.id === docId) || activeDoc();
   return { app: 'Source-Linked AI Reading Workspace', schema: 1, exportedAt: nowISO(),
-    document: { id: docId, name: d ? d.name : 'document' }, noteCount: anns.length, annotations: anns };
+    document: { id: docId, sha256: (d && d.sha) || null, name: d ? d.name : 'document' }, noteCount: anns.length, annotations: anns };
 }
-function applyNotesJSON(obj, docId) {
+// Apply a notes object onto a document. Default REPLACES this doc's notes (explicit Import). With
+// { merge:true } it UNIONS by annotation id, newest-wins — used by auto-attach and cross-device
+// sync so re-opening the same paper elsewhere combines notes instead of clobbering them.
+function applyNotesJSON(obj, docId, opts) {
   if (!obj || !Array.isArray(obj.annotations)) { toast('That file has no notes to import.', 'err'); return 0; }
-  const others = state.annotations.filter(a => docIdOf(a) !== docId);
   const incoming = obj.annotations.map(a => { const c = JSON.parse(JSON.stringify(a)); c.doc = docId; return c; });
-  state.annotations = others.concat(incoming);
+  const others = state.annotations.filter(a => docIdOf(a) !== docId);
+  if (opts && opts.merge) {
+    const byId = new Map(state.annotations.filter(a => docIdOf(a) === docId).map(a => [a.id, a]));
+    const stamp = a => new Date(a.updated_at || a.created_at || 0).getTime() || 0;
+    for (const c of incoming) { const cur = byId.get(c.id); if (!cur || stamp(c) >= stamp(cur)) byId.set(c.id, c); }
+    state.annotations = others.concat([...byId.values()]);
+  } else {
+    state.annotations = others.concat(incoming);
+  }
   state.ui.activeId = null; if (typeof renumber === 'function') renumber();
   save(); render(); drawHighlights(); drawPins();
   return incoming.length;
@@ -1704,6 +1780,63 @@ function importNotesJSON() {
   inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return; try { const n = applyNotesJSON(JSON.parse(await f.text()), state.ui.activeDoc); toast(n + ' note' + (n === 1 ? '' : 's') + ' imported.'); } catch (e) { toast('Could not read that JSON: ' + (e.message || e), 'err'); } };
   inp.click();
 }
+// Notes for the self-contained export: like docNotesJSON, but with any images that were offloaded
+// to IndexedDB ("@idb") re-inlined as data URLs, so the shared file is truly standalone.
+async function notesJSONForExport(docId) {
+  const j = docNotesJSON(docId);
+  for (const a of j.annotations) {
+    if (a.screenshot === '@idb') a.screenshot = await idbGet('shot:' + a.id);
+    for (const m of (a.messages || [])) if (m.image === '@idb') m.image = await idbGet('img:' + m.id);
+  }
+  return j;
+}
+/* ---------- single-file annotated-paper sharing ----------
+   Export the active document + its notes as ONE self-contained .html: the live app shell with
+   PDF.js, styles, and app code inlined (same trick as build.js), plus the PDF bytes and notes
+   embedded as a read-only "bundle". Opens anywhere with no server — a portable annotated paper
+   with working math, connectors, highlights, and captured figures. */
+async function exportSelfContainedHTML(docId) {
+  docId = docId || state.ui.activeDoc;
+  const doc = state.docs.find(d => d.id === docId) || activeDoc();
+  toast('Building shareable file…');
+  try {
+    const bytes = await loadDocBytes(docId);
+    if (!bytes) { toast('Could not read the PDF for this document.', 'err'); return; }
+    const [shell, css, pdfjs, worker, appjs] = await Promise.all([
+      fetch('/app.html').then(r => r.text()),
+      fetch('/src/styles.css').then(r => r.text()),
+      fetch('/vendor/pdf.min.js').then(r => r.text()),
+      fetch('/vendor/pdf.worker.b64.js').then(r => r.text()),
+      fetch('/src/app.js').then(r => r.text()),
+    ]);
+    const notes = await notesJSONForExport(docId);
+    const bundle = { readOnly: true, name: doc.name, sha: doc.sha || null, pdfB64: bytesToB64(bytes), notes };
+    // Escaping every "<" in the bundle as < keeps note text that happens to contain a script
+    // close-tag from ending the inline block early (JSON.parse reads < back as "<").
+    const bundleJson = JSON.stringify(bundle).replace(/</g, '\\u003c');
+    // Same hazard for the inlined code: neutralize any literal close-tag so the HTML parser can't
+    // see it. "<\/script>" is byte-identical JS (a backslash before "/" is just "/") but invisible
+    // to the parser. (build.js never needed this; our own strings now contain the sequence.)
+    const inlineJs = s => s.replace(/<\/script/gi, '<\\/script');
+    let html = shell;
+    // Use function replacements so "$" in the inlined code/base64 is inserted verbatim (see build.js).
+    const put = (re, out) => { html = html.replace(re, () => out); };
+    put(/<link\b[^>]*href="\/src\/styles\.css"[^>]*>/, '<style>\n' + css + '\n</style>');
+    put(/<script src="\/vendor\/pdf\.min\.js"><\/script>/, '<script>\n' + inlineJs(pdfjs) + '\n</script>');
+    put(/<script src="\/vendor\/pdf\.worker\.b64\.js"><\/script>/, '<script>\n' + worker + '\n</script>');
+    put(/<script src="\/assets\/sample-pdf\.js"><\/script>\s*/, '');       // drop the bundled sample; the doc travels in the bundle
+    put(/<script src="\/assets\/sample-notes\.js"><\/script>\s*/, '');
+    put(/<script src="\/src\/app\.js"><\/script>/, '<script>window.__PAIR_BUNDLE__=' + bundleJson + ';</script>\n<script>\n' + inlineJs(appjs) + '\n</script>');
+    put(/<script>window\.va=[\s\S]*?<\/script>\s*/, '');                    // strip analytics — a shared file must not phone home
+    put(/<script defer src="\/_vercel\/insights\/script\.js"><\/script>\s*/, '');
+    const base = (doc.name || 'paper').replace(/\.pdf$/i, '').replace(/[^\w.\- ]+/g, '_').trim() || 'paper';
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = base + '.annotated.html'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Exported ' + base + '.annotated.html — ' + (html.length / 1048576).toFixed(1) + ' MB, opens anywhere.');
+  } catch (e) { toast('Could not build the file: ' + (e && e.message || e), 'err'); }
+}
 function flashSaved() { const b = document.getElementById('btnSaveNotes'); if (b) { b.classList.add('saved'); setTimeout(() => b.classList.remove('saved'), 1400); } }
 // Save button: write to the chosen folder; if none is set, offer to pick one (Chromium) or download.
 async function saveNotesNow() {
@@ -1724,8 +1857,10 @@ function injectNotesButtons() {
   const IMPORT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m9 18 3-3-3-3"/></svg>';
   const PDF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><rect x="5" y="12.5" width="14" height="7" rx="1.5" fill="currentColor" stroke="none"/><text x="12" y="18" font-size="5.4" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">PDF</text></svg>';
   const TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+  const SHARE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
   mk('btnSaveNotes', fb, 'Save notes (JSON; auto-saves to your folder when one is set)', SAVE, () => saveNotesNow());
   mk('btnImportNotes', fb, 'Import notes from a JSON file', IMPORT, () => importNotesJSON());
+  mk('btnShareHtml', fb, 'Share as a self-contained .html (document + notes, read-only)', SHARE, () => exportSelfContainedHTML(state.ui.activeDoc));
   mk('btnExportPdf', fb, 'Export annotations to PDF', PDF, () => openExport());
   const cr = document.getElementById('btnCollapseRight');
   mk('btnClearNotes', cr || fb, 'Delete all notes for this document', TRASH, () => clearActiveNotes());
@@ -2149,7 +2284,23 @@ function wire() {
   $('#btnCollapseRight').onclick = toggleRight; $('#btnToggleRight').onclick = toggleRight;
   $('#btnSettings').onclick = () => openSettings();
   $('#newBtn').onclick = () => $('#fileInput').click();
-  $('#fileInput').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; try { await openPdfFile(f); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
+  $('#fileInput').onchange = async e => { const files = [...e.target.files]; e.target.value = ''; try { await openFiles(files); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
+  // Drag-and-drop a PDF (and, optionally, its ".notes.json") anywhere on the reader to open them
+  // together — the one gesture that makes a paper and its notes travel as a pair in any browser.
+  if (!READONLY) {
+    const rd = $('#reader');
+    if (rd && !rd._dropWired) {
+      rd._dropWired = true;
+      const stop = e => { e.preventDefault(); e.stopPropagation(); };
+      ['dragenter', 'dragover'].forEach(ev => rd.addEventListener(ev, e => { stop(e); rd.classList.add('drop-hint'); }));
+      ['dragleave', 'dragend'].forEach(ev => rd.addEventListener(ev, e => { stop(e); rd.classList.remove('drop-hint'); }));
+      rd.addEventListener('drop', async e => {
+        stop(e); rd.classList.remove('drop-hint');
+        const files = e.dataTransfer && e.dataTransfer.files ? [...e.dataTransfer.files] : [];
+        if (files.length) { try { await openFiles(files); } catch (err) { toast('Could not open dropped files: ' + (err && err.message || err), 'err'); } }
+      });
+    }
+  }
   $$('.nav-item[data-view]').forEach(n => n.onclick = () => { state.ui.libView = n.dataset.view; save(); renderTree(); });
   // reader top
   $('#pagePrev').onclick = () => gotoPage(state.ui.page - 1);
@@ -2312,7 +2463,28 @@ function wireNoteEditDblclick() {
     else _lastMsgClick = { id: ids.msgId, t: now };
   });
 }
+// Build an ephemeral, storage-free state from an embedded share bundle (see exportSelfContainedHTML).
+// The whole library is just the one shared document; its notes load read-only. Nothing persists.
+function initBundleState() {
+  state = defaultState();
+  state.docs = [{ id: 'bundle', name: PAIR_BUNDLE.name || 'Shared paper', kind: 'bundle', sha: PAIR_BUNDLE.sha || null, addedAt: nowISO() }];
+  state.ui.activeDoc = 'bundle';
+  const anns = (PAIR_BUNDLE.notes && Array.isArray(PAIR_BUNDLE.notes.annotations)) ? PAIR_BUNDLE.notes.annotations : [];
+  state.annotations = anns.map(a => { const c = JSON.parse(JSON.stringify(a)); c.doc = 'bundle'; return c; });
+  state.seeded = true; state.seedVersion = SEED_VERSION;   // never seed the sample over a shared doc
+}
+// Strip the read-only viewer down to reading: hide every editing affordance, show a made-with banner.
+function applyReadOnly() {
+  document.body.classList.add('readonly');
+  ['newBtn', 'fileInput', 'toolHi', 'toolText', 'toolComment', 'toolShot', 'composer',
+   'btnSaveNotes', 'btnImportNotes', 'btnClearNotes', 'btnShareHtml', 'btnSettings'
+  ].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+  $$('.sb-storage').forEach(e => e.style.display = 'none');
+  const banner = el('<div id="roBanner">Read-only annotated paper · made with <a href="https://pairedx.com" target="_blank" rel="noopener">PairedX</a></div>');
+  document.body.appendChild(banner);
+}
 async function boot() {
+  if (PAIR_BUNDLE) initBundleState();
   // restore actor identity
   ACTORS.you.name = state.settings.actorName || 'You'; ACTORS.you.initials = state.settings.actorInitials || 'YO';
   // apply ui
@@ -2321,10 +2493,11 @@ async function boot() {
   $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%';
   await idbOpen(); await rehydrateAssets();   // restore any offloaded screenshot/visual images
   wire(); setTool(state.ui.tool || 'cursor');
+  if (READONLY) applyReadOnly();
   applyPanelWidths(); initPanelResize(); wireNoteEditDblclick();
   // Resolve the active document's bytes (sample inline, or a user PDF from IndexedDB).
   let startBytes = await loadDocBytes(state.ui.activeDoc);
-  if (!startBytes) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
+  if (!startBytes && !READONLY) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
   renderTree(); updateStorage();
   let pdfOk = true;
   try {
