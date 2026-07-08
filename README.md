@@ -19,9 +19,16 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 - **Share a whole annotated paper** — export the document + notes as one self-contained `.html` that opens anywhere (read-only) and re-opens in PairedX to keep editing.
 - **Notes re-attach by content** — a PDF is identified by the SHA-256 of its bytes, so the same paper opened under a different name, folder, or machine picks its notes back up automatically.
 - **Continuous or single-page** reading, with find-in-document, filters, and tags.
+- **Scanned PDFs get OCR'd on-device** — an image-only PDF is auto-detected; one tap runs OCR **entirely in your browser** (nothing uploaded) and rebuilds a real text layer, so find, highlights, and the AI work like a normal text PDF. Results cache, so it runs once.
 - **Bring your own model** — OpenRouter (default) or any OpenAI-compatible endpoint. Your key is stored only in your browser.
 - **Portable storage** — notes stay in the browser and can auto-save to a folder as `<doc>.notes.json` (Chrome/Edge), so they travel with the PDF (great for Drive folders and other machines). Export/Import works in any browser.
 - **Fully customizable prompts** — edit every system prompt and even the agent’s tool descriptions in **Settings → Templates**, and export/import them as JSON.
+
+## Scanned PDFs read like real text — on your device
+
+Open an image-only PDF and PairedX notices there's no selectable text, then offers **one-tap OCR that runs entirely in your browser** (via Tesseract) — your file is never uploaded. It rebuilds a real, positioned text layer, so **find, highlights, source-anchored notes, and the AI all work like a normal PDF**. Results are cached (keyed by the file's SHA-256), so a document is OCR'd once.
+
+<div align="center"><img src="docs/screenshots/feat-ocr-banner.jpg" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR" width="820"></div>
 
 ## Every note stays linked to its source
 
