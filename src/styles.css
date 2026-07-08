@@ -42,6 +42,8 @@ svg{display:block}
   display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--blue);font-weight:600;
   box-shadow:var(--shadow)}
 .new-btn:hover{background:var(--surface-2)}
+.btn-link{background:none;border:0;padding:0;color:var(--muted);font-weight:600;font-size:12.5px;cursor:pointer}
+.btn-link:hover{color:var(--text);text-decoration:underline}
 .nav{padding:2px 8px}
 .nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:8px;
   color:var(--ink-2);font-weight:500;cursor:pointer}

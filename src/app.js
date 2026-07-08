@@ -245,6 +245,9 @@ async function openFiles(files) {
     let obj; try { obj = JSON.parse(await nf.text()); } catch (e) { toast('Could not read ' + nf.name + ' — not valid JSON.', 'err'); continue; }
     await attachNotesFile(obj, nf.name, openedIds);
   }
+  // Opened a single PDF with no notes alongside it, and no notes folder is set to auto-search:
+  // offer to pick its .notes.json by hand (folder mode is handled in openPdfFile → maybeOfferFolderNotes).
+  if (storageCfg().mode !== 'folder' && openedIds.length === 1 && !notes.length) await maybeOfferNotesFallback(openedIds[0]);
 }
 // Merge a parsed notes object into the library document it belongs to.
 async function attachNotesFile(obj, fileName, preferIds) {
@@ -1789,6 +1792,32 @@ async function maybeOfferFolderNotes(docId, dir) {
   try { const n = applyNotesJSON(found.obj, docId, { merge: true }); toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.'); }
   catch (e) { toast('Could not read the notes file: ' + (e.message || e), 'err'); }
 }
+// No notes folder set and the freshly opened PDF has no notes yet: a browser can't peek into its
+// folder, so offer a one-time prompt to pick the .notes.json by hand. Asked once per document.
+async function maybeOfferNotesFallback(docId) {
+  const doc = state.docs.find(d => d.id === docId); if (!doc) return;
+  if (doc.notesAsked) return;                                        // already asked — don't nag
+  if (state.annotations.some(a => docIdOf(a) === docId)) return;     // already has notes
+  doc.notesAsked = true; save();                                     // mark asked, whether or not they proceed
+  if (!(await confirmDialog('Have saved notes for “' + doc.name + '”? Open the .notes.json to load them.', { okLabel: 'Open notes file…', cancelLabel: 'Not now' }))) return;
+  openNotesFileFor(docId);   // called right after the confirm click, so the picker keeps its user gesture
+}
+// Pick a .notes.json and merge it into the given document (with a nudge if it was saved for another PDF).
+function openNotesFileFor(docId) {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    try {
+      const obj = JSON.parse(await f.text());
+      const doc = state.docs.find(d => d.id === docId);
+      const sha = obj.document && obj.document.sha256;
+      if (sha && doc && doc.sha && sha !== doc.sha && !(await confirmDialog('“' + f.name + '” was saved for a different PDF. Attach it to “' + doc.name + '” anyway?', { okLabel: 'Attach', cancelLabel: 'Cancel' }))) return;
+      const n = applyNotesJSON(obj, docId, { merge: true });
+      toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded.');
+    } catch (e) { toast('Could not read that JSON: ' + (e.message || e), 'err'); }
+  };
+  inp.click();
+}
 let _folderSyncT;
 function scheduleFolderSync() {
   if (storageCfg().mode !== 'folder') return;
@@ -1886,10 +1915,11 @@ function injectNotesButtons() {
   const IMPORT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m9 18 3-3-3-3"/></svg>';
   const PDF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><rect x="5" y="12.5" width="14" height="7" rx="1.5" fill="currentColor" stroke="none"/><text x="12" y="18" font-size="5.4" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">PDF</text></svg>';
   const TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
-  const SHARE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>';
+  // File-with-"HTML"-badge, matching the neighbouring PDF button — makes clear it exports an .html file.
+  const HTMLIC = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><rect x="3.3" y="12.4" width="17.4" height="7.2" rx="1.5" fill="currentColor" stroke="none"/><text x="12" y="17.9" font-size="4.6" font-weight="700" letter-spacing="0.3" text-anchor="middle" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">HTML</text></svg>';
   mk('btnSaveNotes', fb, 'Save notes (JSON; auto-saves to your folder when one is set)', SAVE, () => saveNotesNow());
   mk('btnImportNotes', fb, 'Import notes from a JSON file', IMPORT, () => importNotesJSON());
-  mk('btnShareHtml', fb, 'Share as a self-contained .html (document + notes, read-only)', SHARE, () => exportSelfContainedHTML(state.ui.activeDoc));
+  mk('btnShareHtml', fb, 'Share as a self-contained .html (document + notes, read-only)', HTMLIC, () => exportSelfContainedHTML(state.ui.activeDoc));
   mk('btnExportPdf', fb, 'Export annotations to PDF', PDF, () => openExport());
   const cr = document.getElementById('btnCollapseRight');
   mk('btnClearNotes', cr || fb, 'Delete all notes for this document', TRASH, () => clearActiveNotes());
@@ -2044,13 +2074,17 @@ function openSettings(note) {
       <div class="tabpane hidden" data-pane="templates">${templatesPaneHTML()}</div>
       <div class="tabpane hidden" data-pane="storage">
         <div class="field"><label>Notes storage</label>
-        <div class="hint" style="margin-top:0">Notes are always kept in this browser. Optionally choose a folder to also auto-save a portable <b>.notes.json</b> next to your PDFs (Chrome/Edge) — ideal for backups, other computers, and Google Drive folders. Export / Import works in any browser.</div>
+        <div class="hint" style="margin-top:0">Notes are always saved in this browser. Optionally sync a portable <b>.notes.json</b> to a folder (Chrome/Edge) — great for backups, other devices, and Google Drive. Export / Import works in any browser.</div>
+        ${(s.storage && s.storage.mode === 'folder')
+          ? `<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+               <span style="font-size:13px;color:var(--text)">Notes sync to <b>📁 ${esc(s.storage.folderName || 'your folder')}</b></span>
+               <button type="button" class="btn-link" id="stChange">Change folder</button>
+               <button type="button" class="btn-link" id="stDisconnect">Turn off</button>
+             </div>`
+          : `<div style="margin-top:12px"><button type="button" class="btn ghost" id="stFolder">Choose folder…</button></div>`}
         <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-          <button type="button" class="btn ghost" id="stFolder">${(s.storage && s.storage.mode === 'folder') ? ('📁 ' + esc(s.storage.folderName || 'folder set')) : 'Choose folder…'}</button>
           <button type="button" class="btn ghost" id="stExport">Export notes (JSON)</button>
           <button type="button" class="btn ghost" id="stImport">Import notes (JSON)</button>
-          ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stLoad">Load from folder</button>' : ''}
-          ${(s.storage && s.storage.mode === 'folder') ? '<button type="button" class="btn ghost" id="stBrowserOnly">Stop folder sync</button>' : ''}
         </div>
         </div>
       </div>
@@ -2066,11 +2100,12 @@ function openSettings(note) {
   $$('.settab', m).forEach(t => t.onclick = () => { $$('.settab', m).forEach(x => x.classList.toggle('on', x === t)); $$('.tabpane', m).forEach(p => p.classList.toggle('hidden', p.dataset.pane !== t.dataset.tab)); });
   $$('[data-reset]', m).forEach(b => b.onclick = () => { const key = b.dataset.reset; const ta = $('#pt_' + key, m); if (ta) ta.value = key.indexOf('tool_') === 0 ? DEFAULT_TOOLS[key.slice(5)] : DEFAULT_PROMPTS[key]; });
   { const pe = $('#ptExport', m); if (pe) pe.onclick = () => exportPrompts(m); const pi = $('#ptImport', m); if (pi) pi.onclick = () => importPrompts(m); const pr = $('#ptResetAll', m); if (pr) pr.onclick = () => { PROMPT_KEYS.forEach(k => { const ta = $('#pt_' + k, m); if (ta) ta.value = DEFAULT_PROMPTS[k]; }); TOOL_KEYS.forEach(k => { const ta = $('#pt_tool_' + k, m); if (ta) ta.value = DEFAULT_TOOLS[k]; }); }; }
-  { const stF = $('#stFolder', m); if (stF) stF.onclick = async () => { if (await chooseNotesFolder()) close(); }; }
+  { const pick = async () => { if (await chooseNotesFolder()) close(); };
+    const stF = $('#stFolder', m); if (stF) stF.onclick = pick;
+    const stC = $('#stChange', m); if (stC) stC.onclick = pick; }
   { const stE = $('#stExport', m); if (stE) stE.onclick = () => downloadNotesJSON(state.ui.activeDoc); }
   { const stI = $('#stImport', m); if (stI) stI.onclick = () => importNotesJSON(); }
-  { const stB = $('#stBrowserOnly', m); if (stB) stB.onclick = () => { state.settings.storage = { mode: 'browser', folderName: '' }; save(); close(); toast('Folder sync off — notes stay in this browser.'); }; }
-  { const stL = $('#stLoad', m); if (stL) stL.onclick = async () => { close(); await loadNotesFromFolder(state.ui.activeDoc, true); }; }
+  { const stD = $('#stDisconnect', m); if (stD) stD.onclick = () => { state.settings.storage = { mode: 'browser', folderName: '' }; save(); close(); toast('Folder sync off — notes stay in this browser.'); }; }
   $('#mSave', m).onclick = () => {
     const defEl = $('.def-radio.on', m); if (defEl) s.provider = defEl.dataset.def;
     s.keys.openrouter = $('#kOpenrouter', m).value.trim();
