@@ -65,9 +65,11 @@ function loadState() { try { return JSON.parse(localStorage.getItem(LS)); } catc
 function migrateState(s) {
   if (!s) return null;
   if (!s.ui) s.ui = {};
-  if (!Array.isArray(s.docs) || !s.docs.length) s.docs = [{ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() }];
-  if (!s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() });
-  if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc)) s.ui.activeDoc = 'sample';
+  if (!Array.isArray(s.docs)) s.docs = [];
+  // The bundled sample is auto-added on every load UNTIL the user removes it (state.sampleDismissed),
+  // so removing it actually sticks across reloads.
+  if (!s.sampleDismissed && !s.docs.some(d => d.id === 'sample')) s.docs.unshift({ id: 'sample', name: SAMPLE_DOC_NAME, kind: 'sample', addedAt: nowISO() });
+  if (!s.ui.activeDoc || !s.docs.some(d => d.id === s.ui.activeDoc && !d.trashed)) s.ui.activeDoc = (s.docs.find(d => !d.trashed) || {}).id || null;
   if (!s.ui.libView) s.ui.libView = 'home';
   if (s.ui.tool === 'text') s.ui.tool = 'cursor';
   if (!s.ui._contDefaulted) { s.ui.continuous = true; s.ui._contDefaulted = true; }
@@ -304,23 +306,35 @@ async function attachNotesFile(obj, fileName, preferIds) {
   if (n) toast(n + ' note' + (n === 1 ? '' : 's') + ' attached to “' + doc.name + '”.');
 }
 function toggleStar(id) { const d = state.docs.find(x => x.id === id); if (d) { d.starred = !d.starred; save(); renderTree(); } }
-function trashDoc(id) {   // soft delete -> Trash view
-  const d = state.docs.find(x => x.id === id); if (!d || d.kind === 'sample') return;
+// After the active doc is trashed/removed, open the next still-in-library doc — or, if the whole
+// library is now empty (the sample can be removed too), show a friendly empty reader.
+function openFallbackDoc() {
+  const next = state.docs.find(d => !d.trashed);
+  if (next) { switchDoc(next.id); }
+  else { state.ui.activeDoc = null; save(); renderTree(); render(); showEmptyReader(); }
+}
+function trashDoc(id) {   // soft delete -> Trash view (sample included)
+  const d = state.docs.find(x => x.id === id); if (!d) return;
   d.trashed = true; d.trashedAt = nowISO();
-  if (state.ui.activeDoc === id) { state.ui.activeDoc = 'sample'; save(); switchDoc('sample'); }
-  else { save(); renderTree(); }
+  if (d.id === 'sample') state.sampleDismissed = true;   // don't auto-re-add it on reload
+  if (state.ui.activeDoc === id) openFallbackDoc(); else { save(); renderTree(); }
   toast('Moved “' + d.name + '” to Trash.');
 }
-function restoreDoc(id) { const d = state.docs.find(x => x.id === id); if (d) { d.trashed = false; save(); renderTree(); toast('Restored “' + d.name + '”.'); } }
+function restoreDoc(id) {
+  const d = state.docs.find(x => x.id === id); if (!d) return;
+  d.trashed = false; if (id === 'sample') state.sampleDismissed = false; save();
+  if (!state.ui.activeDoc) switchDoc(id); else renderTree();   // open it if the library was empty
+  toast('Restored “' + d.name + '”.');
+}
 async function purgeDoc(id) {   // permanent delete
   const d = state.docs.find(x => x.id === id); if (!d) return;
   const n = state.annotations.filter(a => docIdOf(a) === id).length;
   if (!(await confirmDialog('Permanently delete “' + d.name + '”' + (n ? ' and its ' + n + ' note' + (n === 1 ? '' : 's') : '') + '? This cannot be undone.', { okLabel: 'Delete', danger: true }))) return;
+  if (d.id === 'sample') state.sampleDismissed = true;
   state.docs = state.docs.filter(x => x.id !== id);
   state.annotations = state.annotations.filter(a => docIdOf(a) !== id);
   idbDel('pdf:' + id); delete _docBytes[id];
-  if (state.ui.activeDoc === id) { state.ui.activeDoc = 'sample'; save(); switchDoc('sample'); }
-  else { save(); renderTree(); render(); }
+  if (state.ui.activeDoc === id) openFallbackDoc(); else { save(); renderTree(); render(); }
   updateStorage();
 }
 function docsForView() {
@@ -341,7 +355,7 @@ function renderTree() {
   const view = state.ui.libView || 'home', inTrash = view === 'trash';
   const docs = docsForView();
   if (!docs.length) {
-    const msg = inTrash ? 'Trash is empty.' : view === 'starred' ? 'No starred documents yet.' : 'No documents yet — use New to open a PDF.';
+    const msg = inTrash ? 'Trash is empty.' : view === 'starred' ? 'No starred documents yet.' : 'No documents yet — use “Open PDF or bundle” to add one.';
     list.appendChild(el(`<div class="lib-empty">${msg}</div>`)); return;
   }
   docs.forEach(d => {
@@ -349,7 +363,7 @@ function renderTree() {
     const actions = inTrash
       ? `<button class="doc-act" data-restore="${d.id}" title="Restore">↩</button><button class="doc-act danger" data-purge="${d.id}" title="Delete forever">${ICON_TRASH}</button>`
       : `<button class="doc-act star ${d.starred ? 'on' : ''}" data-star="${d.id}" title="${d.starred ? 'Unstar' : 'Star'}">${_STAR(d.starred)}</button>`
-        + (d.kind === 'user' ? `<button class="doc-act" data-trash="${d.id}" title="Move to trash">${ICON_TRASH}</button>` : '');
+        + `<button class="doc-act" data-trash="${d.id}" title="Move to trash">${ICON_TRASH}</button>`;
     const row = el(`<div class="tree-row indent-1 doc-row ${active ? 'active' : ''}" data-doc="${d.id}" title="${esc(d.name)}">
       <span class="fic" style="color:${active ? '#DC2626' : 'currentColor'}">${_FILEIC}</span>
       <span class="doc-name">${esc(d.name)}</span>
@@ -2545,6 +2559,21 @@ function showReaderFallback(msg) {
     ${msg ? `<div style="margin-top:14px;color:var(--faint);font-size:12px">Engine note: ${esc(msg)}</div>` : ''}
   </div>`;
 }
+// Shown when the library has no documents (the user removed everything, including the sample).
+function showEmptyReader() {
+  pdfDoc = null; numPages = 0; viewport = null;
+  try { teardownContinuous(); } catch (e) {}
+  const pt = $('#pageTotal'); if (pt) pt.textContent = '/ 0';
+  const scroll = $('#rdScroll'); if (!scroll) return;
+  const pw = $('#pageWrap'); if (pw) pw.style.display = 'none';
+  let fb = $('#readerFallback');
+  if (!fb) { fb = el('<div id="readerFallback"></div>'); scroll.insertBefore(fb, scroll.firstChild); }
+  fb.innerHTML = `<div class="fb-card">
+    <div style="font-size:34px;margin-bottom:6px">📄</div>
+    <h3 style="margin:0 0 8px;font-size:18px">Your library is empty</h3>
+    <p style="color:var(--muted);line-height:1.55;margin:0">Use <b>Open PDF or bundle</b> (top-left) to open a paper, its notes, or a shared <b>.html</b>.</p>
+  </div>`;
+}
 
 /* ---------- boot ---------- */
 /* ---------- resizable right notes panel (drag its left edge) ---------- */
@@ -2647,22 +2676,31 @@ async function boot() {
   wire(); setTool(state.ui.tool || 'cursor');
   if (READONLY) applyReadOnly();
   applyPanelWidths(); initPanelResize(); wireNoteEditDblclick();
-  // Resolve the active document's bytes (sample inline, or a user PDF from IndexedDB).
-  let startBytes = await loadDocBytes(state.ui.activeDoc);
-  if (!startBytes && !READONLY) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
+  // Resolve the active document's bytes (sample inline, or a user PDF from IndexedDB). Fall back to
+  // any remaining library doc, then the sample (unless removed), then an empty-library reader.
+  let startBytes = state.ui.activeDoc ? await loadDocBytes(state.ui.activeDoc) : null;
+  if (!startBytes && !READONLY) {
+    const anyDoc = state.docs.find(d => !d.trashed);
+    if (anyDoc) { state.ui.activeDoc = anyDoc.id; startBytes = await loadDocBytes(anyDoc.id); }
+    else if (!state.sampleDismissed) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
+  }
   renderTree(); updateStorage();
   let pdfOk = true;
-  try {
-    // Race against a timeout: in a sandboxed preview the worker can hang instead of
-    // erroring, which would otherwise block seeding + the whole UI.
-    await Promise.race([
-      initPdf(startBytes),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('PDF engine did not start — likely a sandboxed preview. Open the downloaded file directly.')), 7000)),
-    ]);
-  } catch (e) { pdfOk = false; showReaderFallback(e && e.message); }
-  if ((!state.seeded && !state.annotations.length) || state.seedVersion !== SEED_VERSION) { try { await seed(); } catch (e) { console.warn('seed failed', e); } }
+  if (!startBytes && !READONLY) {
+    pdfOk = false; showEmptyReader();   // library is empty (sample removed and no user docs)
+  } else {
+    try {
+      // Race against a timeout: in a sandboxed preview the worker can hang instead of
+      // erroring, which would otherwise block seeding + the whole UI.
+      await Promise.race([
+        initPdf(startBytes),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('PDF engine did not start — likely a sandboxed preview. Open the downloaded file directly.')), 7000)),
+      ]);
+    } catch (e) { pdfOk = false; showReaderFallback(e && e.message); }
+  }
+  if (!state.sampleDismissed && ((!state.seeded && !state.annotations.length) || state.seedVersion !== SEED_VERSION)) { try { await seed(); } catch (e) { console.warn('seed failed', e); } }
   if (pdfOk && !state.ui.continuous) { await renderPage(state.ui.page); }
-  render(); drawHighlights(); drawPins();
+  render(); if (pdfOk) { drawHighlights(); drawPins(); }
   // Pre-cache all page text in the background so AI context retrieval + document search
   // can draw on the whole document (not just visited pages).
   if (pdfOk) setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 1200);
