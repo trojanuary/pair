@@ -495,8 +495,21 @@ svg{display:block}
 
 /* ---- compact note cards (compact by default; active expands) ---- */
 .card{position:relative}
-.card.compact .card-b{padding:1px 13px 11px}
 .card .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* Badge sits inline to the left of the preview text; timestamp floats top-right. */
+.card.compact .cc{display:flex;gap:10px;align-items:flex-start;padding:11px 13px 12px}
+.card.compact .cc-badge{width:22px;height:22px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto;margin-top:1px}
+.card.compact .cc-main{flex:1 1 auto;min-width:0}
+.card.compact .cc-main .msg{padding-right:46px}
+.card.compact .cc-main .msg + .msg{margin-top:6px;padding-right:0}
+.card.compact .cc-when{position:absolute;top:12px;right:14px;color:var(--faint);font-size:12px}
+.cc-tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.03em;padding:1px 5px;border-radius:5px;margin-right:6px;vertical-align:1.5px}
+.cc-tag.ai{background:#DCFCE7;color:#059669}
+.cc-tag.you{background:#DBEAFE;color:#2563EB}
+.mact.showtog{opacity:.5}
+.card-h:hover .mact.showtog{opacity:.8}
+.mact.showtog:hover{opacity:1}
+.mact.showtog.on{opacity:1;color:var(--blue)}
 .card.compact .loc-line{color:var(--muted);font-size:12px;margin-top:7px;display:flex;align-items:center;gap:7px}
 .card.compact .loc-line .qn{width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;flex:0 0 auto}
 .unread-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);position:absolute;right:14px;bottom:14px}

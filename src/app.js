@@ -1251,15 +1251,23 @@ const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
 const ICON_CHEVUP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
 const ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+const ICON_CHECKBOX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/></svg>';
+const ICON_CHECKBOX_ON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4" fill="currentColor" stroke="currentColor"/><path d="M8 12.3l2.7 2.7L16 9.3" stroke="#fff"/></svg>';
 // hover action icons in a message head — collapse (note head), copy, edit (comment or AI), plus delete-note / delete-reply
 function msgActions(a, m, isFirst) {
   const editable = m.type === 'comment' || m.type === 'ai_answer';
   // Collapse chevron sits outside .macts so it stays visible; copy/edit/delete reveal on hover.
   const collapse = isFirst ? `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button>` : '';
+  // "Show on card" checkbox — also always-visible — lets you pick which message(s) appear on the
+  // collapsed card (e.g. show the AI's summary instead of your question). Off = faint, on = blue.
+  const showable = m.type === 'comment' || m.type === 'ai_answer' || m.type === 'generated_visual';
+  const showtog = showable
+    ? `<button class="mact showtog ${m.showOnCard ? 'on' : ''}" data-showtog="${m.id}" data-ann="${a.id}" title="${m.showOnCard ? 'Showing on the collapsed card — click to hide' : 'Show this on the collapsed card'}">${m.showOnCard ? ICON_CHECKBOX_ON : ICON_CHECKBOX}</button>`
+    : '';
   const copy = isFirst
     ? `<button class="mact" data-copynote="${a.id}" title="Copy whole thread">${ICON_COPY}</button>`
     : `<button class="mact" data-copymsg="${m.id}" data-ann="${a.id}" title="Copy this response">${ICON_COPY}</button>`;
-  return collapse + `<span class="macts">`
+  return collapse + showtog + `<span class="macts">`
     + copy
     + (editable ? `<button class="mact" data-edit="${m.id}" data-ann="${a.id}" title="Edit">${ICON_EDIT}</button>` : '')
     + (isFirst ? `<button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button>`
@@ -1342,23 +1350,46 @@ function cardKind(a) {
   if (a.source_type === 'free_comment') return 'comment';
   return 'hl';
 }
+function msgPreviewText(m) {
+  if (!m) return '';
+  if (m.type === 'comment' || m.type === 'ai_answer') return m.text || '';
+  if (m.type === 'generated_visual') return m.title || 'Visual';
+  return '';
+}
+// Flatten a message to a one-glance preview: drop markdown syntax, fold newlines/bullets inline.
+function plainPreview(t) {
+  return String(t || '').replace(/`{1,3}/g, '').replace(/[*_#>]/g, '')
+    .replace(/^\s*[-•]\s+/gm, '• ').replace(/\s*\n+\s*/g, '  ').trim();
+}
 function compactCard(a) {
-  // compact by default (mockup 2): number badge + time; clamped preview + location. (The source-type
-  // label — "Linked text" / "Screenshot" — was dropped: the badge + preview already say enough.)
+  // Compact card: number badge inline with the preview, time top-right, then location.
+  // Preview = the message(s) the user checked "Show on card" (e.g. the AI answer); if none are
+  // checked, fall back to the first question/answer. (Type label was dropped — badge+text say enough.)
   const m0 = a.messages[0];
-  const preview = (a.messages.find(m => m.type === 'comment') || {}).text
-    || (a.messages.find(m => m.type === 'ai_answer') || {}).text
-    || a.selected_text || '';
   const when = timeLabel(m0 ? m0.created_at : a.created_at);
   const badge = a.source_type === 'screenshot' ? 'var(--green)' : 'var(--blue)';
+  const shown = (a.messages || []).filter(m => m.showOnCard && msgPreviewText(m).trim());
+  let items;
+  if (shown.length) items = shown.map(m => ({ m, tag: m.actor === 'ai' ? 'ai' : 'you' }));
+  else {
+    const first = (a.messages || []).find(m => (m.type === 'comment' || m.type === 'ai_answer') && (m.text || '').trim());
+    items = first ? [{ m: first, tag: null }] : [];
+  }
+  let previews = items.map(({ m, tag }) => {
+    const tagHTML = tag === 'ai' ? '<span class="cc-tag ai">AI</span>' : tag === 'you' ? '<span class="cc-tag you">You</span>' : '';
+    return `<div class="msg clamp">${tagHTML}${esc(plainPreview(msgPreviewText(m))).replace(/@ai\b/ig, x => `<span class="men">${x}</span>`)}</div>`;
+  }).join('');
+  if (!previews && a.selected_text) previews = `<div class="msg clamp">${esc(a.selected_text)}</div>`;
   const wrap = el(`<div class="card compact k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${!a.resolved ? '<span class="unread-dot"></span>' : ''}
-    <div class="card-h"><span style="width:22px;height:22px;border-radius:50%;background:${badge};color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto">${a.anchor}</span>
-      <span class="when">${when}</span></div>
-    <div class="card-b">
-      ${preview ? `<div class="msg clamp">${esc(preview).replace(/@ai\b/ig, x => `<span class="men">${x}</span>`)}</div>` : ''}
-      ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
-      <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
+    <span class="cc-when">${when}</span>
+    <div class="cc">
+      <span class="cc-badge" style="background:${badge}">${a.anchor}</span>
+      <div class="cc-main">
+        ${previews}
+        ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
+        <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
+      </div>
     </div></div>`);
   wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],button')) return; if (window.getSelection && String(window.getSelection()).trim()) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
   return wrap;
@@ -1583,6 +1614,7 @@ function render() {
   $$('[data-savemsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveMsgEdit(b.dataset.ann, b.dataset.savemsg); });
   $$('[data-reask]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); saveAndReask(b.dataset.ann, b.dataset.reask); });
   $$('[data-collapse]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); collapseNote(b.dataset.collapse); });
+  $$('[data-showtog]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); toggleShowOnCard(b.dataset.ann, b.dataset.showtog); });
   $$('[data-copynote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); copyNote(b.dataset.copynote); });
   $$('[data-copymsg]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); copyMsg(b.dataset.ann, b.dataset.copymsg); });
   $$('[data-delnote]', list).forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteNote(b.dataset.delnote); });
@@ -1657,6 +1689,12 @@ function confirmDialog(message, opts) {
 function deleteMsg(annId, msgId) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
   a.messages = a.messages.filter(m => m.id !== msgId); a.updated_at = nowISO(); save(); render();
+}
+// Toggle whether a message appears on the collapsed card (the "Show on card" checkbox).
+function toggleShowOnCard(annId, msgId) {
+  const a = state.annotations.find(x => x.id === annId); if (!a) return;
+  const m = a.messages.find(x => x.id === msgId); if (!m) return;
+  m.showOnCard = !m.showOnCard; a.updated_at = nowISO(); save(); render();
 }
 async function deleteNote(annId) {
   if (!(await confirmDialog('Delete this note and its thread?', { okLabel: 'Delete', danger: true }))) return;
