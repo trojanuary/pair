@@ -42,10 +42,6 @@ svg{display:block}
   display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--blue);font-weight:600;
   box-shadow:var(--shadow)}
 .new-btn:hover{background:var(--surface-2)}
-.folder-btn{margin:-4px 14px 10px;height:32px;border:1px solid var(--line-2);border-radius:9px;
-  display:flex;align-items:center;gap:7px;padding:0 11px;color:var(--muted);font-weight:600;font-size:12.5px;background:transparent;width:calc(100% - 28px)}
-.folder-btn:hover{background:var(--surface-2);color:var(--text)}
-.folder-btn svg{flex:0 0 auto}
 .nav{padding:2px 8px}
 .nav-item{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:8px;
   color:var(--ink-2);font-weight:500;cursor:pointer}
@@ -546,7 +542,7 @@ details.pt-item .pt-body{padding:0 12px 12px}
 
 /* ---------- drag-and-drop a PDF (+ its .notes.json) onto the reader ---------- */
 #reader.drop-hint{outline:2.5px dashed var(--violet, #7c3aed);outline-offset:-10px;background:var(--violet-weak, rgba(124,58,237,.06))}
-#reader.drop-hint::after{content:"Drop a PDF with its .notes.json — or the whole folder — to load them together";position:absolute;left:50%;top:18px;transform:translateX(-50%);z-index:40;background:#0B0F19;color:#fff;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:99px;box-shadow:0 6px 20px rgba(0,0,0,.28);pointer-events:none}
+#reader.drop-hint::after{content:"Drop a PDF — add its .notes.json to load them together";position:absolute;left:50%;top:18px;transform:translateX(-50%);z-index:40;background:#0B0F19;color:#fff;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:99px;box-shadow:0 6px 20px rgba(0,0,0,.28);pointer-events:none}
 
 /* ---------- read-only shared file (single-file annotated paper) ---------- */
 body.readonly #roBanner{position:fixed;left:0;right:0;bottom:0;z-index:80;background:#0B0F19;color:#cbd5e1;font-size:12.5px;text-align:center;padding:7px 12px;letter-spacing:.01em}
