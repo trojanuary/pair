@@ -1966,11 +1966,9 @@ function injectNotesButtons() {
   const IMPORT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m9 18 3-3-3-3"/></svg>';
   const PDF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><rect x="5" y="12.5" width="14" height="7" rx="1.5" fill="currentColor" stroke="none"/><text x="12" y="18" font-size="5.4" font-weight="700" text-anchor="middle" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">PDF</text></svg>';
   const TRASH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
-  // File-with-"HTML"-badge, matching the neighbouring PDF button — makes clear it exports an .html file.
-  const HTMLIC = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><rect x="3.3" y="12.4" width="17.4" height="7.2" rx="1.5" fill="currentColor" stroke="none"/><text x="12" y="17.9" font-size="4.6" font-weight="700" letter-spacing="0.3" text-anchor="middle" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">HTML</text></svg>';
+  // (Share-as-HTML now lives on the left sidebar, next to New — see #btnShareHtml wiring in wire().)
   mk('btnSaveNotes', fb, 'Save notes (JSON; auto-saves to your folder when one is set)', SAVE, () => saveNotesNow());
   mk('btnImportNotes', fb, 'Import notes from a JSON file', IMPORT, () => importNotesJSON());
-  mk('btnShareHtml', fb, 'Share as a self-contained .html (document + notes, read-only)', HTMLIC, () => exportSelfContainedHTML(state.ui.activeDoc));
   mk('btnExportPdf', fb, 'Export annotations to PDF', PDF, () => openExport());
   const cr = document.getElementById('btnCollapseRight');
   mk('btnClearNotes', cr || fb, 'Delete all notes for this document', TRASH, () => clearActiveNotes());
@@ -2399,6 +2397,7 @@ function wire() {
   $('#btnCollapseRight').onclick = toggleRight; $('#btnToggleRight').onclick = toggleRight;
   $('#btnSettings').onclick = () => openSettings();
   $('#newBtn').onclick = () => $('#fileInput').click();
+  { const sh = $('#btnShareHtml'); if (sh) sh.onclick = () => exportSelfContainedHTML(state.ui.activeDoc); }
   $('#fileInput').onchange = async e => { const files = [...e.target.files]; e.target.value = ''; try { await openFiles(files); } catch (err) { toast('Could not open file: ' + (err && err.message || err), 'err'); } };
   // Drag-and-drop a PDF (and, optionally, its ".notes.json") anywhere on the reader to open them
   // together — the one gesture that makes a paper and its notes travel as a pair in any browser.
