@@ -1748,16 +1748,45 @@ async function loadNotesFromFolder(docId, interactive) {
     return true;
   } catch (e) { if (interactive) toast('No saved notes for this document in that folder yet.', 'err'); return false; }
 }
-// On opening a PDF, if the chosen notes folder already holds "<name>.notes.json", offer to import it.
+// Look in the chosen notes folder for this PDF's notes: first the "<name>.notes.json" filename
+// (fast), then — so a renamed PDF still matches — any .json whose document.sha256 equals the doc's
+// content hash. Returns { name, obj } or null.
+async function findFolderNotes(dir, docId) {
+  const fname = notesFileName(docId);
+  try {
+    const fh = await dir.getFileHandle(fname, { create: false });
+    const obj = JSON.parse(await (await fh.getFile()).text());
+    if (obj && Array.isArray(obj.annotations)) return { name: fname, obj };
+  } catch (e) {}
+  const doc = state.docs.find(x => x.id === docId);
+  if (doc && doc.sha) {
+    try {
+      for await (const h of dir.values()) {
+        if (h.kind !== 'file' || !/\.json$/i.test(h.name || '')) continue;
+        try {
+          const obj = JSON.parse(await (await h.getFile()).text());
+          if (obj && obj.document && obj.document.sha256 === doc.sha && Array.isArray(obj.annotations)) return { name: h.name, obj };
+        } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+// On opening a PDF, if a notes folder is set (Settings → Notes storage), search it for this PDF's
+// notes and — only when they'd add something new — pop up asking to open them.
 async function maybeOfferFolderNotes(docId, dir) {
   if (storageCfg().mode !== 'folder') return;
   if (!dir) { try { dir = await notesDirHandle(false); } catch (e) {} }
   if (!dir) return;
-  let fh = null;
-  try { fh = await dir.getFileHandle(notesFileName(docId), { create: false }); } catch (e) { return; }
-  if (!fh) return;
-  if (!(await confirmDialog('Found saved notes “' + notesFileName(docId) + '” in “' + dir.name + '”. Import them for this document?', { okLabel: 'Import', cancelLabel: 'Not now' }))) return;
-  try { const n = applyNotesJSON(JSON.parse(await (await fh.getFile()).text()), docId); toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.'); }
+  let found = null;
+  try { found = await findFolderNotes(dir, docId); } catch (e) { return; }
+  if (!found) return;
+  // Don't nag: skip if every note in the file is already loaded for this document.
+  const have = new Set(state.annotations.filter(a => docIdOf(a) === docId).map(a => a.id));
+  const fresh = found.obj.annotations.filter(a => a && !have.has(a.id)).length;
+  if (!fresh) return;
+  if (!(await confirmDialog('Found notes for this PDF in “' + dir.name + '”: ' + found.name + '. Open them?', { okLabel: 'Open notes', cancelLabel: 'Not now' }))) return;
+  try { const n = applyNotesJSON(found.obj, docId, { merge: true }); toast(n + ' note' + (n === 1 ? '' : 's') + ' loaded from “' + dir.name + '”.'); }
   catch (e) { toast('Could not read the notes file: ' + (e.message || e), 'err'); }
 }
 let _folderSyncT;
