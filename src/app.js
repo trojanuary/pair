@@ -1185,11 +1185,19 @@ function submitToNote(annId, rawText) {
 }
 // Recognize a request to CREATE a visual (image or diagram) — a visual noun + a make/turn-into verb.
 function isVisualRequest(t) {
-  t = t || '';
-  const noun = /\b(image|picture|illustration|figure|visual|diagram|chart|graph|plot|infographic|schematic|flow-?chart|drawing|mind ?map|sketch)\b/i.test(t);
-  const verb = /\b(generate|make|create|draw|produce|render|design|sketch|mock ?up|whip up|visuali[sz]e|turn|convert|give me|summari[sz]e)\b/i.test(t);
-  const asNoun = /\bas an?\s+(image|picture|diagram|chart|graph|figure|schematic|flow-?chart|infographic|sketch|visual|mind ?map)\b/i.test(t);
-  return (noun && verb) || asNoun || /\bvisuali[sz]e\b/i.test(t);
+  t = (t || '').toLowerCase();
+  const NOUN = 'image|picture|pic|illustration|figure|visual|diagram|chart|graph|plot|infographic|schematic|flow-?chart|drawing|mind ?map|sketch';
+  const noun = new RegExp(`\\b(${NOUN})\\b`).test(t);
+  // Catch natural phrasings so image requests aren't silently dropped: a "make" verb near a visual noun,
+  // a bare visual verb (draw/sketch/illustrate…), "as a <visual>", "<visual> of/showing…", or a leading
+  // visual noun ("image of the model"). Previously required BOTH a noun AND a verb, so "draw the
+  // architecture" / "a picture of the encoder" / "illustrate X" fell through and did nothing.
+  const makeVerb = /\b(generate|make|create|draw|produce|render|design|sketch|mock ?up|whip up|visuali[sz]e|illustrate|depict|show me|give me|turn|convert)\b/.test(t);
+  const asNoun = new RegExp(`\\bas an?\\s+(${NOUN})\\b`).test(t);
+  const nounOf = new RegExp(`\\b(${NOUN})\\s+(of|for|showing|depicting|that|to|with)\\b`).test(t);
+  const leadNoun = new RegExp(`^\\s*(a|an|the|another|one)?\\s*(${NOUN})\\b`).test(t);
+  const visualVerb = /\b(draw|sketch|illustrate|diagram|visuali[sz]e|depict)\b/.test(t);
+  return (noun && makeVerb) || asNoun || nounOf || leadNoun || visualVerb;
 }
 // Ask a general question about the whole document — no text selection required.
 // Creates a document-level note (no pin/highlight) and routes the question to the AI.
