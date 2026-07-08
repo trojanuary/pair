@@ -188,6 +188,7 @@ async function loadDocBytes(id) {
 async function switchDoc(id) {
   if (id === state.ui.activeDoc) { renderTree(); return; }
   document.getElementById('notesBanner')?.remove();   // clear a stale "open notes?" banner on switch
+  document.getElementById('ocrBanner')?.remove(); if (ocrRunning) ocrCancel = true;   // stop OCR for the doc we're leaving
   const doc = state.docs.find(d => d.id === id); if (!doc) { toast('Document not found.', 'err'); return; }
   state.ui.activeDoc = id; state.ui.activeId = null; state.ui.page = 1;
   doc.lastOpened = nowISO();
@@ -195,9 +196,10 @@ async function switchDoc(id) {
   save(); renderTree(); render();
   const bytes = await loadDocBytes(id);
   if (!bytes) { showReaderFallback('Could not load “' + doc.name + '”. Re-open it with New.'); return; }
+  await loadOcrStore(doc.sha);   // load any saved OCR for this PDF before the first render uses its text layer
   try { await initPdf(bytes); } catch (e) { showReaderFallback('Could not open “' + doc.name + '” — it may not be a valid PDF.'); return; }
   render(); drawHighlights(); drawPins();
-  setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 500);
+  setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); detectAndOfferOcr(doc); }, 500);
 }
 async function openPdfFile(f) {
   if (!f) return null;
@@ -440,6 +442,7 @@ async function renderPage(n) {
   const textContent = await page.getTextContent();
   await pdfjsLib.renderTextLayer({ textContent, container: tl, viewport, textDivs: [] }).promise;
   pageTextCache[n] = { text: textContent.items.map(i => i.str).join(' '), items: textContent.items, vp: viewport };
+  applyOcrLayer(tl, viewport, n);   // scanned page we've OCR'd -> lay in the selectable OCR text layer
 
   $('#pageInput').value = n;
   drawHighlights(); drawPins();
@@ -471,6 +474,7 @@ async function renderInto(n, pg) {
     const tc = await page.getTextContent();
     await pdfjsLib.renderTextLayer({ textContent: tc, container: tl, viewport: vp, textDivs: [] }).promise;
     pageTextCache[n] = { text: tc.items.map(i => i.str).join(' '), items: tc.items, vp };
+    applyOcrLayer(tl, vp, n);   // scanned page we've OCR'd -> lay in the selectable OCR text layer
     pg._vp = vp; pg._rendered = true;
     drawHighlights(); drawPins();
   } catch (e) { /* leave placeholder */ } finally { pg._rendering = false; }
@@ -525,9 +529,179 @@ async function ensurePageText(n) {
   if (pageTextCache[n]) return pageTextCache[n];
   const page = await pdfDoc.getPage(n);
   const vp = page.getViewport({ scale: state.ui.zoom });
+  const rec = ocrRec(n);   // scanned page we've already OCR'd -> use that text, skip the empty native layer
+  if (rec) { pageTextCache[n] = { text: rec.text || '', items: [], vp, ocr: true }; return pageTextCache[n]; }
   const tc = await page.getTextContent();
   pageTextCache[n] = { text: tc.items.map(i => i.str).join(' '), items: tc.items, vp };
   return pageTextCache[n];
+}
+
+/* ---------- OCR for scanned / image-based PDFs (client-side, Tesseract.js) ----------
+   Detection is free: PDF.js returns near-empty text for a scanned page. On a hit we prompt
+   (a banner); on accept we render each empty page to a canvas, OCR it in-browser (nothing
+   leaves the machine), and rebuild a transparent, selectable text layer from the word boxes —
+   so find, the AI tools, and source-anchored highlights all work like a native text PDF.
+   Results cache in IndexedDB keyed by the doc's SHA-256, so a document is OCR'd once. */
+let ocrStore = null;               // { pages: { [n]: { text, words:[{x0,y0,x1,y1,t}] } } } for the active doc
+let ocrRunning = false, ocrCancel = false;
+const TESS_VER = '5.1.1';
+function ocrRec(n) { return (ocrStore && ocrStore.pages && ocrStore.pages[n]) || null; }
+async function loadOcrStore(sha) {
+  ocrStore = null;
+  if (!sha) return;
+  try { const v = await idbGet('ocr:' + sha); if (v && v.pages) ocrStore = v; } catch (e) {}
+}
+// Lay transparent word spans (from OCR boxes) into a text layer, scaled to fill each box so the
+// browser's own selection geometry matches the words — that's what powers highlight anchoring.
+function buildOcrTextLayer(tl, vp, rec) {
+  if (!tl || !rec || !rec.words) return;
+  const spans = [];
+  for (const wd of rec.words) {
+    const w = (wd.x1 - wd.x0) * vp.width, h = (wd.y1 - wd.y0) * vp.height;
+    if (w <= 0 || h <= 1) continue;
+    const s = document.createElement('span');
+    s.textContent = wd.t;   // word only for now, so the box scale is measured from the word (not a trailing space)
+    s.style.cssText = 'left:' + (wd.x0 * vp.width).toFixed(2) + 'px;top:' + (wd.y0 * vp.height).toFixed(2)
+      + 'px;height:' + h.toFixed(2) + 'px;line-height:' + h.toFixed(2) + 'px;font-size:' + (h * 0.86).toFixed(2) + 'px';
+    s._bw = w; tl.appendChild(s); spans.push(s);
+  }
+  const nat = spans.map(s => s.offsetWidth);   // one batched reflow, then scale each word to its box width
+  // Scale the word to its box, THEN append a trailing space so selecting across words yields spaced,
+  // searchable text (the space sits in the inter-word gap and doesn't skew the box geometry).
+  spans.forEach((s, i) => { if (nat[i] > 0) s.style.transform = 'scaleX(' + (s._bw / nat[i]).toFixed(4) + ')'; s.textContent += ' '; });
+}
+// Called by the render paths after PDF.js builds its (empty) text layer for a scanned page.
+function applyOcrLayer(tl, vp, n) {
+  const rec = ocrRec(n); if (!rec) return;
+  buildOcrTextLayer(tl, vp, rec);
+  pageTextCache[n] = { text: rec.text || '', items: [], vp, ocr: true };
+}
+// Live-refresh a page that's already on screen once its OCR finishes.
+function applyOcrToRendered(n) {
+  const rec = ocrRec(n); if (!rec) return;
+  if (state.ui.continuous) {
+    const pg = document.querySelector('#contPages .pg[data-page="' + n + '"]');
+    if (pg && pg._rendered) { const tl = pg.querySelector('.textLayer'); tl.innerHTML = ''; buildOcrTextLayer(tl, pg._vp, rec); pageTextCache[n] = { text: rec.text, items: [], vp: pg._vp, ocr: true }; }
+  } else if (state.ui.page === n) {
+    const tl = document.getElementById('textLayer');
+    if (tl && viewport) { tl.innerHTML = ''; buildOcrTextLayer(tl, viewport, rec); pageTextCache[n] = { text: rec.text, items: [], vp: viewport, ocr: true }; }
+  }
+  drawHighlights();
+}
+function ensureTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  if (window.__tessLoad) return window.__tessLoad;
+  window.__tessLoad = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@' + TESS_VER + '/dist/tesseract.min.js';
+    s.async = true;
+    s.onload = () => res();
+    s.onerror = () => { window.__tessLoad = null; rej(new Error('tesseract load failed')); };
+    document.head.appendChild(s);
+  });
+  return window.__tessLoad;
+}
+function createTesseractWorker() {
+  return Tesseract.createWorker('eng', 1, {
+    workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@' + TESS_VER + '/dist/worker.min.js',
+    corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@' + TESS_VER,
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0',
+  });
+}
+// Tesseract v5 returns hierarchy under data.blocks; older builds expose data.words. Handle both.
+function ocrCollectWords(data) {
+  if (data && data.words && data.words.length) return data.words;
+  const out = [];
+  for (const b of (data && data.blocks || [])) for (const p of (b.paragraphs || [])) for (const l of (p.lines || [])) for (const w of (l.words || [])) out.push(w);
+  return out;
+}
+async function ocrOnePage(worker, n) {
+  const page = await pdfDoc.getPage(n);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.max(1.5, Math.min(4, 2000 / base.width));   // ~2000px wide is a good OCR resolution
+  const vp = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);   // white bg for cleaner OCR
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  const { data } = await worker.recognize(canvas, {}, { blocks: true });
+  const W = canvas.width, H = canvas.height;
+  const words = ocrCollectWords(data)
+    .filter(w => w.text && w.text.trim() && w.bbox)
+    .map(w => ({ x0: w.bbox.x0 / W, y0: w.bbox.y0 / H, x1: w.bbox.x1 / W, y1: w.bbox.y1 / H, t: w.text }));
+  return { text: (data.text || '').replace(/[ \t]+\n/g, '\n').trim(), words };
+}
+const OCR_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>';
+async function detectAndOfferOcr(doc) {
+  if (!pdfDoc || ocrRunning || !doc) return;
+  if (ocrStore && ocrStore.pages && Object.keys(ocrStore.pages).length) return;   // already OCR'd this doc
+  if (doc.ocrDismissed) return;                                                    // user said "not now"
+  const N = numPages, step = Math.max(1, Math.floor(N / 8)), sample = [];
+  for (let n = 1; n <= N && sample.length < 8; n += step) sample.push(n);
+  let empty = 0, checked = 0;
+  for (const n of sample) { try { const t = (await ensureText(n)) || ''; checked++; if (t.replace(/\s+/g, '').length < 12) empty++; } catch (e) {} }
+  if (checked && empty / checked >= 0.6 && !ocrRunning) showOcrBanner(doc);   // mostly-empty text -> looks scanned
+}
+// Multiple top-banners (e.g. the OCR prompt + the "open notes file" offer) can be live at once —
+// stack them vertically instead of overlapping at the same fixed top.
+function restackBanners() {
+  let top = 64;
+  document.querySelectorAll('.top-banner').forEach(b => { b.style.top = top + 'px'; top += b.offsetHeight + 8; });
+}
+function showOcrBanner(doc) {
+  document.getElementById('ocrBanner')?.remove();
+  const b = el('<div id="ocrBanner" class="top-banner ocr" role="status">'
+    + '<span class="tb-ic">' + OCR_ICON + '</span>'
+    + '<span class="tb-msg">This looks like a <b>scanned PDF</b> — no selectable text. Run OCR to make it searchable, highlightable & AI-readable?</span>'
+    + '<button class="tb-act" id="ocrRun">Run OCR</button>'
+    + '<button class="tb-x" id="ocrClose" aria-label="Dismiss">✕</button></div>');
+  document.body.appendChild(b);
+  b.querySelector('#ocrRun').onclick = () => runOcr(doc);
+  b.querySelector('#ocrClose').onclick = () => { b.remove(); doc.ocrDismissed = true; save(); restackBanners(); };
+  requestAnimationFrame(() => { b.classList.add('show'); restackBanners(); });
+}
+async function runOcr(doc) {
+  if (ocrRunning) return;
+  ocrRunning = true; ocrCancel = false;
+  const banner = document.getElementById('ocrBanner');
+  const msg = html => { const m = banner && banner.querySelector('.tb-msg'); if (m) m.innerHTML = html; };
+  msg('Loading the OCR engine…');
+  const run = banner && banner.querySelector('#ocrRun'); if (run) run.remove();
+  const stop = banner && banner.querySelector('#ocrClose');
+  if (stop) { stop.textContent = 'Stop'; stop.className = 'tb-act'; stop.onclick = () => { ocrCancel = true; msg('Finishing current page…'); }; }
+  let worker = null, done = 0;
+  // Capture the store + page count for THIS doc, so switching docs mid-run can't corrupt another
+  // doc's store (the module-level ocrStore/numPages get reassigned on switch).
+  const store = (ocrStore && ocrStore.pages) ? ocrStore : (ocrStore = { pages: {} });
+  const total = numPages, active = () => ocrStore === store;
+  try {
+    await ensureTesseract();
+    worker = await createTesseractWorker();
+    const todo = [];
+    for (let n = 1; n <= total; n++) { if (store.pages[n]) continue; const t = (await ensureText(n)) || ''; if (t.replace(/\s+/g, '').length < 12) todo.push(n); }
+    for (const n of todo) {
+      if (ocrCancel || !active()) break;
+      msg('Reading text… <b>page ' + (done + 1) + ' of ' + todo.length + '</b>');
+      try { store.pages[n] = await ocrOnePage(worker, n); idbPut('ocr:' + doc.sha, store); if (active()) applyOcrToRendered(n); } catch (e) {}
+      done++;
+    }
+  } catch (e) {
+    toast('OCR could not run: ' + (e && e.message || e), 'err');
+  } finally {
+    if (worker) { try { await worker.terminate(); } catch (e) {} }
+    ocrRunning = false;
+    document.getElementById('ocrBanner')?.remove();
+  }
+  // Refresh caches + on-screen layers for everything we OCR'd — only if this doc is still open.
+  if (active()) for (const k of Object.keys(store.pages)) {
+    const n = +k, rec = store.pages[k], vp = pageTextCache[n] ? pageTextCache[n].vp : null;
+    pageTextCache[n] = { text: rec.text, items: [], vp, ocr: true };
+    applyOcrToRendered(n);
+  }
+  if (done) toast(ocrCancel
+    ? ('OCR stopped — ' + done + ' page' + (done !== 1 ? 's' : '') + ' done.')
+    : ('OCR complete — ' + done + ' page' + (done !== 1 ? 's' : '') + ' now searchable & highlightable.'));
 }
 async function locateQuote(quote) {
   if (!pdfDoc) return null;
@@ -1926,9 +2100,9 @@ function showNotesBanner(docId, name) {
     + '<button class="tb-act" id="tbOpen">Open notes file…</button>'
     + '<button class="tb-x" id="tbClose" aria-label="Dismiss">✕</button></div>');
   document.body.appendChild(b);
-  b.querySelector('#tbOpen').onclick = () => { b.remove(); openNotesFileFor(docId); };  // direct click keeps the file-picker gesture
-  b.querySelector('#tbClose').onclick = () => b.remove();
-  requestAnimationFrame(() => b.classList.add('show'));
+  b.querySelector('#tbOpen').onclick = () => { b.remove(); restackBanners(); openNotesFileFor(docId); };  // direct click keeps the file-picker gesture
+  b.querySelector('#tbClose').onclick = () => { b.remove(); restackBanners(); };
+  requestAnimationFrame(() => { b.classList.add('show'); restackBanners(); });
 }
 // Pick a .notes.json and merge it into the given document (with a nudge if it was saved for another PDF).
 function openNotesFileFor(docId) {
@@ -2710,6 +2884,8 @@ async function boot() {
     else if (!state.sampleDismissed) { state.ui.activeDoc = 'sample'; startBytes = b64ToBytes(window.SAMPLE_PDF_B64); }
   }
   renderTree(); updateStorage();
+  const bootDoc = state.docs.find(d => d.id === state.ui.activeDoc);
+  await loadOcrStore(bootDoc && bootDoc.sha);   // boot skips switchDoc — load saved OCR before the first render
   let pdfOk = true;
   if (!startBytes && !READONLY) {
     pdfOk = false; showEmptyReader();   // library is empty (sample removed and no user docs)
@@ -2728,7 +2904,7 @@ async function boot() {
   render(); if (pdfOk) { drawHighlights(); drawPins(); }
   // Pre-cache all page text in the background so AI context retrieval + document search
   // can draw on the whole document (not just visited pages).
-  if (pdfOk) setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); }, 1200);
+  if (pdfOk) setTimeout(() => { for (let n = 1; n <= numPages; n++) ensurePageText(n).catch(() => {}); detectAndOfferOcr(bootDoc); }, 1200);
 }
 document.addEventListener('DOMContentLoaded', boot);
 })();

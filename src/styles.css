@@ -576,6 +576,7 @@ details.pt-item .pt-body{padding:0 12px 12px}
 .top-banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
 .top-banner .tb-ic{flex:0 0 auto;color:#93c5fd;display:flex}
 .top-banner .tb-msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.top-banner.ocr .tb-msg{white-space:normal;line-height:1.35}
 .top-banner .tb-msg b{color:#fff;font-weight:700}
 .top-banner .tb-act{flex:0 0 auto;background:var(--blue,#2563EB);color:#fff;font-weight:700;font-size:12.5px;padding:6px 13px;border-radius:8px;white-space:nowrap}
 .top-banner .tb-act:hover{filter:brightness(1.1)}
