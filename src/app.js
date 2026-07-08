@@ -551,6 +551,36 @@ async function loadOcrStore(sha) {
   if (!sha) return;
   try { const v = await idbGet('ocr:' + sha); if (v && v.pages) ocrStore = v; } catch (e) {}
 }
+// Fraction of the page covered by the single largest painted image (0..1). Replays the content
+// stream's transform stack so a full-page scan reads ~1.0 even when it also carries a bit of real
+// text (a stamp / watermark / page number).
+async function pageImageCoverage(page) {
+  try {
+    const OPS = pdfjsLib.OPS, ol = await page.getOperatorList();
+    const view = page.view, pageArea = (view[2] - view[0]) * (view[3] - view[1]);
+    if (!pageArea) return 0;
+    const mul = (a, b) => [a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1], a[0]*b[2]+a[2]*b[3], a[1]*b[2]+a[3]*b[3], a[0]*b[4]+a[2]*b[5]+a[4], a[1]*b[4]+a[3]*b[5]+a[5]];
+    let ctm = [1, 0, 0, 1, 0, 0]; const stack = []; let max = 0;
+    for (let i = 0; i < ol.fnArray.length; i++) {
+      const fn = ol.fnArray[i];
+      if (fn === OPS.save) stack.push(ctm.slice());
+      else if (fn === OPS.restore) { if (stack.length) ctm = stack.pop(); }
+      else if (fn === OPS.transform) ctm = mul(ctm, ol.argsArray[i]);
+      else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject || fn === OPS.paintImageXObjectRepeat || fn === OPS.paintInlineImageXObject) {
+        const w = Math.hypot(ctm[0], ctm[1]), h = Math.hypot(ctm[2], ctm[3]);
+        max = Math.max(max, (w * h) / pageArea);
+      }
+    }
+    return max;
+  } catch (e) { return 0; }
+}
+// A page "needs OCR" when it's image-dominated with little real text (a scan) — NOT merely because
+// it has a short paragraph. This catches scanned pages that carry a stamp/watermark as real text.
+async function pageNeedsOcr(n) {
+  const t = (await ensureText(n)) || '';
+  if (t.replace(/\s+/g, '').length > 200) return false;   // has genuine selectable text -> leave it
+  try { const page = await pdfDoc.getPage(n); return (await pageImageCoverage(page)) >= 0.5; } catch (e) { return false; }
+}
 // Lay transparent word spans (from OCR boxes) into a text layer, scaled to fill each box so the
 // browser's own selection geometry matches the words — that's what powers highlight anchoring.
 function buildOcrTextLayer(tl, vp, rec) {
@@ -573,6 +603,7 @@ function buildOcrTextLayer(tl, vp, rec) {
 // Called by the render paths after PDF.js builds its (empty) text layer for a scanned page.
 function applyOcrLayer(tl, vp, n) {
   const rec = ocrRec(n); if (!rec) return;
+  tl.innerHTML = '';   // replace the sparse native layer (e.g. a watermark) with the OCR one
   buildOcrTextLayer(tl, vp, rec);
   pageTextCache[n] = { text: rec.text || '', items: [], vp, ocr: true };
 }
@@ -639,9 +670,9 @@ async function detectAndOfferOcr(doc) {
   if (doc.ocrDismissed) return;                                                    // user said "not now"
   const N = numPages, step = Math.max(1, Math.floor(N / 8)), sample = [];
   for (let n = 1; n <= N && sample.length < 8; n += step) sample.push(n);
-  let empty = 0, checked = 0;
-  for (const n of sample) { try { const t = (await ensureText(n)) || ''; checked++; if (t.replace(/\s+/g, '').length < 12) empty++; } catch (e) {} }
-  if (checked && empty / checked >= 0.6 && !ocrRunning) showOcrBanner(doc);   // mostly-empty text -> looks scanned
+  let scanned = 0, checked = 0;
+  for (const n of sample) { try { checked++; if (await pageNeedsOcr(n)) scanned++; } catch (e) {} }
+  if (checked && scanned / checked >= 0.5 && !ocrRunning) showOcrBanner(doc);   // mostly image pages -> looks scanned
 }
 // Multiple top-banners (e.g. the OCR prompt + the "open notes file" offer) can be live at once —
 // stack them vertically instead of overlapping at the same fixed top.
@@ -679,7 +710,7 @@ async function runOcr(doc) {
     await ensureTesseract();
     worker = await createTesseractWorker();
     const todo = [];
-    for (let n = 1; n <= total; n++) { if (store.pages[n]) continue; const t = (await ensureText(n)) || ''; if (t.replace(/\s+/g, '').length < 12) todo.push(n); }
+    for (let n = 1; n <= total; n++) { if (store.pages[n]) continue; if (await pageNeedsOcr(n)) todo.push(n); }
     for (const n of todo) {
       if (ocrCancel || !active()) break;
       msg('Reading text… <b>page ' + (done + 1) + ' of ' + todo.length + '</b>');
