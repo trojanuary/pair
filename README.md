@@ -4,7 +4,7 @@
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF.
 
-<div align="center"><video src="https://pub.hyperagent.com/api/published/pbf01KWYSN0WB_HP0AM3QD12K3FX7D/reel-web.mp4" poster="https://pub.hyperagent.com/api/published/pbf01KWYSN4W4_Z6AH3C3K8HB9CB5P/reel-poster.jpg" controls muted loop autoplay playsinline width="820"></video></div>
+<div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></div>
 
 ---
 
