@@ -141,6 +141,7 @@ table.cmp .priceRow .pair{color:var(--blue-2)}
 /* settings split */
 .split{padding:70px 0 30px}
 .split .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.split.rev .wrap{grid-template-columns:.9fr 1.1fr}
 .split h2{font-size:clamp(30px,4.2vw,44px);line-height:1.04;margin:12px 0 18px}
 .split p{color:var(--ink-2);max-width:400px;margin:0 0 24px}
 .split .doodle{color:var(--blue);width:130px;opacity:.7;margin-top:10px}
@@ -211,7 +212,7 @@ table.cmp .priceRow .pair{color:var(--blue-2)}
   <div class="wrap">
     <a class="brand" href="#top"><svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="#2555F5"/><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="url(#g)"/><defs><linearGradient id="g" x1="4" y1="3" x2="28" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#3b6bff"/><stop offset="1" stop-color="#1636c9"/></linearGradient></defs><path d="M12 10.5h5.2c2.3 0 3.8 1.4 3.8 3.5s-1.5 3.6-3.8 3.6H14.5V22" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>PairedX</a>
     <nav class="nlinks">
-      <a href="#features">Features</a>
+      <a href="/features.html">Features</a>
       <a href="https://github.com/trojanuary/pair#readme" target="_blank" rel="noopener noreferrer">Docs</a>
       <a href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer">GitHub</a>
       <a href="#privacy">Privacy</a>
@@ -298,15 +299,15 @@ table.cmp .priceRow .pair{color:var(--blue-2)}
     </div>
   </section>
 
-  <section class="split">
+  <section class="split rev">
     <div class="wrap">
+      <div class="setframe" data-reveal><img src="docs/screenshots/settings-templates.jpg" alt="Settings → Templates: every system prompt and the agent's tool descriptions are editable, with Export / Import / Reset" loading="lazy"></div>
       <div class="split-copy" data-reveal>
         <div class="eyebrow">Editable prompts</div>
         <h2>Tune every <span class="mark">prompt<svg class="uline" viewBox="0 0 300 16" preserveAspectRatio="none" fill="none" aria-hidden="true"><path d="M4 10 C 58 3, 116 15, 172 7 S 264 4, 296 11" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></span>.</h2>
         <p>Every system prompt — even the tool-using agent's tool descriptions — is editable under <b>Settings&nbsp;→&nbsp;Templates</b>. Restyle the assistant's voice, then export or import your whole set as JSON.</p>
         <a class="btn primary lg" href="/app.html">Open Templates</a>
       </div>
-      <div class="setframe" data-reveal><img src="docs/screenshots/settings-templates.jpg" alt="Settings → Templates: every system prompt and the agent's tool descriptions are editable, with Export / Import / Reset" loading="lazy"></div>
     </div>
   </section>
 
@@ -349,7 +350,7 @@ table.cmp .priceRow .pair{color:var(--blue-2)}
     <a class="brand" href="#top"><svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="#2555F5"/><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="url(#g)"/><defs><linearGradient id="g" x1="4" y1="3" x2="28" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#3b6bff"/><stop offset="1" stop-color="#1636c9"/></linearGradient></defs><path d="M12 10.5h5.2c2.3 0 3.8 1.4 3.8 3.5s-1.5 3.6-3.8 3.6H14.5V22" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>PairedX</a>
     <span class="copy">© 2026 PairedX.com · <a href="https://github.com/trojanuary/pair/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">AGPL-3.0</a></span>
     <nav class="flinks">
-      <a href="#features">Features</a>
+      <a href="/features.html">Features</a>
       <a href="https://github.com/trojanuary/pair#readme" target="_blank" rel="noopener noreferrer">Docs</a>
       <a href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer">GitHub</a>
       <a href="#privacy">Privacy</a>
