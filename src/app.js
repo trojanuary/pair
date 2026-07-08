@@ -185,6 +185,7 @@ async function loadDocBytes(id) {
 }
 async function switchDoc(id) {
   if (id === state.ui.activeDoc) { renderTree(); return; }
+  document.getElementById('notesBanner')?.remove();   // clear a stale "open notes?" banner on switch
   const doc = state.docs.find(d => d.id === id); if (!doc) { toast('Document not found.', 'err'); return; }
   state.ui.activeDoc = id; state.ui.activeId = null; state.ui.page = 1;
   doc.lastOpened = nowISO();
@@ -247,7 +248,7 @@ async function openFiles(files) {
   }
   // Opened a single PDF with no notes alongside it, and no notes folder is set to auto-search:
   // offer to pick its .notes.json by hand (folder mode is handled in openPdfFile → maybeOfferFolderNotes).
-  if (storageCfg().mode !== 'folder' && openedIds.length === 1 && !notes.length) await maybeOfferNotesFallback(openedIds[0]);
+  if (storageCfg().mode !== 'folder' && openedIds.length === 1 && !notes.length) maybeOfferNotesFallback(openedIds[0]);
 }
 // Merge a parsed notes object into the library document it belongs to.
 async function attachNotesFile(obj, fileName, preferIds) {
@@ -1793,14 +1794,27 @@ async function maybeOfferFolderNotes(docId, dir) {
   catch (e) { toast('Could not read the notes file: ' + (e.message || e), 'err'); }
 }
 // No notes folder set and the freshly opened PDF has no notes yet: a browser can't peek into its
-// folder, so offer a one-time prompt to pick the .notes.json by hand. Asked once per document.
-async function maybeOfferNotesFallback(docId) {
+// folder, so surface a slim, non-blocking banner to pick the .notes.json by hand. Once per document.
+function maybeOfferNotesFallback(docId) {
   const doc = state.docs.find(d => d.id === docId); if (!doc) return;
   if (doc.notesAsked) return;                                        // already asked — don't nag
   if (state.annotations.some(a => docIdOf(a) === docId)) return;     // already has notes
   doc.notesAsked = true; save();                                     // mark asked, whether or not they proceed
-  if (!(await confirmDialog('Have saved notes for “' + doc.name + '”? Open the .notes.json to load them.', { okLabel: 'Open notes file…', cancelLabel: 'Not now' }))) return;
-  openNotesFileFor(docId);   // called right after the confirm click, so the picker keeps its user gesture
+  showNotesBanner(docId, doc.name);
+}
+// A dismissible announcement strip across the top of the reader — click to add notes, or ✕ to close.
+// Non-blocking: no backdrop, the page stays fully usable underneath.
+function showNotesBanner(docId, name) {
+  const old = document.getElementById('notesBanner'); if (old) old.remove();
+  const b = el('<div id="notesBanner" class="top-banner" role="status">'
+    + '<span class="tb-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h8l6 6v14H6z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg></span>'
+    + '<span class="tb-msg">Have notes for <b>' + esc(name) + '</b>? Open its <b>.notes.json</b> to load them.</span>'
+    + '<button class="tb-act" id="tbOpen">Open notes file…</button>'
+    + '<button class="tb-x" id="tbClose" aria-label="Dismiss">✕</button></div>');
+  document.body.appendChild(b);
+  b.querySelector('#tbOpen').onclick = () => { b.remove(); openNotesFileFor(docId); };  // direct click keeps the file-picker gesture
+  b.querySelector('#tbClose').onclick = () => b.remove();
+  requestAnimationFrame(() => b.classList.add('show'));
 }
 // Pick a .notes.json and merge it into the given document (with a nudge if it was saved for another PDF).
 function openNotesFileFor(docId) {
