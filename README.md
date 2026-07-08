@@ -29,7 +29,7 @@ A connector line ties each note in the side panel to the exact spot it came from
 
 <div align="center"><img src="docs/screenshots/04-connector.jpg" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
 
-<div align="center"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a figure captured out of the PDF, with an AI answer about it" width="820"></div>
+<div align="center"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a figure captured out of the PDF, with an AI answer about it" width="420"></div>
 
 ## Why it's different
 
