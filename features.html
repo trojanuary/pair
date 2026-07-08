@@ -25,9 +25,10 @@ a:hover{text-decoration:underline}
 svg{display:block}
 
 /* header */
-header{position:sticky;top:0;z-index:50;background:rgba(247,243,234,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+header{position:sticky;top:0;z-index:50;background:rgba(247,243,234,.82);backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid transparent;transition:border-color .3s}
+header.scrolled{border-color:var(--line)}
 header .wrap{display:flex;align-items:center;gap:14px;height:68px}
-.brand{display:flex;align-items:center;gap:11px;font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:-.01em;color:var(--ink)}
+.brand{display:flex;align-items:center;gap:11px;font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:-.01em;line-height:1.6;color:var(--ink)}
 .logo{width:30px;height:30px;flex:none}
 header nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-weight:600;font-size:14.5px}
 header nav a{color:var(--ink-2)}
@@ -58,20 +59,29 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .legend span{display:inline-flex;align-items:center;gap:8px}
 .legend b{width:20px;height:20px;border-radius:50%;background:#3E9266;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;flex:0 0 auto}
 
-/* feature rows */
-.feat{padding:30px 0}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;padding:34px 0;border-top:1px solid var(--line)}
+/* feature rows (2-col panels) + full-width bands (big, full-app screenshots) */
+.feat{padding:18px 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;padding:34px 0;border-top:1px solid var(--line)}
 .row.rev .copy{order:2}
 .copy h2{font-family:var(--serif);font-weight:600;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:8px 0 8px}
 .copy .lead{color:var(--ink-2);font-size:16.5px;margin:0 0 14px;max-width:460px}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
 .chips span{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink)}
-.shot{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);overflow:hidden;line-height:0}
+.shot{border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh);overflow:hidden;line-height:0;background:var(--card)}
 .shot img{width:100%;display:block}
-.shot.tall{max-height:520px;overflow:hidden;position:relative}
-.shot.tall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(to bottom,transparent,var(--card))}
-.shot.pad{padding:14px;background:var(--paper);border:1px solid var(--line)}
-.shot.pad img{border-radius:10px;border:1px solid var(--line)}
+/* panels: modest, centered in their column — small crops smaller still */
+.row .shot{max-width:470px;margin-inline:auto}
+.row .shot.sm{max-width:330px}
+.shot.tall{max-height:430px;position:relative}
+.shot.tall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:62px;background:linear-gradient(to bottom,transparent,var(--card))}
+.shot.pad{padding:12px;background:var(--paper)}
+.shot.pad img{border-radius:9px;border:1px solid var(--line)}
+/* bands: full-app / full-screen screenshots, shown large */
+.band{border-top:1px solid var(--line);padding:46px 0 36px;text-align:center}
+.band h2{font-family:var(--serif);font-weight:600;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:8px 0 8px}
+.band .lead{color:var(--ink-2);font-size:16.5px;max-width:620px;margin:0 auto 6px}
+.band .chips{justify-content:center;margin:12px auto 22px;max-width:680px}
+.band .shot{max-width:1180px;margin:0 auto;text-align:left}
 
 /* everything-else grid */
 .all{background:var(--card);border-top:1px solid var(--line)}
@@ -149,13 +159,11 @@ footer nav{margin-left:auto;display:flex;gap:18px}
     <div class="shot pad"><img src="docs/screenshots/03-toolbar.png" alt="The reader toolbar: select, highlight, comment, screenshot tools"></div>
   </div>
 
-  <div class="row rev" id="linked">
-    <div class="copy">
-      <div class="eyebrow">Source-linked</div>
-      <h2>Every note ties back to its exact spot.</h2>
-      <p class="lead">A connector line joins each card in the panel to the highlighted passage or captured figure it came from — click a note and the reader jumps right to it.</p>
-      <div class="chips"><span>Connector line</span><span>Numbered pins</span><span>Jump to source</span></div>
-    </div>
+  <div class="band" id="linked">
+    <div class="eyebrow">Source-linked</div>
+    <h2>Every note ties back to its exact spot.</h2>
+    <p class="lead">A connector line joins each card in the panel to the highlighted passage or captured figure it came from — click a note and the reader jumps right to it.</p>
+    <div class="chips"><span>Connector line</span><span>Numbered pins</span><span>Jump to source</span></div>
     <div class="shot"><img src="docs/screenshots/04-connector.jpg" alt="A connector line joining a note to its highlighted passage on the page"></div>
   </div>
 
@@ -166,7 +174,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <p class="lead">Ask about any selection; the answer is saved as a note linked to that passage, with rendered <b>math &amp; code</b> and a <b>provenance</b> panel showing exactly what it used.</p>
       <div class="chips"><span>Source-linked answers</span><span>LaTeX &amp; code</span><span>@ai mentions</span><span>Provenance chips</span></div>
     </div>
-    <div class="shot tall"><img src="docs/screenshots/05-ai-answer.jpg" alt="An AI answer with rendered content and a provenance panel"></div>
+    <div class="shot tall sm"><img src="docs/screenshots/05-ai-answer.jpg" alt="An AI answer with rendered content and a provenance panel"></div>
   </div>
 
   <div class="row rev" id="agent">
@@ -176,7 +184,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <p class="lead">For deeper questions the AI reads other pages, searches the document, scans the outline, or searches the web — and you can open <b>“the agent's work”</b> to see each call.</p>
       <div class="chips"><span>Read page</span><span>Search document</span><span>Outline</span><span>Web search</span><span>Create visual</span></div>
     </div>
-    <div class="shot tall"><img src="docs/screenshots/06-agent-trace.jpg" alt="The agent trace showing each tool call the AI made"></div>
+    <div class="shot tall sm"><img src="docs/screenshots/06-agent-trace.jpg" alt="The agent trace showing each tool call the AI made"></div>
   </div>
 
   <div class="row" id="figures">
@@ -186,7 +194,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <p class="lead">Screenshot any figure or equation and ask about it. The AI can also <b>generate an image</b> or a text/ASCII diagram to explain a concept, grounded in the paper.</p>
       <div class="chips"><span>Figure capture</span><span>Generated images</span><span>ASCII diagrams</span><span>Takeaways</span></div>
     </div>
-    <div class="shot tall"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a captured figure, with an AI answer about it"></div>
+    <div class="shot tall sm"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a captured figure, with an AI answer about it"></div>
   </div>
 
   <div class="row rev" id="notes">
@@ -196,7 +204,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <p class="lead">Check any message — say the AI's summary instead of your question — to show it <b>in full</b> on the collapsed card. Plus tags, resolve, filters, search, and sort.</p>
       <div class="chips"><span>Show on card</span><span>Tags</span><span>Resolve</span><span>Filter &amp; search</span><span>Sort by time / page</span></div>
     </div>
-    <div class="shot tall"><img src="docs/screenshots/feat-show-on-card.jpg" alt="A collapsed card showing the full AI answer, tagged AI"></div>
+    <div class="shot tall sm"><img src="docs/screenshots/feat-show-on-card.jpg" alt="A collapsed card showing the full AI answer, tagged AI"></div>
   </div>
 
   <div class="row" id="library">
@@ -206,16 +214,14 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <p class="lead">Home, Recents, Starred, and Trash. Star, trash, restore, or delete — the same PDF opened again is recognized by content (SHA-256) so its notes just re-attach.</p>
       <div class="chips"><span>Home / Recents / Starred / Trash</span><span>Content-addressed</span><span>Notes auto-attach</span></div>
     </div>
-    <div class="shot tall"><img src="docs/screenshots/feat-library.jpg" alt="The library sidebar with documents and star/trash actions"></div>
+    <div class="shot tall sm"><img src="docs/screenshots/feat-library.jpg" alt="The library sidebar with documents and star/trash actions"></div>
   </div>
 
-  <div class="row rev" id="share">
-    <div class="copy">
-      <div class="eyebrow">Share &amp; export</div>
-      <h2>Send a whole annotated paper.</h2>
-      <p class="lead"><b>Share as HTML</b> bundles the PDF + notes into one self-contained file that opens anywhere (read-only) and re-opens in PairedX to keep editing. Or export a clean annotations <b>PDF</b>.</p>
-      <div class="chips"><span>Single-file HTML</span><span>Round-trip editing</span><span>Export to PDF</span><span>Save / import notes JSON</span></div>
-    </div>
+  <div class="band" id="share">
+    <div class="eyebrow">Share &amp; export</div>
+    <h2>Send a whole annotated paper.</h2>
+    <p class="lead"><b>Share as HTML</b> bundles the PDF + notes into one self-contained file that opens anywhere (read-only) and re-opens in PairedX to keep editing. Or export a clean annotations <b>PDF</b>.</p>
+    <div class="chips"><span>Single-file HTML</span><span>Round-trip editing</span><span>Export to PDF</span><span>Save / import notes JSON</span></div>
     <div class="shot"><img src="docs/screenshots/feat-export-pdf.jpg" alt="The Export annotations screen with include options and a live preview"></div>
   </div>
 
@@ -360,5 +366,10 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   <nav><a href="/#features">Home</a><a href="/app">App</a><a href="https://github.com/trojanuary/pair">GitHub</a><a href="/#privacy">Privacy</a></nav>
 </div></footer>
 
+<script>
+  // match the landing: header border only appears once you scroll (no line at the top)
+  const _h=document.querySelector('header');
+  addEventListener('scroll',()=>_h.classList.toggle('scrolled',scrollY>4),{passive:true});
+</script>
 </body>
 </html>
