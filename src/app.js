@@ -238,8 +238,12 @@ async function openFiles(files) {
   if (!files.length) return;
   const isJson = f => /\.json$/i.test(f.name) || f.type === 'application/json';
   const isPdf = f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+  const isHtml = f => /\.html?$/i.test(f.name) || f.type === 'text/html';
+  const htmls = files.filter(isHtml);
   const pdfs = files.filter(isPdf);
-  const notes = files.filter(f => isJson(f) && !isPdf(f));
+  const notes = files.filter(f => isJson(f) && !isPdf(f) && !isHtml(f));
+  // A shared "<paper>.annotated.html" carries the PDF + notes: open each as an editable library doc.
+  for (const hf of htmls) { try { await importSharedHTML(hf); } catch (e) { toast('Could not open ' + hf.name + ': ' + (e && e.message || e), 'err'); } }
   const openedIds = [];
   for (const f of pdfs) { try { const id = await openPdfFile(f); if (id) openedIds.push(id); } catch (e) { toast('Could not open ' + f.name + ': ' + (e && e.message || e), 'err'); } }
   for (const nf of notes) {
@@ -249,6 +253,39 @@ async function openFiles(files) {
   // Opened a single PDF with no notes alongside it, and no notes folder is set to auto-search:
   // offer to pick its .notes.json by hand (folder mode is handled in openPdfFile → maybeOfferFolderNotes).
   if (storageCfg().mode !== 'folder' && openedIds.length === 1 && !notes.length) maybeOfferNotesFallback(openedIds[0]);
+}
+// Import a shared single-file HTML (exported by exportSelfContainedHTML): pull the embedded PDF +
+// notes back out and add them as a normal, editable library document, so the recipient can keep
+// annotating. The exact inverse of the export — closes the share → edit → re-share loop.
+async function importSharedHTML(f) {
+  const html = await f.text();
+  const marker = 'window.__PAIR_BUNDLE__=';
+  const i = html.indexOf(marker);
+  if (i < 0) { toast('“' + f.name + '” isn’t a PairedX shared paper.', 'err'); return; }
+  let bundle;
+  try {
+    const start = i + marker.length;
+    const end = html.indexOf(';</script>', start);   // JSON has every "<" escaped, so this is unambiguous
+    if (end < 0) throw new Error('unterminated bundle');
+    bundle = JSON.parse(html.slice(start, end).trim());
+  } catch (e) { toast('Could not read the shared paper in “' + f.name + '”.', 'err'); return; }
+  if (!bundle || !bundle.pdfB64) { toast('“' + f.name + '” has no embedded PDF.', 'err'); return; }
+  const bytes = b64ToBytes(bundle.pdfB64);
+  const sha = bundle.sha || await sha256Hex(bytes);
+  const name = bundle.name || (f.name || 'Shared paper').replace(/\.annotated\.html?$/i, '').replace(/\.html?$/i, '') + '.pdf';
+  // Content-address dedupe: same paper already in the library → reuse it and merge, else add it.
+  let id, dup = sha && state.docs.find(d => d.sha === sha && !d.trashed);
+  if (dup) { id = dup.id; if (!_docBytes[id]) { _docBytes[id] = bytes; idbPut('pdf:' + id, bytes); } }
+  else {
+    id = uid('doc'); _docBytes[id] = bytes; idbPut('pdf:' + id, bytes);
+    state.docs.push({ id, name, sha, kind: 'user', addedAt: nowISO(), lastOpened: nowISO() });
+  }
+  state.ui.libView = 'home'; save();
+  await switchDoc(id);
+  let n = 0;
+  if (bundle.notes && Array.isArray(bundle.notes.annotations)) n = applyNotesJSON(bundle.notes, id, { merge: true });
+  updateStorage();
+  toast('Opened ' + name + (n ? ' — ' + n + ' note' + (n === 1 ? '' : 's') + ' loaded. Keep annotating.' : '.'));
 }
 // Merge a parsed notes object into the library document it belongs to.
 async function attachNotesFile(obj, fileName, preferIds) {
@@ -2558,7 +2595,7 @@ function applyReadOnly() {
    'btnSaveNotes', 'btnImportNotes', 'btnClearNotes', 'btnShareHtml', 'btnSettings'
   ].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
   $$('.sb-storage').forEach(e => e.style.display = 'none');
-  const banner = el('<div id="roBanner">Read-only annotated paper · made with <a href="https://pairedx.com" target="_blank" rel="noopener">PairedX</a></div>');
+  const banner = el('<div id="roBanner">Read-only annotated paper · To add notes, open this file at <a href="https://pairedx.com/app" target="_blank" rel="noopener">pairedx.com</a> · made with PairedX</div>');
   document.body.appendChild(banner);
 }
 async function boot() {
