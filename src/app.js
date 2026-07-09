@@ -507,6 +507,27 @@ function scrollToPage(n, smooth) {
   const rd = $('#rdScroll'), pg = $(`#contPages .pg[data-page="${n}"]`); if (!rd || !pg) return;
   rd.scrollTop += pg.getBoundingClientRect().top - rd.getBoundingClientRect().top - 12;
 }
+// Scroll the reader so a note's linked source is actually in view (~30% down the viewport), not just
+// the page top — otherwise a source in the lower half of a tall page stays below the fold and the
+// connector line dangles off-screen toward its pin.
+async function scrollToAnnotation(a) {
+  const rd = $('#rdScroll'); if (!rd || !a) return;
+  const rc = a.rects && a.rects[0];
+  if (state.ui.continuous) {
+    let pg = $(`#contPages .pg[data-page="${a.page}"]`);
+    if (pg && !pg._rendered) await renderInto(a.page, pg);
+    pg = $(`#contPages .pg[data-page="${a.page}"]`); if (!pg) return;
+    state.ui.page = a.page; const pi = $('#pageInput'); if (pi) pi.value = a.page;
+    const top = pg.getBoundingClientRect().top - rd.getBoundingClientRect().top;
+    rd.scrollTop += top + (rc ? rc.y * pg.offsetHeight : 0) - rd.clientHeight * 0.3;
+  } else {
+    if (a.page !== state.ui.page) await renderPage(a.page);
+    const wrap = $('#pageWrap'); if (!wrap) return;
+    const top = wrap.getBoundingClientRect().top - rd.getBoundingClientRect().top;
+    rd.scrollTop += top + (rc ? rc.y * wrap.offsetHeight : 0) - rd.clientHeight * 0.3;
+  }
+  drawPins(); requestAnimationFrame(drawConnector);
+}
 function currentContinuousPage() {
   const rd = $('#rdScroll'); if (!rd) return state.ui.page; const mid = rd.getBoundingClientRect().top + rd.clientHeight * 0.35;
   let best = state.ui.page, bestD = Infinity;
@@ -1010,12 +1031,7 @@ function followNoteBottom(id) {
 function selectAnnotation(id, scrollCard, scrollPage) {
   state.ui.activeId = id; save();
   const a = state.annotations.find(x => x.id === id);
-  if (a && scrollPage) {
-    // Continuous mode: scroll the stacked view to the note's page (renderPage would draw into the
-    // hidden single-page canvas and never move the reader). Single mode: swap the page as before.
-    if (state.ui.continuous) gotoPage(a.page);
-    else if (a.page !== state.ui.page) renderPage(a.page).then(() => { drawPins(); });
-  }
+  if (a && scrollPage) scrollToAnnotation(a);   // bring the linked source into view (not just the page top)
   render(); drawPins();
   if (scrollCard) scrollNoteIntoView(id, true);
   requestAnimationFrame(drawConnector);
