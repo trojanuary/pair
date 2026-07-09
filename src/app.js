@@ -829,6 +829,7 @@ function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
   $('#selPop').classList.add('hidden');
   // For "Ask AI", flag this note so the user's next message routes to the AI even without a "?".
   askNextId = (kind === 'ask') ? ann.id : null;
+  if (kind !== 'yellow') openRightPanel(ann.id);   // Note / Ask AI reveal the panel; a highlight stays silent
   selectAnnotation(ann.id, true);   // expands the note; its inline composer auto-focuses
   drawHighlights(); drawPins();
   pendingSel = null;
@@ -899,6 +900,7 @@ async function captureRegion(l, t, w, h) {
     rects: [{ x: dx / cr.width, y: dy / cr.height, w: dw / cr.width, h: dh / cr.height }],
   });
   setTool('cursor');
+  openRightPanel(ann.id);           // reveal the panel so the captured note is visible
   selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
   toast('Region captured — ask the AI about it below.');
 }
@@ -949,8 +951,19 @@ function drawPins() {
   });
   drawConnector();
 }
+// Open the notes panel if it's collapsed (used when a note/answer/screenshot/comment is created, so
+// the new card is visible and the connector has something to point at). Highlighting doesn't call this.
+function openRightPanel(settleId) {
+  if (!state.ui.collapseRight) return;
+  state.ui.collapseRight = false;
+  document.getElementById('app').classList.remove('collapse-right');
+  save();
+  // Re-scroll the card and redraw the connector once the panel's slide-in transition (.18s) settles.
+  setTimeout(() => { if (settleId) scrollNoteIntoView(settleId, true); drawConnector(); }, 210);
+}
 function drawConnector() {
   const svg = $('#connectors'); if (!svg) return; while (svg.firstChild) svg.removeChild(svg.firstChild);
+  if (state.ui.collapseRight) return;   // notes panel closed -> no visible card to point at, so drop the line
   const a = state.annotations.find(x => x.id === state.ui.activeId);
   if (!a) return;
   const pin = document.querySelector(`#rdScroll .pin[data-ann="${a.id}"]`);
@@ -2723,7 +2736,7 @@ function wire() {
     const x = clamp((cx - r.left) / vp.width, 0, 0.97), y = clamp((cy - r.top) / vp.height, 0, 0.97);
     const pt = pageTextCache[pageNum] || { text: '' };
     const ann = newAnnotation({ source_type: 'free_comment', page: pageNum, section: sectionForIndex(pt.text, 0), rects: [{ x, y, w: 0.02, h: 0.02 }] });
-    setTool('cursor'); selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
+    setTool('cursor'); openRightPanel(ann.id); selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
     toast('Comment placed — type your note below.');
   };
   // Comment tool: click any page to drop a point comment — works in single AND continuous mode.
@@ -2742,7 +2755,7 @@ function wire() {
   { const _bx = $('#btnExportTop'); if (_bx) _bx.onclick = openExport; }
   // selection popover
   document.addEventListener('mouseup', e => { const t = e.target; if (t && t.nodeType === 1 && t.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
-  $('#spHi').onclick = () => createFromSelection('yellow');
+  $('#spHi').onclick = () => highlightSelection();   // popover Highlight is silent, like the highlight tool
   $('#spNote').onclick = () => createFromSelection('text');
   $('#spAsk').onclick = () => createFromSelection('ask');
   document.addEventListener('scroll', () => { if (pendingSel && window.getSelection && String(window.getSelection()).trim()) positionSelPop(); else $('#selPop').classList.add('hidden'); }, true);
