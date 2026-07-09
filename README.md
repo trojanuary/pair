@@ -4,9 +4,9 @@
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF. · **[See every feature →](https://pairedx.com/features.html)**
 
-<div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></div>
+<div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/pairedx-walkthrough.gif" alt="PairedX walkthrough — highlight a passage, ask the AI, and the answer stays pinned to the source with a connector line" width="740"></a></div>
 
-<div align="center"><sub>▶ <b><a href="docs/screenshots/pairedx-reel.mp4">Watch the full walkthrough</a></b> · or try it live at <a href="https://pairedx.com">pairedx.com</a></sub></div>
+<div align="center"><sub>▶ <b><a href="https://pairedx.com">Watch the full walkthrough</a></b> — highlight → ask → source-pinned answer</sub></div>
 
 ---
 
@@ -30,15 +30,15 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 
 A connector line ties each note in the side panel to the exact spot it came from — a **highlighted passage** or a **captured figure** — so you can always trace a claim back to the page.
 
-<div align="center"><img src="docs/screenshots/04-connector.jpg" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
+<div align="center"><img src="docs/screenshots/04-connector.framed.png" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="720"></div>
 
-<div align="center"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a figure captured out of the PDF, with an AI answer about it" width="420"></div>
+<div align="center"><img src="docs/screenshots/07-screenshot-note.framed.png" alt="A note built from a figure captured out of the PDF, with an AI answer about it" width="380"></div>
 
 ## Scanned PDFs read like real text — on your device
 
 Open an image-only PDF and PairedX notices there's no selectable text, then offers **one-tap OCR that runs entirely in your browser** (via Tesseract) — your file is never uploaded. It rebuilds a real, positioned text layer, so **find, highlights, source-anchored notes, and the AI all work like a normal PDF**. Results are cached (keyed by the file's SHA-256), so a document is OCR'd once.
 
-<div align="center"><img src="docs/screenshots/feat-ocr-banner.jpg" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR" width="820"></div>
+<div align="center"><img src="docs/screenshots/feat-ocr-banner.framed.png" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR" width="720"></div>
 
 ## Why it's different
 
@@ -71,7 +71,7 @@ Any one of these exists somewhere — having them **together** is the wedge. (We
 
 **3. Ask the AI.** In any note, type a question (or just `@ai`) and send. The answer renders with math/code and stays linked to the source; open **“Show the agent’s work”** to see which tools it used.
 
-<div align="center"><img src="docs/screenshots/05-ai-answer.jpg" alt="A source-linked AI answer with rendered LaTeX and a provenance panel" width="420"></div>
+<div align="center"><img src="docs/screenshots/05-ai-answer.framed.png" alt="A source-linked AI answer with rendered LaTeX and a provenance panel" width="410"></div>
 
 **4. Save / move your notes.** In **Settings → Storage**, optionally choose a folder to auto-save a portable `<doc>.notes.json` next to your PDF, or export/import notes as JSON.
 
@@ -79,7 +79,7 @@ Any one of these exists somewhere — having them **together** is the wedge. (We
 
 Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
-<div align="center"><img src="docs/screenshots/feat-settings-ai.jpg" alt="Settings — two providers, recommended OpenRouter" width="420"></div>
+<div align="center"><img src="docs/screenshots/feat-settings-ai.framed.png" alt="Settings — two providers, recommended OpenRouter" width="410"></div>
 
 - **OpenRouter** (recommended) — one key for hundreds of models; powers text, images, and the tool-using agent.
 - **OpenAI-compatible API** — point it at any endpoint (OpenAI, Together, Groq, a local model…) with a base URL + key + text/image models.
@@ -88,7 +88,7 @@ Open **Settings → AI & Tools**. Two providers, both OpenAI-compatible:
 
 Every prompt — including the 7 agent tool descriptions — is editable and exportable under **Settings → Templates**:
 
-<div align="center"><img src="docs/screenshots/settings-templates.jpg" alt="Settings — editable prompt templates" width="420"></div>
+<div align="center"><img src="docs/screenshots/settings-templates.framed.png" alt="Settings — editable prompt templates" width="410"></div>
 
 ---
 
