@@ -8,6 +8,8 @@
 
 <div align="center"><sub>▶ <b><a href="https://pairedx.com">Watch the full walkthrough</a></b> — highlight → ask → source-pinned answer</sub></div>
 
+<div align="center"><a href="#what-it-is">What it is</a> · <a href="#every-note-stays-linked-to-its-source">Source-linked notes</a> · <a href="#scanned-pdfs-read-like-real-text--on-your-device">Scanned-PDF OCR</a> · <a href="#why-its-different">Why it's different</a> · <a href="#using-the-app">Using the app</a> · <a href="#configure-the-ai">Configure the AI</a> · <a href="#deploy-your-own-vercel"><b>Deploy your own →</b></a> · <a href="#run-locally"><b>Run locally →</b></a> · <a href="#how-it-works-codebase">How it works</a> · <a href="#privacy--keys">Privacy &amp; keys</a> · <a href="#license">License</a></div>
+
 ---
 
 ## What it is
