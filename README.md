@@ -4,9 +4,9 @@
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF. · **[See every feature →](https://pairedx.com/features.html)**
 
-<div align="center"><video src="https://github.com/trojanuary/pair/raw/main/docs/screenshots/pairedx-reel.mp4" poster="docs/screenshots/reel-poster.jpg" controls muted width="820"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></video></div>
+<div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></div>
 
-<sub>▶ Full walkthrough above (or watch it live on <a href="https://pairedx.com">pairedx.com</a>). If the video doesn't play inline, the animated preview is shown instead.</sub>
+<div align="center"><sub>▶ <b><a href="docs/screenshots/pairedx-reel.mp4">Watch the full walkthrough</a></b> · or try it live at <a href="https://pairedx.com">pairedx.com</a></sub></div>
 
 ---
 
