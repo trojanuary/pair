@@ -16,7 +16,7 @@ const isOR = (url) => url.indexOf('openrouter.ai') >= 0;
 // A quota / credit / rate-limit failure. When it happens on the SHARED server key we nudge the user
 // to their own key instead of leaking the provider's "add credits" message (which points at the
 // owner's account, not theirs, and reads as the user's fault).
-const isQuotaErr = (e) => { const s = e && e.status; return s === 402 || s === 429 || /insufficient|quota|rate.?limit|credit|payment required|billing/i.test(String((e && e.message) || '')); };
+const isQuotaErr = (e) => { const s = e && e.status; return s === 402 || s === 429 || /insufficient|quota|rate.?limit|limit exceeded|credit|payment required|billing|openrouter\.ai\/(workspaces|settings)/i.test(String((e && e.message) || '')); };
 const QUOTA_MSG = 'The site’s shared demo quota is used up right now — add your own key in Settings → AI & Tools to keep going (it stays in your browser and is never saved on our server).';
 
 async function readBody(req) {

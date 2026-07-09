@@ -6,7 +6,7 @@ const ENV = { openrouter: 'OPENROUTER_API_KEY', compat: 'OPENAI_API_KEY' };
 const DEFAULT_IMG = { openrouter: 'google/gemini-3.1-flash-lite-image', compat: 'gpt-image-1' };
 const OR_HEADERS = { 'HTTP-Referer': 'https://pairedx.com', 'X-Title': 'Source-Linked AI Reading Workspace' };
 const baseOf = (u) => (u && String(u).trim() ? String(u).trim() : 'https://api.openai.com/v1').replace(/\/+$/, '');
-const isQuotaErr = (e) => { const s = e && e.status; return s === 402 || s === 429 || /insufficient|quota|rate.?limit|credit|payment required|billing/i.test(String((e && e.message) || '')); };
+const isQuotaErr = (e) => { const s = e && e.status; return s === 402 || s === 429 || /insufficient|quota|rate.?limit|limit exceeded|credit|payment required|billing|openrouter\.ai\/(workspaces|settings)/i.test(String((e && e.message) || '')); };
 const QUOTA_MSG = 'The site’s shared demo quota is used up right now — add your own key in Settings → AI & Tools to keep going (it stays in your browser and is never saved on our server).';
 
 async function readBody(req) {
