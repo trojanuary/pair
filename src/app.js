@@ -945,7 +945,7 @@ function drawPins() {
       const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}" data-ann="${a.id}">${a.anchor}</div>`);
       p.style.left = (rc.x + rc.w) * w.vp.width + 'px';
       p.style.top = rc.y * w.vp.height + 'px';
-      p.onclick = () => selectAnnotation(a.id, false, true);
+      p.onclick = () => { openRightPanel(a.id); selectAnnotation(a.id, false, true); };   // clicking a note's number reveals the panel
       pins.appendChild(p);
     });
   });
