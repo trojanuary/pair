@@ -4,7 +4,9 @@
 
 **▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF. · **[See every feature →](https://pairedx.com/features.html)**
 
-<div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></div>
+<div align="center"><video src="https://github.com/trojanuary/pair/raw/main/docs/screenshots/pairedx-reel.mp4" poster="docs/screenshots/reel-poster.jpg" controls muted width="820"><a href="https://pairedx.com/app"><img src="docs/screenshots/demo.gif" alt="PairedX in action — click a note and a connector line ties it to the exact highlighted passage on the page" width="820"></a></video></div>
+
+<sub>▶ Full walkthrough above (or watch it live on <a href="https://pairedx.com">pairedx.com</a>). If the video doesn't play inline, the animated preview is shown instead.</sub>
 
 ---
 
@@ -24,12 +26,6 @@ A single-user, in-browser reading workspace for papers and reports. Open a PDF, 
 - **Portable storage** — notes stay in the browser and can auto-save to a folder as `<doc>.notes.json` (Chrome/Edge), so they travel with the PDF (great for Drive folders and other machines). Export/Import works in any browser.
 - **Fully customizable prompts** — edit every system prompt and even the agent’s tool descriptions in **Settings → Templates**, and export/import them as JSON.
 
-## Scanned PDFs read like real text — on your device
-
-Open an image-only PDF and PairedX notices there's no selectable text, then offers **one-tap OCR that runs entirely in your browser** (via Tesseract) — your file is never uploaded. It rebuilds a real, positioned text layer, so **find, highlights, source-anchored notes, and the AI all work like a normal PDF**. Results are cached (keyed by the file's SHA-256), so a document is OCR'd once.
-
-<div align="center"><img src="docs/screenshots/feat-ocr-banner.jpg" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR" width="820"></div>
-
 ## Every note stays linked to its source
 
 A connector line ties each note in the side panel to the exact spot it came from — a **highlighted passage** or a **captured figure** — so you can always trace a claim back to the page.
@@ -37,6 +33,12 @@ A connector line ties each note in the side panel to the exact spot it came from
 <div align="center"><img src="docs/screenshots/04-connector.jpg" alt="A note in the side panel joined by a connector line to the exact highlighted sentence on the PDF" width="820"></div>
 
 <div align="center"><img src="docs/screenshots/07-screenshot-note.jpg" alt="A note built from a figure captured out of the PDF, with an AI answer about it" width="420"></div>
+
+## Scanned PDFs read like real text — on your device
+
+Open an image-only PDF and PairedX notices there's no selectable text, then offers **one-tap OCR that runs entirely in your browser** (via Tesseract) — your file is never uploaded. It rebuilds a real, positioned text layer, so **find, highlights, source-anchored notes, and the AI all work like a normal PDF**. Results are cached (keyed by the file's SHA-256), so a document is OCR'd once.
+
+<div align="center"><img src="docs/screenshots/feat-ocr-banner.jpg" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR" width="820"></div>
 
 ## Why it's different
 
