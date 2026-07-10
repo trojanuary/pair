@@ -552,17 +552,22 @@ svg{display:block}
   .col-resizer{display:none}
 
   /* Keep .rd-top at its 60px height — #captureMask, .capbar and .find-bar are offset against it.
-     The middle strip scrolls if it still can't fit; the drawer toggles never move. */
-  .rd-top{gap:4px;padding:0 4px}
-  .rd-mid{gap:6px;overflow-x:auto;overflow-y:hidden;
-    scrollbar-width:none;-webkit-overflow-scrolling:touch}
+     Static so the tools bar below resolves against #reader, not this. Nothing else needs it
+     positioned (#findBar hangs off #reader; .capbar off .rd-scroll). */
+  .rd-top{gap:4px;padding:0 4px;position:static}
+  /* No -webkit-overflow-scrolling:touch — on iOS it makes a scroller the containing block for
+     positioned descendants, which strands the tools bar inside this 60px strip. Momentum
+     scrolling has been the default since iOS 13 anyway. */
+  .rd-mid{gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   .rd-mid::-webkit-scrollbar{display:none}
   .rd-mid>*{flex:0 0 auto}
   .icon-btn{width:34px;height:34px}
 
   /* The 4 tools don't fit beside page nav + zoom at this width, and a thumb can't reach the top
-     bar anyway — float them at the bottom instead. Below the scrim, so an open drawer covers them. */
-  .tools{position:fixed;z-index:45;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));
+     bar anyway — float them at the bottom instead. Absolute against #reader (whose bottom is the
+     100dvh edge) rather than fixed, so iOS Safari's bottom toolbar can't sit over them.
+     Below the scrim, so an open drawer covers them. */
+  .tools{position:absolute;z-index:45;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));
     transform:translateX(-50%);margin:0;gap:4px;padding:6px;border-radius:14px;
     box-shadow:var(--shadow-lg)}
   .tool{width:46px;height:42px}

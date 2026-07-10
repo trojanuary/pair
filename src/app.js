@@ -410,11 +410,26 @@ function setupWorker() {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `${CDN}/pdf.worker.min.js`;
   } catch (e) { pdfjsLib.GlobalWorkerOptions.workerSrc = `${CDN}/pdf.worker.min.js`; }
 }
+// Size the page column to the screen, so a phone opens on a whole page instead of a half-cut one.
+// The reader zooms in from there; this runs once, on the same narrow first load as the drawers.
+// A page too wide to reach 0.5 stays pannable rather than shrinking past the buttons' own floor.
+async function fitZoomToWidth() {
+  const scroller = document.getElementById('rdScroll');
+  if (!scroller || !pdfDoc || !isNarrowViewport()) return;   // layout may have settled wide since boot
+  const avail = scroller.clientWidth - 8;   // a little gutter so the page shadow isn't flush
+  if (avail <= 0) return;
+  const base = (await pdfDoc.getPage(1)).getViewport({ scale: 1 }).width;
+  if (!base) return;
+  state.ui.zoom = clamp(+(avail / base).toFixed(3), 0.5, 3);
+  $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%';
+  save();
+}
 async function initPdf(bytes) {
   setupWorker();
   pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
   numPages = pdfDoc.numPages;
   $('#pageTotal').textContent = '/ ' + numPages;
+  if (pendingMobileFit) { pendingMobileFit = false; await fitZoomToWidth(); }   // before the first render
   teardownContinuous();
   await renderPage(clamp(state.ui.page, 1, numPages));   // renders single elements (also seeds `viewport`)
   if (state.ui.continuous) await buildContinuous();
@@ -984,6 +999,15 @@ function openRightPanel(settleId) {
 }
 // Below this width the asides overlay the page instead of taking a grid column (see styles.css).
 const drawerMQ = window.matchMedia('(max-width:820px)');
+let pendingMobileFit = false;   // narrow first run: fit the zoom once the page's size is known
+// A document that hasn't been laid out yet reports a width of 0, and `0 <= 820` would read as
+// "phone". Treat 0 as unknown: the mobile default is persisted and one-way, so it must never be
+// decided from an unmeasured viewport.
+function isNarrowViewport() {
+  const w = window.innerWidth || document.documentElement.clientWidth || 0;
+  return w > 0 && w <= 820;
+}
+
 const PANEL_KEY = { left: 'collapseLeft', right: 'collapseRight' };
 function setPanel(side, open) {
   const app = document.getElementById('app');
@@ -3006,9 +3030,10 @@ async function boot() {
   ACTORS.you.name = state.settings.actorName || 'You'; ACTORS.you.initials = state.settings.actorInitials || 'YO';
   // First run on a narrow screen: start with the page, not a drawer covering it. Once set, the
   // reader's own choice sticks — so this never re-collapses a panel they deliberately opened.
-  if (drawerMQ.matches && !state.ui._mobileDefaulted) {
+  if (isNarrowViewport() && !state.ui._mobileDefaulted) {
     state.ui._mobileDefaulted = true;
     state.ui.collapseLeft = true; state.ui.collapseRight = true;
+    pendingMobileFit = true;
     save();
   }
   // apply ui
