@@ -2,7 +2,7 @@
 
 > **Not another chat‑with‑your‑PDF.** An AI reading workspace that stays **pinned to the source**: every highlight, note, screenshot, and answer anchors to the exact spot it came from, so nothing floats free of its evidence. Your PDF never leaves your machine, you bring your own model, and your notes are a portable file you own — open‑source and self‑hostable (AGPL).
 
-**▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *Attention Is All You Need* sample, or drop in your own PDF. · **[See every feature →](https://pairedx.com/features.html)**
+**▶ Try it now: [pairedx.com](https://pairedx.com)** — no signup, no install. Hit **Open app** to load the bundled *BERT* sample paper (Devlin et al., 2019, [CC BY 4.0](https://aclanthology.org/N19-1423/)), or drop in your own PDF. · **[See every feature →](https://pairedx.com/features.html)**
 
 <div align="center"><a href="https://pairedx.com/app"><img src="docs/screenshots/pairedx-walkthrough.gif" alt="PairedX walkthrough — highlight a passage, ask the AI, and the answer stays pinned to the source with a connector line" width="740"></a></div>
 
@@ -170,3 +170,5 @@ make_sample_pdf.py    # generates the sample paper
 [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
 
 PairedX.com is free software — you can use, study, share, and modify it under the terms of the AGPL-3.0. Note the network clause (section 13): if you run a modified version as a network service, you must make the corresponding source available to its users. Copyright (C) 2026 PairedX.com.
+
+**Bundled sample.** The sample paper that loads on first run is *“BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding”* by Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova (NAACL-HLT 2019), used unmodified under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source: [aclanthology.org/N19-1423](https://aclanthology.org/N19-1423/). See [`NOTICE`](NOTICE). The AGPL applies to PairedX's code, not to the sample paper.

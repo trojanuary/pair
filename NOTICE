@@ -1,0 +1,19 @@
+Bundled sample document
+========================
+
+PairedX ships one sample paper so the app has something to open on first run:
+
+  "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding"
+  Jacob Devlin, Ming-Wei Chang, Kenton Lee, Kristina Toutanova
+  Proceedings of NAACL-HLT 2019, pages 4171–4186. Association for Computational Linguistics.
+
+  Source:  https://aclanthology.org/N19-1423/
+  License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+           https://creativecommons.org/licenses/by/4.0/
+
+The PDF (assets/sample-pdf.js) is bundled unmodified. The sample notes that ship
+alongside it (assets/sample-notes.js) are PairedX's own commentary added to
+demonstrate the app; they are not part of, or endorsed by, the paper's authors.
+
+This notice covers only the bundled sample. PairedX itself is licensed
+AGPL-3.0-only — see LICENSE.

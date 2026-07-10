@@ -24,8 +24,8 @@ function toast(msg, kind) {
 
 /* ---------- state ---------- */
 const LS = 'srw_state_v1';
-const SAMPLE_DOC_NAME = 'NIPS-2017-attention-is-all-you-need-Paper.pdf';
-const SEED_VERSION = 2;
+const SAMPLE_DOC_NAME = 'BERT — Devlin et al. 2019 (NAACL).pdf';   // bundled sample, CC BY 4.0 — see NOTICE
+const SEED_VERSION = 3;   // bumped when the bundled sample changes, so existing installs re-seed its notes
 /* Self-contained share file: a single .html carrying one document + its notes. When present,
    the app boots into a read-only viewer of that embedded paper (see boot()/initBundleState). */
 const PAIR_BUNDLE = (typeof window !== 'undefined' && window.__PAIR_BUNDLE__) || null;
@@ -101,7 +101,7 @@ function migrateState(s) {
     if (!P.image && P.visual_planner) P.image = P.visual_planner;
     ['answer_direct', 'answer_agent', 'visual_planner', 'diagram'].forEach(k => delete P[k]);
   }
-  { const sd = (s.docs || []).find(d => d.id === 'sample'); if (sd && sd.name === 'Turbulence_review.pdf') sd.name = SAMPLE_DOC_NAME; }
+  { const sd = (s.docs || []).find(d => d.id === 'sample'); if (sd && (sd.name === 'Turbulence_review.pdf' || sd.name === 'NIPS-2017-attention-is-all-you-need-Paper.pdf')) sd.name = SAMPLE_DOC_NAME; }
   (s.annotations || []).forEach(a => { if (!a.doc || a.doc === 'Turbulence_review.pdf') a.doc = 'sample'; });
   return s;
 }
@@ -2880,7 +2880,7 @@ function findMarkPage(pel, q, curOcc) {
 
 /* ---------- seeding (mirror the mockups) ---------- */
 async function seed() {
-  // Seed the bundled sample: the "Attention Is All You Need" paper and its saved notes.
+  // Seed the bundled sample: the BERT paper (Devlin et al., 2019, CC BY 4.0) and its saved notes.
   const src = window.SAMPLE_NOTES_JSON;
   const others = (state.annotations || []).filter(a => docIdOf(a) !== 'sample');
   if (src && Array.isArray(src.annotations)) {
