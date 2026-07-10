@@ -47,7 +47,7 @@ function defaultState() {
       models: { ...DEFAULT_MODELS },
       keys: { openrouter: '', compat: '' },
       compatBaseUrl: 'https://api.openai.com/v1',
-      enableVisuals: true, enableWeb: true, enablePython: true,
+      enableVisuals: true, enableWeb: true,
       actorName: 'You', actorInitials: 'YO',
       storage: { mode: 'browser', folderName: '' },
       prompts: {},
@@ -74,7 +74,7 @@ function migrateState(s) {
   if (s.ui.tool === 'text') s.ui.tool = 'cursor';
   if (!s.ui._contDefaulted) { s.ui.continuous = true; s.ui._contDefaulted = true; }
   // one-time: turn all tools on by default (respects later manual changes via the flag)
-  if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings.enablePython = true; s.settings._toolsDefaulted = true; }
+  if (s.settings && !s.settings._toolsDefaulted) { s.settings.enableVisuals = true; s.settings.enableWeb = true; s.settings._toolsDefaulted = true; }
   // (per-provider model upgrade removed — providers are now openrouter + compat)
   // Legacy notes carried the file name as their doc label — map them onto the sample doc id.
   if (s.settings && !s.settings.storage) s.settings.storage = { mode: 'browser', folderName: '' };
@@ -2655,7 +2655,6 @@ function openSettings(note) {
       <div class="field"><label>Tools</label>
         <div class="chk"><div class="sw ${s.enableVisuals ? 'on' : ''}" id="tgVis"><i></i></div> Enable generated visuals</div>
         <div class="chk"><div class="sw ${s.enableWeb ? 'on' : ''}" id="tgWeb"><i></i></div> Allow external web search (changes provenance to “Used web search”)</div>
-        <div class="chk"><div class="sw ${s.enablePython ? 'on' : ''}" id="tgPy"><i></i></div> Enable Python tool use (stub)</div>
       </div>
       <div class="hint">Your own key (if entered) is stored only in this browser and sent per‑request to the site's <code>/api/ai</code> proxy as an override; otherwise the server's key is used and never exposed to the browser.</div>
       </div>
@@ -2684,7 +2683,7 @@ function openSettings(note) {
   $('#mClose', m).onclick = close; $('#mCancel', m).onclick = close;
   m.addEventListener('click', e => { if (e.target === m) close(); });
   $$('.def-radio', m).forEach(b => b.onclick = () => { $$('.def-radio', m).forEach(x => x.classList.remove('on')); b.classList.add('on'); });
-  ['tgVis', 'tgWeb', 'tgPy'].forEach(id => $('#' + id, m).onclick = () => $('#' + id, m).classList.toggle('on'));
+  ['tgVis', 'tgWeb'].forEach(id => $('#' + id, m).onclick = () => $('#' + id, m).classList.toggle('on'));
   $$('.settab', m).forEach(t => t.onclick = () => { $$('.settab', m).forEach(x => x.classList.toggle('on', x === t)); $$('.tabpane', m).forEach(p => p.classList.toggle('hidden', p.dataset.pane !== t.dataset.tab)); });
   $$('[data-reset]', m).forEach(b => b.onclick = () => { const key = b.dataset.reset; const ta = $('#pt_' + key, m); if (ta) ta.value = key.indexOf('tool_') === 0 ? DEFAULT_TOOLS[key.slice(5)] : DEFAULT_PROMPTS[key]; });
   { const pe = $('#ptExport', m); if (pe) pe.onclick = () => exportPrompts(m); const pi = $('#ptImport', m); if (pi) pi.onclick = () => importPrompts(m); const pr = $('#ptResetAll', m); if (pr) pr.onclick = () => { PROMPT_KEYS.forEach(k => { const ta = $('#pt_' + k, m); if (ta) ta.value = DEFAULT_PROMPTS[k]; }); TOOL_KEYS.forEach(k => { const ta = $('#pt_tool_' + k, m); if (ta) ta.value = DEFAULT_TOOLS[k]; }); }; }
@@ -2710,7 +2709,6 @@ function openSettings(note) {
     ACTORS.you.name = s.actorName; ACTORS.you.initials = s.actorInitials;
     s.enableVisuals = $('#tgVis', m).classList.contains('on');
     s.enableWeb = $('#tgWeb', m).classList.contains('on');
-    s.enablePython = $('#tgPy', m).classList.contains('on');
     s.prompts = collectPrompts(m);
     save(); close(); render(); toast('Settings saved.');
   };
