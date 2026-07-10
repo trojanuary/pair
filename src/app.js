@@ -37,8 +37,8 @@ const ACTORS = {
 };
 const PROVIDER_LABEL = { openrouter: 'OpenRouter', compat: 'OpenAI-compatible' };
 const DEFAULT_MODELS = {
-  openrouter: 'openai/gpt-5.4', openrouterImage: 'google/gemini-3.1-flash-lite-image',
-  compat: 'gpt-5.4', compatImage: 'gpt-image-1',
+  openrouter: 'openai/gpt-5.4', openrouterImage: 'google/gemini-3.1-flash-lite-image', openrouterRouter: 'openai/gpt-5.4-mini',
+  compat: 'gpt-5.4', compatImage: 'gpt-image-1', compatRouter: 'gpt-5.4-mini',
 };
 function defaultState() {
   return {
@@ -90,6 +90,8 @@ function migrateState(s) {
     if (!('compat' in s.settings.keys)) s.settings.keys.compat = '';
     if (!s.settings.models.compat) s.settings.models.compat = DEFAULT_MODELS.compat;
     if (s.settings.models.compat === 'gpt-5.4-mini') s.settings.models.compat = DEFAULT_MODELS.compat;   // bump the old default up to 5.4
+    if (!s.settings.models.openrouterRouter) s.settings.models.openrouterRouter = DEFAULT_MODELS.openrouterRouter;   // fast/cheap model for the intent router
+    if (!s.settings.models.compatRouter) s.settings.models.compatRouter = DEFAULT_MODELS.compatRouter;
     if (!s.settings.models.compatImage) s.settings.models.compatImage = DEFAULT_MODELS.compatImage;
     if (!s.settings.compatBaseUrl) s.settings.compatBaseUrl = 'https://api.openai.com/v1';
     if (!s.settings._orDefaulted) { s.settings.provider = 'openrouter'; s.settings._orDefaulted = true; }
@@ -1080,6 +1082,38 @@ async function aiImage(provider, prompt) {
   if (!r.ok) throw new Error(j.error || `Image request failed (${r.status})`);
   return j.image;
 }
+// ---- Intent router: a fast/cheap model classifies a note message → answer | visual | note ----
+async function aiClassify(provider, model, system, user) {
+  const r = await fetch('/api/ai', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, mode: 'text', system, user, model, maxTokens: 220, userKey: keyFor(provider) || undefined, baseUrl: state.settings.compatBaseUrl }),
+  });
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || `Router failed (${r.status})`);
+  return j.text || '';
+}
+function parseRoute(raw) {
+  let o = {};
+  try { o = JSON.parse(raw); } catch (e) { const m = String(raw).match(/\{[\s\S]*\}/); if (m) { try { o = JSON.parse(m[0]); } catch (e2) {} } }
+  const it = String(o.intent || '').toLowerCase();
+  const intent = /visual|image|diagram|picture/.test(it) ? 'visual' : /note|comment|reminder/.test(it) ? 'note' : 'answer';
+  const visual_type = /image|picture|photo|illustrat|draw|sketch|hand/i.test(String(o.visual_type || '')) ? 'image' : 'diagram';
+  const tags = Array.isArray(o.tags) ? o.tags.filter(t => typeof t === 'string' && t.trim()).slice(0, 2) : [];
+  return { intent, visual_type, tags };
+}
+async function routeMessage(a, question) {
+  const provider = activeProvider();
+  const model = (provider === 'openrouter' ? state.settings.models.openrouterRouter : state.settings.models.compatRouter) || DEFAULT_MODELS.openrouterRouter;
+  const c = buildContext(a);
+  const where = a.source_type === 'screenshot' ? 'a captured figure/screenshot' : a.source_type === 'doc' ? 'the whole document' : 'a text selection';
+  const user = [
+    `The note is anchored to ${where} (page ${c.page}${c.section ? ', ' + c.section : ''}).`,
+    c.evidence ? `Selected excerpt: """${c.evidence.slice(0, 300)}"""` : '',
+    c.thread ? `Earlier in this note:\n${c.thread.slice(0, 500)}` : '',
+    `The reader just wrote: """${question}"""`,
+  ].filter(Boolean).join('\n');
+  return parseRoute(await aiClassify(provider, model, promptFor('router'), user));
+}
 function imageEvidence(a) {
   if (a.source_type !== 'screenshot' || !a.screenshot) return null;
   const mm = a.screenshot.match(/^data:(.*?);base64,(.*)$/); return mm ? { mime: mm[1], b64: mm[2] } : null;
@@ -1320,7 +1354,7 @@ function visualContext(a, prompt) {
   }
   return { ctx, passages, docText };
 }
-async function generateVisual(annId, prompt) {
+async function generateVisual(annId, prompt, typeHint) {
   const a = state.annotations.find(x => x.id === annId); if (!a) return;
   state.ui.streamingId = a.id;   // follow this note's newest content while the visual generates
   const ip = pickImageProvider();
@@ -1335,6 +1369,7 @@ async function generateVisual(annId, prompt) {
   // 1) Let the model choose the RIGHT format and produce it, grounded in the document.
   let planSys = promptFor('image');
   if (!canImage && !/image generation is unavailable/i.test(planSys)) planSys += '\nNOTE: image generation is unavailable, so you must use "ascii".';
+  if (typeHint && canImage) planSys += `\nThe reader's intent is already classified as "${typeHint}". Set "format" to "${typeHint === 'image' ? 'image' : 'ascii'}" and fill the matching field (${typeHint === 'image' ? 'a detailed image_prompt' : 'the ascii diagram'}).`;
   if (!/STRICT JSON/i.test(planSys)) planSys += '\nReturn STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}';
   const planUser = [
     `Reader's request: ${prompt || 'Make a helpful visual of this.'}`,
@@ -1347,6 +1382,7 @@ async function generateVisual(annId, prompt) {
   try {
     const planRaw = await aiText(tp, { system: planSys, user: planUser, image: ctx.image, maxTokens: 2600 });
     let plan = stripJson(planRaw) || {};
+    if (typeHint && canImage) plan.format = (typeHint === 'image') ? 'image' : 'ascii';   // router already decided image vs diagram
     if (!plan.format) plan.format = (canImage && /\b(illustrat|picture|scene|concept art|artistic|imagine|photo)\b/i.test(prompt || '')) ? 'image' : 'ascii';
     if (plan.format === 'image' && !canImage) plan.format = 'ascii';
     msg.title = plan.title || (plan.format === 'image' ? 'Generated image' : 'Diagram');
@@ -1415,9 +1451,24 @@ function submitToNote(annId, rawText) {
   a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...autoTag(text, a.source_type, 'comment')]));
   a.updated_at = nowISO(); save(); render(); focusThreadCompose();
   const forceAsk = askNextId === a.id; askNextId = null;   // user chose “Ask AI” on this note
-  const wantAI = forceAsk || /@ai\b/i.test(text) || /\?\s*$/.test(text) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean);
-  if (isVisualRequest(clean)) generateVisual(a.id, clean);
-  else if (wantAI) askAI(a.id, clean || text);
+  const forceEngage = forceAsk || /@ai\b/i.test(text);     // an explicit @ai / “Ask AI” always engages the model
+  routeAndAct(a, clean || text, clean, forceEngage);
+}
+// Route a note message via the intent router (a fast model). Falls back to the legacy keyword
+// heuristics only if the router is unreachable (offline / no /api / quota). Leans to "answer" when unsure.
+async function routeAndAct(a, question, clean, forceEngage) {
+  let route;
+  try {
+    route = await routeMessage(a, question);
+  } catch (e) {
+    const wantAI = forceEngage || /\?\s*$/.test(question) || /^(explain|summar|derive|what|why|how|does|is|are|prove|show|compare)/i.test(clean || '');
+    route = { intent: isVisualRequest(clean || question) ? 'visual' : wantAI ? 'answer' : 'note', visual_type: 'image', tags: [] };
+  }
+  if (forceEngage && route.intent === 'note') route.intent = 'answer';   // @ai overrides a "personal note" call
+  if (route.tags && route.tags.length) a.auto_tags = Array.from(new Set([...(a.auto_tags || []), ...route.tags]));
+  if (route.intent === 'visual') generateVisual(a.id, question, route.visual_type);
+  else if (route.intent === 'answer') askAI(a.id, question);
+  else { save(); render(); }   // keep as a personal note — the comment is already saved; persist any tags
 }
 // Recognize a request to CREATE a visual (image or diagram) — a visual noun + a make/turn-into verb.
 function isVisualRequest(t) {
@@ -2320,13 +2371,20 @@ For "ascii" build a faithful monospace diagram from the document (never invent n
 Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST so it survives if the response is cut off: {"format":"ascii"|"image","ascii":"<monospace diagram, <=24 lines, only if ascii>","image_prompt":"<detailed prompt, only if image>","title":"<=6 words","takeaways":["2-4 short bullets grounded in the doc"],"caption":"one line"}`,
   diagram: `Return ONLY a faithful monospace/ASCII diagram (max 24 lines) built strictly from the document context below. No prose, no explanation, no JSON, no code fences.`,
   web: `Search the web and answer concisely with source links.`,
+  router: `You are a fast intent router for a source-linked PDF reading app. The reader typed a message on a note. Decide what should happen with it.
+Return STRICT JSON only, no prose: {"intent":"answer"|"visual"|"note","visual_type":"image"|"diagram","tags":["..."]}
+- "answer": a question, request, or instruction for the AI assistant (explain, summarize, define, compute, compare, "what/why/how", or any ask directed at the AI). When in doubt, choose "answer".
+- "visual": the reader wants a picture or diagram GENERATED (make/draw/sketch/illustrate/render an image, "as a diagram/chart/flowchart", "make it hand-drawn", "redraw this", etc.). Set visual_type: "image" for a rendered picture / illustration / scene / photo / artistic or hand-drawn look; "diagram" for structure / process / flow / comparison / data best shown as a labeled monospace diagram (also use "diagram" when the request is about the paper's specific results or numbers, which a generated image would fabricate).
+- "note": a personal note, reminder, highlight, or fragment the reader is writing for THEMSELVES — not addressed to the AI (e.g. "reread this", "important!", "todo: check ref 12", "my take: ...").
+tags: 0–2 short labels for the note (e.g. "Question", "Claim", "Definition", "Confusion", "Action item", "Summary"). Use [] if none is clear.`,
 };
-const PROMPT_KEYS = ['text', 'image', 'diagram', 'web'];
+const PROMPT_KEYS = ['text', 'image', 'diagram', 'web', 'router'];
 const PROMPT_META = {
   text: { label: 'Text answers', desc: 'The system prompt used for every text answer, whatever model you pick — set the assistant’s voice and answer style here.' },
   image: { label: 'Images & diagrams', desc: 'Decides whether a request becomes a diagram or an image, and how. The strict-JSON output contract is always enforced automatically, so you can safely reword the guidance.' },
   diagram: { label: 'Diagram (text fallback)', desc: 'Redraws a monospace/ASCII diagram when the visual planner returns an empty one.' },
   web: { label: 'Web search', desc: 'System prompt for the web-search tool (used when “Allow external web search” is on).' },
+  router: { label: 'Intent router', desc: 'A fast, cheap first-pass model decides whether a note message is a question for the AI, a request for a visual (image vs diagram), or a personal note — replacing the old keyword heuristics. Typing @ai always routes to the AI regardless.' },
 };
 function promptFor(key) {
   const o = state.settings && state.settings.prompts;
@@ -2415,14 +2473,14 @@ function openSettings(note) {
       <div class="hint" style="margin:-2px 0 16px">AI runs through a <b>shared key</b> so you can try it instantly — but that key has a <b>small test quota</b>. For real use, add your <b>own key</b> below: it's stored only in this browser and sent per‑request as an override — <b>never saved on the server</b>. <b>OpenRouter</b> is the recommended default (text, images, and the tool‑using agent); or use any <b>OpenAI‑compatible API</b> (base URL + key + models). Mark one as <b>Default</b>, or type <b>@ai</b> in a note.</div>
       <div class="field">
         <div class="lbl-row"><label>OpenRouter <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
-        <input id="kOpenrouter" type="password" placeholder="API key — sk-or-… (optional; server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
+        <input id="kOpenrouter" type="password" placeholder="API key — sk-or-… (optional; server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"> · Router <span style="color:var(--muted)">(fast/cheap)</span>: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mOpenrouterRouter" value="${esc((s.models && s.models.openrouterRouter) || '')}"></div>
       </div>
       <div class="field">
         <div class="lbl-row"><label>OpenAI-compatible API</label><button type="button" class="def-radio ${s.provider === 'compat' ? 'on' : ''}" data-def="compat"><span class="rdot"></span>Default</button></div>
         <div class="hint" style="margin-top:0">Any OpenAI-compatible endpoint (OpenAI, Together, Groq, a local model…). Used for text, images, and the tool-using agent.</div>
         <input id="cBase" placeholder="Base URL — e.g. https://api.openai.com/v1" value="${esc(s.compatBaseUrl || '')}" style="margin-top:8px">
         <input id="kCompat" type="password" placeholder="API key" value="${esc((s.keys && s.keys.compat) || '')}" style="margin-top:8px">
-        <div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompat" value="${esc((s.models && s.models.compat) || '')}"> · Image model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"></div>
+        <div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompat" value="${esc((s.models && s.models.compat) || '')}"> · Image model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"> · Router model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:130px" id="mCompatRouter" value="${esc((s.models && s.models.compatRouter) || '')}"></div>
       </div>
       <div class="field"><label>Your identity (actor)</label>
         <div style="display:flex;gap:8px"><input id="actorName" placeholder="Your name" value="${esc(s.actorName)}" style="flex:1"><input id="actorInit" placeholder="IN" maxlength="2" value="${esc(s.actorInitials)}" style="width:70px;text-transform:uppercase"></div></div>
@@ -2477,6 +2535,8 @@ function openSettings(note) {
     s.models.openrouterImage = $('#mOpenrouterImg', m).value.trim() || DEFAULT_MODELS.openrouterImage;
     s.models.compat = $('#mCompat', m).value.trim() || DEFAULT_MODELS.compat;
     s.models.compatImage = $('#mCompatImg', m).value.trim() || DEFAULT_MODELS.compatImage;
+    s.models.openrouterRouter = $('#mOpenrouterRouter', m).value.trim() || DEFAULT_MODELS.openrouterRouter;
+    s.models.compatRouter = $('#mCompatRouter', m).value.trim() || DEFAULT_MODELS.compatRouter;
     s.actorName = $('#actorName', m).value.trim() || 'You';
     s.actorInitials = ($('#actorInit', m).value.trim() || 'YO').toUpperCase().slice(0, 2);
     ACTORS.you.name = s.actorName; ACTORS.you.initials = s.actorInitials;
