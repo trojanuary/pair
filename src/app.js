@@ -978,11 +978,24 @@ function drawPins() {
 // the new card is visible and the connector has something to point at). Highlighting doesn't call this.
 function openRightPanel(settleId) {
   if (!state.ui.collapseRight) return;
-  state.ui.collapseRight = false;
-  document.getElementById('app').classList.remove('collapse-right');
-  save();
+  setPanel('right', true);
   // Re-scroll the card and redraw the connector once the panel's slide-in transition (.18s) settles.
   setTimeout(() => { if (settleId) scrollNoteIntoView(settleId, true); drawConnector(); }, 210);
+}
+// Below this width the asides overlay the page instead of taking a grid column (see styles.css).
+const drawerMQ = window.matchMedia('(max-width:820px)');
+const PANEL_KEY = { left: 'collapseLeft', right: 'collapseRight' };
+function setPanel(side, open) {
+  const app = document.getElementById('app');
+  if (open && drawerMQ.matches) {   // a drawer covers the page — only one at a time
+    const other = side === 'left' ? 'right' : 'left';
+    state.ui[PANEL_KEY[other]] = true;
+    app.classList.add('collapse-' + other);
+  }
+  state.ui[PANEL_KEY[side]] = !open;
+  app.classList.toggle('collapse-' + side, !open);
+  save();
+  requestAnimationFrame(() => { if (viewport) drawConnector(); });
 }
 function drawConnector() {
   const svg = $('#connectors'); if (!svg) return; while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -2765,10 +2778,11 @@ async function rectsForQuote(page, quote) {
 /* ---------- wiring ---------- */
 function wire() {
   // sidebar
-  const toggleLeft = () => { state.ui.collapseLeft = !state.ui.collapseLeft; $('#app').classList.toggle('collapse-left', state.ui.collapseLeft); save(); requestAnimationFrame(() => { if (viewport) drawConnector(); }); };
-  const toggleRight = () => { state.ui.collapseRight = !state.ui.collapseRight; $('#app').classList.toggle('collapse-right', state.ui.collapseRight); save(); requestAnimationFrame(() => { if (viewport) drawConnector(); }); };
+  const toggleLeft = () => setPanel('left', state.ui.collapseLeft);
+  const toggleRight = () => setPanel('right', state.ui.collapseRight);
   $('#btnCollapseLeft').onclick = toggleLeft; $('#btnToggleLeft').onclick = toggleLeft;
   $('#btnCollapseRight').onclick = toggleRight; $('#btnToggleRight').onclick = toggleRight;
+  { const sc = $('#scrim'); if (sc) sc.onclick = () => { setPanel('left', false); setPanel('right', false); }; }
   $('#btnSettings').onclick = () => openSettings();
   $('#newBtn').onclick = () => $('#fileInput').click();
   { const sh = $('#btnShareHtml'); if (sh) sh.onclick = () => exportSelfContainedHTML(state.ui.activeDoc); }
@@ -2990,6 +3004,13 @@ async function boot() {
   if (PAIR_BUNDLE) initBundleState();
   // restore actor identity
   ACTORS.you.name = state.settings.actorName || 'You'; ACTORS.you.initials = state.settings.actorInitials || 'YO';
+  // First run on a narrow screen: start with the page, not a drawer covering it. Once set, the
+  // reader's own choice sticks — so this never re-collapses a panel they deliberately opened.
+  if (drawerMQ.matches && !state.ui._mobileDefaulted) {
+    state.ui._mobileDefaulted = true;
+    state.ui.collapseLeft = true; state.ui.collapseRight = true;
+    save();
+  }
   // apply ui
   $('#app').classList.toggle('collapse-left', state.ui.collapseLeft);
   $('#app').classList.toggle('collapse-right', state.ui.collapseRight);

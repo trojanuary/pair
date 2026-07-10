@@ -44,6 +44,8 @@
   <section id="reader">
     <div class="rd-top">
       <button class="icon-btn" id="btnToggleLeft" title="Show library"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+      <!-- everything between the two panel toggles; scrolls on its own when the screen is narrow -->
+      <div class="rd-mid">
       <div class="rd-group pagebox">
         <button class="icon-btn" id="pagePrev">‹</button>
         <input class="pagein" id="pageInput" value="1">
@@ -64,6 +66,7 @@
       <button class="icon-btn" id="btnContinuous" title="Continuous scroll"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="5" y="3" width="14" height="7" rx="1.5"/><rect x="5" y="14" width="14" height="7" rx="1.5"/></svg></button>
       <button class="icon-btn" id="btnSearch" title="Search in document"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></button>
       <button class="icon-btn" id="btnExportTop" title="Export annotations">⋯</button>
+      </div>
       <button class="icon-btn" id="btnToggleRight" title="Show notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg></button>
     </div>
     <div class="rd-scroll" id="rdScroll">
@@ -108,6 +111,8 @@
       </div>
     </div>
   </aside>
+  <!-- dims the page behind an open drawer; only rendered at drawer widths -->
+  <div id="scrim"></div>
 </div>
 
 <!-- selection popover -->

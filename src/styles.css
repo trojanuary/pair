@@ -25,9 +25,10 @@ svg{display:block}
 /* ---------- App shell ---------- */
 #app{display:grid;grid-template-columns:var(--left-w) 1fr var(--right-w);
   grid-template-rows:minmax(0,1fr);
-  height:100vh;overflow:clip;transition:grid-template-columns .18s ease}
+  height:100vh;height:100dvh;overflow:clip;transition:grid-template-columns .18s ease}
 #app.collapse-left{--left-w:0px}
 #app.collapse-right{--right-w:0px}
+#scrim{display:none}
 
 /* ---------- Left sidebar ---------- */
 #sidebar{background:var(--surface);border-right:1px solid var(--line);
@@ -86,12 +87,14 @@ svg{display:block}
 #reader{display:flex;flex-direction:column;min-width:0;background:var(--bg);overflow:clip;position:relative}
 .rd-top{height:60px;flex:0 0 auto;display:flex;align-items:center;gap:12px;
   padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);position:relative}
+.rd-mid{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:12px}
+.rd-top>.icon-btn{flex:0 0 auto}   /* the panel toggles must never be squeezed by a crowded toolbar */
 .rd-group{display:flex;align-items:center;gap:6px;border:1px solid var(--line);
   border-radius:10px;padding:4px;background:var(--surface);box-shadow:var(--shadow)}
 .pagebox{display:flex;align-items:center;gap:8px}
-.pagein{width:38px;text-align:center;border:1px solid var(--line);border-radius:7px;
+.pagein{width:38px;flex:0 0 auto;text-align:center;border:1px solid var(--line);border-radius:7px;
   padding:5px 4px;font-weight:600}
-.pagetotal{color:var(--muted)}
+.pagetotal{color:var(--muted);white-space:nowrap}
 .zoom{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;
   padding:5px 10px;background:var(--surface);box-shadow:var(--shadow);font-weight:600}
 .tools{margin:0 auto;display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;
@@ -103,8 +106,10 @@ svg{display:block}
 .tool.active.shot{background:var(--blue)}
 .rd-scroll{flex:1;overflow:auto;padding:26px 0 60px;position:relative}
 .page-wrap{width:max-content;margin:0 auto;position:relative}
-/* continuous scroll: stacked pages */
-#contPages{display:flex;flex-direction:column;align-items:center;gap:16px}
+/* continuous scroll: stacked pages.
+   `safe center` centers a page that fits but falls back to start-alignment when it doesn't —
+   plain `center` pushes the overflow outside the scroll range, stranding the page's left edge. */
+#contPages{display:flex;flex-direction:column;align-items:center;align-items:safe center;gap:16px}
 .pg{position:relative;background:#fff;box-shadow:var(--shadow);width:max-content}
 .pg>canvas{display:block}
 .icon-btn.active{background:var(--blue-weak);color:var(--blue)}
@@ -524,6 +529,53 @@ svg{display:block}
 .expand-hint{color:var(--faint);font-size:11.5px;margin-top:8px}
 
 @media (max-width:1100px){:root{--right-w:340px;--left-w:0px}}
+
+/* ---------- Phones & small tablets ----------
+   The three-column grid can't give the page a readable column here — at 390px it
+   leaves the reader 50px — so both asides become drawers that slide over the page.
+   `.collapse-left`/`.collapse-right` keep their meaning: present = closed. */
+@media (max-width:820px){
+  #app{grid-template-columns:1fr;transition:none}
+  #sidebar,#notes{position:fixed;top:0;bottom:0;z-index:60;
+    box-shadow:var(--shadow-lg);transition:transform .22s ease}
+  #sidebar{left:0;width:min(80vw,290px);transform:translateX(-100%)}
+  #notes{right:0;width:min(92vw,380px);transform:translateX(100%)}
+  #app:not(.collapse-left) #sidebar{transform:none}
+  #app:not(.collapse-right) #notes{transform:none}
+
+  #scrim{display:block;position:fixed;inset:0;z-index:55;background:rgba(9,12,20,.42);
+    opacity:0;pointer-events:none;transition:opacity .22s ease}
+  #app:not(.collapse-left) #scrim,#app:not(.collapse-right) #scrim{opacity:1;pointer-events:auto}
+
+  /* an open drawer covers the passage the line would point at */
+  #connectors{display:none}
+  .col-resizer{display:none}
+
+  /* Keep .rd-top at its 60px height — #captureMask, .capbar and .find-bar are offset against it.
+     The middle strip scrolls if it still can't fit; the drawer toggles never move. */
+  .rd-top{gap:4px;padding:0 4px}
+  .rd-mid{gap:6px;overflow-x:auto;overflow-y:hidden;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .rd-mid::-webkit-scrollbar{display:none}
+  .rd-mid>*{flex:0 0 auto}
+  .icon-btn{width:34px;height:34px}
+
+  /* The 4 tools don't fit beside page nav + zoom at this width, and a thumb can't reach the top
+     bar anyway — float them at the bottom instead. Below the scrim, so an open drawer covers them. */
+  .tools{position:fixed;z-index:45;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);margin:0;gap:4px;padding:6px;border-radius:14px;
+    box-shadow:var(--shadow-lg)}
+  .tool{width:46px;height:42px}
+  .rd-scroll{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+  #toasts{bottom:calc(84px + env(safe-area-inset-bottom))}   /* clear the tools bar */
+
+  .composer{padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  .sb-storage{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+}
+@media (max-width:560px){
+  /* the zoom readout and the single-page/continuous toggle are the least load-bearing here */
+  #zoomVal,#btnContinuous{display:none}
+}
 /* ---- draggable divider for the right notes panel ---- */
 .col-resizer{position:absolute;top:0;left:0;width:8px;height:100%;cursor:col-resize;z-index:35;touch-action:none}
 .col-resizer::before{content:"";position:absolute;top:0;bottom:0;left:0;width:2px;background:transparent;transition:background .12s}

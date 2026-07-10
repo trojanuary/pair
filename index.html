@@ -52,6 +52,9 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;font-optical-sizing:auto;lette
 .btn.ghost:hover{background:var(--card);transform:translateY(-1px)}
 .btn.lg{padding:13px 22px;font-size:15.5px;border-radius:12px}
 .nav-cta{display:flex;gap:10px}
+/* icon-only GitHub link — stands in for “Clone from GitHub” once that button is hidden */
+.btn.iconly{padding:0;width:42px;justify-content:center;color:var(--ink-2)}
+.nav-cta .iconly{display:none}
 
 /* hero */
 .hero{padding:52px 0 10px}
@@ -195,6 +198,7 @@ table.cmp .priceRow .pair{color:var(--blue-2)}
   .hero{padding:44px 0 8px}
   .grid,.priv .wrap{grid-template-columns:1fr}
   .nav-cta .ghost{display:none}
+  .nav-cta .iconly{display:inline-flex}
   .ctapanel{padding:30px 24px}
 }
 @media (prefers-reduced-motion:reduce){
@@ -219,6 +223,7 @@ table.cmp .priceRow .pair{color:var(--blue-2)}
     </nav>
     <div class="nav-cta">
       <a class="btn ghost" href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer">Clone from GitHub</a>
+      <a class="btn ghost iconly" href="https://github.com/trojanuary/pair" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2.2A9.8 9.8 0 0 0 8.9 21.3c.5.1.68-.22.68-.48v-1.7c-2.77.6-3.35-1.34-3.35-1.34-.45-1.15-1.1-1.46-1.1-1.46-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.9.83.1-.65.35-1.1.63-1.35-2.2-.25-4.53-1.1-4.53-4.9 0-1.08.39-1.97 1.03-2.66-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.9-1.3 2.74-1.02 2.74-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.58 1.03 2.66 0 3.8-2.34 4.64-4.57 4.88.36.31.68.92.68 1.85v2.74c0 .27.18.59.69.48A9.8 9.8 0 0 0 12 2.2z"/></svg></a>
       <a class="btn primary" href="/app.html">Enter</a>
     </div>
   </div>
