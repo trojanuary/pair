@@ -13,6 +13,17 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const uid = (p = 'id') => p + '_' + Math.random().toString(36).slice(2, 9);
+// Only ever put a raster image URL we generate/import into an <img src>. A data: raster (never svg —
+// svg can script) or a clean https: URL; anything else renders as no image. Belt-and-suspenders with
+// import sanitization: even a value that slipped into state can't break out of the src attribute.
+const RASTER_DATA = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/\s]+=*$/i;
+function safeImgSrc(u) {
+  if (typeof u !== 'string') return '';
+  const s = u.trim();
+  if (RASTER_DATA.test(s)) return s.replace(/\s+/g, '');
+  if (/^https:\/\/[^\s"'<>]+$/i.test(s)) return s;
+  return '';
+}
 const nowISO = () => new Date().toISOString();
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function toast(msg, kind) {
@@ -1786,7 +1797,7 @@ function msgCard(a, m, isFirst) {
   let body = '';
   if (isFirst) {
     body += `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>`;
-    if (a.source_type === 'screenshot' && a.screenshot) body += `<div class="shot-thumb"><img src="${a.screenshot}"></div>`;
+    if (a.source_type === 'screenshot' && a.screenshot) body += `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>`;
     else if (a.selected_text) body += quoteBlock(a.selected_text);
   }
   if (m.type === 'comment') body += editing ? editBox(a, m) : `<div class="msg">${m.text ? commentHTML(m.text) : ''}</div>`;
@@ -1808,7 +1819,7 @@ function msgCard(a, m, isFirst) {
     else if (m.error) body += `<div class="msg" style="color:#B91C1C">⚠ ${esc(m.error)}</div>`;
     else {
       body += `<div class="vis-card"><h4>${esc(m.title || 'Visual')}</h4>`;
-      if (m.image) body += `<img src="${m.image}">`;
+      if (m.image) body += `<img src="${safeImgSrc(m.image)}">`;
       else if (m.ascii) body += `<pre class="ascii">${esc(m.ascii)}</pre>`;
       if (m.takeaways?.length) body += `<ul class="vis-take">${m.takeaways.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
       body += `</div>`;
@@ -1844,7 +1855,7 @@ function fullMsgHTML(m) {
   if (m.type === 'comment') return commentHTML(m.text || '');
   if (m.type === 'generated_visual') {
     let h = `<div class="vis-card cc-vis"><h4>${esc(m.title || 'Visual')}</h4>`;
-    if (m.image) h += `<img src="${m.image}">`;
+    if (m.image) h += `<img src="${safeImgSrc(m.image)}">`;
     else if (m.ascii) h += `<pre class="ascii">${esc(m.ascii)}</pre>`;
     if (m.takeaways?.length) h += `<ul class="vis-take">${m.takeaways.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
     return h + `</div>`;
@@ -1880,7 +1891,7 @@ function compactCard(a) {
       <span class="cc-badge" style="background:${badge}">${a.anchor}</span>
       <div class="cc-main">
         ${previews}
-        ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : ''}
+        ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>` : ''}
         <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
       </div>
     </div></div>`);
@@ -1900,7 +1911,7 @@ function annCard(a) {
     headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span>`
       + `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button><span class="macts"><button class="mact" data-copynote="${a.id}" title="Copy note">${ICON_COPY}</button><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
     firstBody = `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>`
-      + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${a.screenshot}"></div>` : (a.selected_text ? quoteBlock(a.selected_text) : ''));
+      + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>` : (a.selected_text ? quoteBlock(a.selected_text) : ''));
   }
   let replies = '';
   for (let i = 1; i < a.messages.length; i++) {
@@ -2266,9 +2277,71 @@ function docNotesJSON(docId) {
 // Apply a notes object onto a document. Default REPLACES this doc's notes (explicit Import). With
 // { merge:true } it UNIONS by annotation id, newest-wins — used by auto-attach and cross-device
 // sync so re-opening the same paper elsewhere combines notes instead of clobbering them.
+// ---- import hardening ----
+// A shared .notes.json / .annotated.html can come from anyone, so validate it against a strict schema
+// before it enters state. Text is already escaped at render, so the vectors are (a) ids, which go into
+// HTML attributes and CSS selectors, and (b) image URLs in <img src>. We rebuild each note from a
+// whitelist: ids forced to a safe charset, enums to known-or-default, sizes/counts bounded, images to
+// safeImgSrc (raster/https only, never svg). Unknown fields are dropped.
+const IMP_ID = /^[A-Za-z0-9_-]{1,80}$/;
+const IMP_SRC_TYPES = new Set(['text', 'screenshot', 'free_comment', 'doc', 'equation']);
+const IMP_HL = new Set(['yellow', 'blue', 'green', 'pink', 'box', 'text']);
+const IMP_ACTORS = new Set(['you', 'ai', 'system']);
+const IMP_MTYPES = new Set(['user', 'comment', 'ai_answer', 'generated_visual', 'note', 'system']);
+const impStr = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+const impNum = (v, lo, hi, d) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+const impId = (v, p) => (typeof v === 'string' && IMP_ID.test(v)) ? v : uid(p);
+function sanitizeImportedMessage(m) {
+  if (!m || typeof m !== 'object') return null;
+  const o = { id: impId(m.id, 'm'), actor: IMP_ACTORS.has(m.actor) ? m.actor : 'you',
+    text: impStr(m.text, 40000), at: impStr(m.at || m.created_at, 40), showOnCard: !!m.showOnCard };
+  if (IMP_MTYPES.has(m.type)) o.type = m.type;
+  if (m.kind === 'image' || m.kind === 'diagram') o.kind = m.kind;
+  if (typeof m.provider === 'string') o.provider = impStr(m.provider, 40);
+  if (typeof m.model === 'string') o.model = impStr(m.model, 80);
+  if (m.title) o.title = impStr(m.title, 400);
+  if (m.ascii) o.ascii = impStr(m.ascii, 40000);
+  if (m.approximation_note) o.approximation_note = impStr(m.approximation_note, 2000);
+  if (m.image) { const s = safeImgSrc(m.image); if (s) o.image = s; }
+  if (Array.isArray(m.takeaways)) o.takeaways = m.takeaways.filter(t => typeof t === 'string').slice(0, 20).map(t => t.slice(0, 500));
+  if (Array.isArray(m.chips)) o.chips = m.chips.filter(t => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 160));
+  if (Array.isArray(m.trace)) o.trace = m.trace.slice(0, 60).map(s => {
+    if (!s || typeof s !== 'object') return null;
+    const t = { type: impStr(s.type, 20) };
+    if (s.title) t.title = impStr(s.title, 200);
+    if (s.text) t.text = impStr(s.text, 20000);
+    if (s.name) t.name = impStr(s.name, 80);
+    if (s.result) t.result = impStr(s.result, 8000);
+    if (s.args && typeof s.args === 'object') { try { t.args = JSON.parse(JSON.stringify(s.args)); } catch (e) {} }
+    return t;
+  }).filter(Boolean);
+  return o;
+}
+function sanitizeImportedAnnotation(a) {
+  if (!a || typeof a !== 'object') return null;
+  const o = {
+    id: impId(a.id, 'ann'), thread: impId(a.thread, 'thr'),
+    page: Math.round(impNum(a.page, 1, 100000, 1)),
+    anchor: Math.round(impNum(a.anchor, 0, 100000, 0)),
+    source_type: IMP_SRC_TYPES.has(a.source_type) ? a.source_type : 'text',
+    section: impStr(a.section, 600), selected_text: impStr(a.selected_text, 50000),
+    prefix: impStr(a.prefix, 4000), suffix: impStr(a.suffix, 4000), caption: impStr(a.caption, 4000),
+    created_at: impStr(a.created_at, 40), updated_at: impStr(a.updated_at, 40), resolved: !!a.resolved,
+    auto_tags: Array.isArray(a.auto_tags) ? a.auto_tags.filter(t => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 60)) : [],
+    manual_tags: Array.isArray(a.manual_tags) ? a.manual_tags.filter(t => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 60)) : [],
+    rects: Array.isArray(a.rects) ? a.rects.slice(0, 400).map(r => (r && typeof r === 'object')
+      ? { x: impNum(r.x, -2, 3, 0), y: impNum(r.y, -2, 3, 0), w: impNum(r.w, 0, 3, 0), h: impNum(r.h, 0, 3, 0) } : null).filter(Boolean) : [],
+    messages: Array.isArray(a.messages) ? a.messages.slice(0, 300).map(sanitizeImportedMessage).filter(Boolean) : [],
+  };
+  if (IMP_HL.has(a.hlColor)) o.hlColor = a.hlColor;
+  if (a.screenshot) { const s = safeImgSrc(a.screenshot); if (s) o.screenshot = s; }
+  return o;
+}
+const sanitizeImportedNotes = (list) => (Array.isArray(list) ? list : []).slice(0, 5000).map(sanitizeImportedAnnotation).filter(Boolean);
+
 function applyNotesJSON(obj, docId, opts) {
   if (!obj || !Array.isArray(obj.annotations)) { toast('That file has no notes to import.', 'err'); return 0; }
-  const incoming = obj.annotations.map(a => { const c = JSON.parse(JSON.stringify(a)); c.doc = docId; return c; });
+  const incoming = sanitizeImportedNotes(obj.annotations).map(a => { a.doc = docId; return a; });
   const others = state.annotations.filter(a => docIdOf(a) !== docId);
   if (opts && opts.merge) {
     const byId = new Map(state.annotations.filter(a => docIdOf(a) === docId).map(a => [a.id, a]));
@@ -2763,13 +2836,13 @@ function buildSheet() {
     if (hasShot && !inc.screenshots) return;
     n++;
     const left = [];
-    if (hasShot && inc.screenshots && a.screenshot) left.push(`<div class="ex-sub">Screenshot</div><div class="ex-shot"><img src="${a.screenshot}"></div>`);
+    if (hasShot && inc.screenshots && a.screenshot) left.push(`<div class="ex-sub">Screenshot</div><div class="ex-shot"><img src="${safeImgSrc(a.screenshot)}"></div>`);
     if (!hasShot && inc.linked && a.selected_text) left.push(`<div class="ex-sub">${a.hlColor === 'yellow' ? 'Highlight' : 'Linked text'}</div><div class="ex-quote ${a.hlColor === 'yellow' ? 'yellow' : ''}">${esc(a.selected_text)}</div>`);
     const right = [];
     a.messages.forEach(m => {
       if (m.type === 'comment' && inc.comments) right.push(`<div class="ex-comment"><div class="card-h" style="padding:0;margin:2px 0 4px">${actorAvatar(m)}<span class="who">${esc(actorName(m))}</span><span class="when">${new Date(m.created_at).toLocaleDateString()} · ${timeLabel(m.created_at)}</span></div><div class="msg">${esc(m.text || '')}</div></div>`);
       if (m.type === 'ai_answer' && inc.ai && !m.pending && !m.error) right.push(`<div class="ex-resp"><div class="ex-sub">AI response · ${esc(PROVIDER_LABEL[m.provider] || 'AI')}</div><div class="msg">${mdRich(m.text)}</div>${chipRow(m.chips)}</div>`);
-      if (m.type === 'generated_visual' && inc.visuals && !m.pending && m.image) right.push(`<div class="ex-resp"><div class="ex-sub">Generated visual</div><div class="ex-shot"><img src="${m.image}"></div>${m.approximation_note ? `<div style="margin-top:6px"><span class="badge-appx">Approximate</span></div>` : ''}</div>`);
+      if (m.type === 'generated_visual' && inc.visuals && !m.pending && m.image) right.push(`<div class="ex-resp"><div class="ex-sub">Generated visual</div><div class="ex-shot"><img src="${safeImgSrc(m.image)}"></div>${m.approximation_note ? `<div style="margin-top:6px"><span class="badge-appx">Approximate</span></div>` : ''}</div>`);
     });
     if (!left.length && !right.length) { n--; return; }
     html += `<div class="ex-item ${compact ? 'compact' : ''}"><div class="ex-left"><div class="ex-loc"><span class="ex-num">${n}</span>Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>${left.join('')}</div><div class="ex-right">${right.join('') || '<div class="ex-sub" style="color:#9CA3AF">—</div>'}</div></div>`;
