@@ -410,18 +410,25 @@ function setupWorker() {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `${CDN}/pdf.worker.min.js`;
   } catch (e) { pdfjsLib.GlobalWorkerOptions.workerSrc = `${CDN}/pdf.worker.min.js`; }
 }
-// Size the page column to the screen, so a phone opens on a whole page instead of a half-cut one.
-// The reader zooms in from there; this runs once, on the same narrow first load as the drawers.
-// A page too wide to reach 0.5 stays pannable rather than shrinking past the buttons' own floor.
-async function fitZoomToWidth() {
+// The zoom at which a page's width matches the reader — the view that shows the whole page and
+// every control. Used for a phone's first open, and as the snap target when the reader pinches out.
+// A page too wide to reach 0.5 stays pannable rather than shrinking past the zoom buttons' floor.
+async function fitZoom(pageNo) {
   const scroller = document.getElementById('rdScroll');
-  if (!scroller || !pdfDoc || !isNarrowViewport()) return;   // layout may have settled wide since boot
+  if (!scroller || !pdfDoc) return null;
   const avail = scroller.clientWidth - 8;   // a little gutter so the page shadow isn't flush
-  if (avail <= 0) return;
-  const base = (await pdfDoc.getPage(1)).getViewport({ scale: 1 }).width;
-  if (!base) return;
-  state.ui.zoom = clamp(+(avail / base).toFixed(3), 0.5, 3);
-  $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%';
+  if (avail <= 0) return null;
+  const base = (await pdfDoc.getPage(clamp(pageNo || 1, 1, numPages))).getViewport({ scale: 1 }).width;
+  return base ? clamp(+(avail / base).toFixed(3), 0.5, 3) : null;
+}
+// Size the page column to the screen, so a phone opens on a whole page instead of a half-cut one.
+// Runs once, on the same narrow first load as the drawers.
+async function fitZoomToWidth() {
+  if (!isNarrowViewport()) return;   // layout may have settled wide since boot
+  const z = await fitZoom(1);
+  if (!z) return;
+  state.ui.zoom = z;
+  $('#zoomVal').textContent = Math.round(z * 100) + '%';
   save();
 }
 async function initPdf(bytes) {
@@ -828,8 +835,12 @@ function positionSelPop() {
   const sel = window.getSelection(); const pop = $('#selPop');
   if (!sel || !sel.rangeCount || !String(sel).trim()) { pop.classList.add('hidden'); return; }
   const rects = sel.getRangeAt(0).getClientRects(); const last = rects[rects.length - 1]; if (!last) return;
-  pop.style.left = clamp(last.left + last.width / 2 - 70, 8, window.innerWidth - 220) + 'px';
-  pop.style.top = (last.bottom + 8) + 'px';
+  const pw = pop.offsetWidth || 220, ph = pop.offsetHeight || 40;
+  pop.style.left = clamp(last.left + last.width / 2 - pw / 2, 8, window.innerWidth - pw - 8) + 'px';
+  // Below the selection, or above it when the bottom of the screen is too close — on a phone the
+  // selection is often near the bottom, and a popover placed off-screen reads as "Ask AI is broken".
+  const below = last.bottom + 8;
+  pop.style.top = (below + ph <= window.innerHeight - 8 ? below : Math.max(8, last.top - ph - 8)) + 'px';
 }
 
 /* ---------- create annotations ---------- */
@@ -884,28 +895,101 @@ function setTool(t) {
   if (t === 'shot') { mask.style.display = 'block'; bar.classList.remove('hidden'); $('#textLayer').style.pointerEvents = 'none'; }
   else { mask.style.display = 'none'; bar.classList.add('hidden'); $('#textLayer').style.pointerEvents = 'auto'; }
 }
+// Pointer events, not mouse events: a finger drag never produces mousedown/mousemove/mouseup, so
+// box-select was mouse-only. #captureMask sets touch-action:none so the drag doesn't scroll instead.
 function initCaptureMask() {
   const mask = $('#captureMask'); let box = null, start = null;
-  mask.addEventListener('mousedown', e => {
-    const r = mask.getBoundingClientRect(); start = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const at = e => { const r = mask.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const rect = p => ({ l: Math.min(p.x, start.x), t: Math.min(p.y, start.y),
+                       w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) });
+  mask.addEventListener('pointerdown', e => {
+    if (e.button) return;   // primary button / any touch or pen contact
+    e.preventDefault();
+    try { mask.setPointerCapture(e.pointerId); } catch (err) {}   // a nicety; the mask already spans the reader
+    start = at(e);
     box = el('<div class="selbox"><span class="selhandle" style="left:-5px;top:-5px"></span><span class="selhandle" style="right:-5px;top:-5px"></span><span class="selhandle" style="left:-5px;bottom:-5px"></span><span class="selhandle" style="right:-5px;bottom:-5px"></span></div>');
     mask.appendChild(box);
   });
-  mask.addEventListener('mousemove', e => {
-    if (!box) return; const r = mask.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    const l = Math.min(x, start.x), t = Math.min(y, start.y), w = Math.abs(x - start.x), h = Math.abs(y - start.y);
-    Object.assign(box.style, { left: l + 'px', top: t + 'px', width: w + 'px', height: h + 'px' });
+  mask.addEventListener('pointermove', e => {
+    if (!box) return; e.preventDefault();
+    const r = rect(at(e));
+    Object.assign(box.style, { left: r.l + 'px', top: r.t + 'px', width: r.w + 'px', height: r.h + 'px' });
   });
-  mask.addEventListener('mouseup', async e => {
-    if (!box) return; const r = mask.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    const l = Math.min(x, start.x), t = Math.min(y, start.y), w = Math.abs(x - start.x), h = Math.abs(y - start.y);
+  mask.addEventListener('pointerup', async e => {
+    if (!box) return;
+    const r = rect(at(e));
     box.remove(); box = null;
-    if (w < 12 || h < 12) return;
-    await captureRegion(l, t, w, h);
+    if (r.w < 12 || r.h < 12) return;
+    await captureRegion(r.l, r.t, r.w, r.h);
   });
+  mask.addEventListener('pointercancel', () => { if (box) { box.remove(); box = null; } });
 }
+/* ---------- pinch to zoom ---------- */
+// Browser pinch magnifies the whole UI — toolbar, drawers and all — and only rescales the canvas'
+// existing pixels, so text goes soft. Handle the gesture ourselves: preview it with a transform,
+// then re-render the PDF crisply at the new scale. Pinching out lands on fitZoom(), the view that
+// shows the whole page and every button, rather than some arbitrary scale in between.
+// `.rd-scroll` sets touch-action so the browser never claims the gesture.
+let pinch = null;
+const zoomLayer = () => (state.ui.continuous ? $('#contPages') : $('#pageWrap'));
+const fingerGap = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+function initPinch() {
+  const rd = $('#rdScroll'); if (!rd) return;
+
+  rd.addEventListener('touchstart', e => {
+    if (e.touches.length !== 2 || !pdfDoc) return;
+    const layer = zoomLayer(); if (!layer) return;
+    const t = [e.touches[0], e.touches[1]];
+    const cx = (t[0].clientX + t[1].clientX) / 2, cy = (t[0].clientY + t[1].clientY) / 2;
+    const hit = document.elementFromPoint(cx, cy);
+    const anchor = (hit && hit.closest && hit.closest('.pg')) || $('#pageWrap');
+    if (!anchor) return;
+    const ab = anchor.getBoundingClientRect(), lb = layer.getBoundingClientRect();
+    pinch = {
+      d0: fingerGap(t), z0: state.ui.zoom, k: 1, cx, cy, layer,
+      page: +anchor.dataset.page || state.ui.page,
+      fx: (cx - ab.left) / state.ui.zoom,   // focal point, in page units
+      fy: (cy - ab.top) / state.ui.zoom,
+    };
+    layer.style.transformOrigin = (cx - lb.left) + 'px ' + (cy - lb.top) + 'px';
+    layer.style.willChange = 'transform';
+  }, { passive: true });
+
+  rd.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    pinch.k = clamp(fingerGap([e.touches[0], e.touches[1]]) / pinch.d0, 0.2, 5);
+    pinch.layer.style.transform = 'scale(' + pinch.k + ')';
+  }, { passive: false });
+
+  async function commit() {
+    const p = pinch; if (!p) return; pinch = null;
+    p.layer.style.transform = ''; p.layer.style.transformOrigin = ''; p.layer.style.willChange = '';
+    if (Math.abs(p.k - 1) < 0.06) return;   // a nudge while scrolling, not a pinch
+    let z = clamp(p.z0 * p.k, 0.5, 3);
+    if (p.k < 1) {
+      // Pinching out means "show me the whole page". Stop at fitZoom rather than shrinking the page
+      // below the screen, and pull a near miss exactly onto it. Only when the reader was zoomed in
+      // past fit — otherwise a pinch-out would zoom *in*, which is the opposite of the gesture.
+      const fit = await fitZoom(p.page);
+      if (fit && fit <= p.z0 && z <= fit * 1.06) z = fit;
+    }
+    if (Math.abs(z - state.ui.zoom) < 0.005) return;
+    state.ui.page = p.page; state.ui.zoom = z;
+    await updateZoom();
+    // hold the pinched-on spot under the fingers across the re-render
+    const el2 = state.ui.continuous ? $(`#contPages .pg[data-page="${p.page}"]`) : $('#pageWrap');
+    if (el2) {
+      const b = el2.getBoundingClientRect();
+      rd.scrollLeft += (b.left + p.fx * z) - p.cx;
+      rd.scrollTop += (b.top + p.fy * z) - p.cy;
+    }
+    drawHighlights(); drawPins(); drawConnector();
+  }
+  rd.addEventListener('touchend', e => { if (pinch && e.touches.length < 2) commit(); }, { passive: true });
+  rd.addEventListener('touchcancel', () => { if (pinch) commit(); }, { passive: true });
+}
+
 async function captureRegion(l, t, w, h) {
   // l,t,w,h are pixels within the capture mask (which overlays the scroll viewport).
   const mask = $('#captureMask'); const mr = mask.getBoundingClientRect();
@@ -2870,6 +2954,22 @@ function wire() {
   { const _bx = $('#btnExportTop'); if (_bx) _bx.onclick = openExport; }
   // selection popover
   document.addEventListener('mouseup', e => { const t = e.target; if (t && t.nodeType === 1 && t.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
+  // iOS dispatches `mouseup` only for taps: a long-press that makes a selection is consumed by the
+  // selection UI, so `mouseup` alone never surfaces Highlight/Note/Ask AI on a phone. Key off
+  // `selectionchange` too. Debounced (it fires on every handle nudge) and held while a finger is
+  // still down, so the highlight tool can't commit halfway through a drag.
+  let touching = 0, selTimer = null;   // read off e.touches, so a dropped touchend can't wedge it
+  const scheduleSel = ms => { clearTimeout(selTimer); selTimer = setTimeout(() => { if (!touching) onTextSelect(); }, ms); };
+  document.addEventListener('touchstart', e => { touching = e.touches.length; }, { passive: true });
+  const liftTouch = e => {
+    touching = e.touches.length;
+    const t = e && e.target;
+    if (t && t.closest && t.closest('#selPop')) return;   // let the popover button's click land first
+    scheduleSel(80);
+  };
+  document.addEventListener('touchend', liftTouch, { passive: true });
+  document.addEventListener('touchcancel', liftTouch, { passive: true });
+  document.addEventListener('selectionchange', () => scheduleSel(350));
   $('#spHi').onclick = () => highlightSelection();   // popover Highlight is silent, like the highlight tool
   $('#spNote').onclick = () => createFromSelection('text');
   $('#spAsk').onclick = () => createFromSelection('ask');
@@ -2900,9 +3000,9 @@ function wire() {
   $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
   $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
-  initCaptureMask();
+  initCaptureMask(); initPinch();
 }
-function updateZoom() { $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%'; save(); if (state.ui.continuous) buildContinuous(); else renderPage(state.ui.page); }
+function updateZoom() { $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%'; save(); return state.ui.continuous ? buildContinuous() : renderPage(state.ui.page); }
 function showReaderFallback(msg) {
   // Keep #pageWrap (and its #overlay/#pins nodes) intact — just hide it and show a
   // sibling message. Destroying #pageWrap here previously nulled #overlay/#pins and

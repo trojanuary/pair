@@ -104,7 +104,9 @@ svg{display:block}
 .tool.active{background:var(--blue);color:#fff}
 .tool.active.hl{background:var(--amber);color:#3b2c00}
 .tool.active.shot{background:var(--blue)}
-.rd-scroll{flex:1;overflow:auto;padding:26px 0 60px;position:relative}
+/* pan freely, but leave pinch to initPinch() — the browser's own zoom would magnify the toolbar
+   and drawers along with the page, and blur the canvas instead of re-rendering it. */
+.rd-scroll{flex:1;overflow:auto;padding:26px 0 60px;position:relative;touch-action:pan-x pan-y}
 .page-wrap{width:max-content;margin:0 auto;position:relative}
 /* continuous scroll: stacked pages.
    `safe center` centers a page that fits but falls back to start-alignment when it doesn't —
@@ -152,7 +154,7 @@ svg{display:block}
 .capbar .x{color:var(--muted);font-weight:500;cursor:pointer;padding-left:8px;border-left:1px solid var(--line)}
 .selbox{position:absolute;border:1.5px dashed var(--blue);background:rgba(37,99,235,.08);z-index:15;pointer-events:none}
 .selhandle{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid var(--blue);border-radius:2px}
-#captureMask{position:absolute;left:0;right:0;top:60px;bottom:0;z-index:30;cursor:crosshair;display:none}
+#captureMask{position:absolute;left:0;right:0;top:60px;bottom:0;z-index:30;cursor:crosshair;display:none;touch-action:none}
 
 /* ---------- Right notes panel ---------- */
 #notes{background:var(--surface);border-left:1px solid var(--line);display:flex;
