@@ -13,6 +13,19 @@ const OR_HEADERS = { 'HTTP-Referer': 'https://pairedx.com', 'X-Title': 'Source-L
 const capTokens = (m, n) => (/(^|\/)(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n + 4000 } : { max_tokens: n });
 const baseOf = (u) => (u && String(u).trim() ? String(u).trim() : 'https://api.openai.com/v1').replace(/\/+$/, '');
 const isOR = (url) => url.indexOf('openrouter.ai') >= 0;
+// When the CALLER supplies the endpoint (the OpenAI-compatible provider), reject SSRF targets so
+// this function can't be turned into a proxy into a private network. Not a complete guard (no
+// DNS-rebind protection) — the primary defense is requiring a caller-supplied key (see handler).
+// A self-hoster pointing at a local model can set ALLOW_PRIVATE_ENDPOINTS=1.
+const isBlockedHost = (u) => {
+  let h; try { h = new URL(u).hostname.toLowerCase(); } catch (e) { return true; }
+  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal') || h === 'metadata.google.internal') return true;
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) { const a = +m[1], b = +m[2];
+    if (a === 0 || a === 127 || a === 10 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return true; }
+  if (h === '::1' || h.startsWith('fe80') || h.startsWith('fc') || h.startsWith('fd')) return true;
+  return false;
+};
 // A quota / credit / rate-limit failure. When it happens on the SHARED server key we nudge the user
 // to their own key instead of leaking the provider's "add credits" message (which points at the
 // owner's account, not theirs, and reads as the user's fault).
@@ -25,9 +38,15 @@ async function readBody(req) {
   return await new Promise(r => { let d = ''; req.on('data', c => (d += c)); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
 }
 async function postJSON(url, key, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, ...(isOR(url) ? OR_HEADERS : {}) }, body: JSON.stringify(body) });
-  let j = {}; try { j = await r.json(); } catch (e) {}
-  return { r, j };
+  // redirect:'error' stops a trusted host from 302-ing into a private address; the abort is a
+  // backstop so a hung upstream can't pin the function open (the platform timeout is the real cap).
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const r = await fetch(url, { method: 'POST', signal: ctrl.signal, redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key, ...(isOR(url) ? OR_HEADERS : {}) }, body: JSON.stringify(body) });
+    let j = {}; try { j = await r.json(); } catch (e) {}
+    return { r, j };
+  } finally { clearTimeout(to); }
 }
 
 // ---- Chat completion (text/vision) for any OpenAI-compatible endpoint ----
@@ -64,10 +83,18 @@ module.exports = async function handler(req, res) {
     const body = await readBody(req);
     const { provider = 'openrouter', mode, messages, tools, model, userKey, baseUrl } = body;
     const ownKey = userKey && String(userKey).trim();
+    // The OpenAI-compatible provider lets the caller name the endpoint. Never pair a caller-chosen
+    // URL with the server's key — that would forward our credentials to an arbitrary host. This path
+    // is bring-your-own-key only; the site's shared demo key is OpenRouter-only.
+    if (provider === 'compat' && !ownKey) return res.status(400).json({ error: 'The OpenAI-compatible provider needs your own API key (add it in Settings → AI & Tools). The site’s shared demo key only works with OpenRouter.' });
     usedServerKey = !ownKey;
     const key = ownKey || process.env[ENV[provider]];
     if (!key) return res.status(400).json({ error: `No ${provider} key available. Add your own key in Settings, or ask the site owner to set ${ENV[provider] || 'the API key'}.` });
     const url = provider === 'openrouter' ? OR_BASE : baseOf(baseUrl);
+    if (provider === 'compat' && !process.env.ALLOW_PRIVATE_ENDPOINTS) {
+      if (!/^https:\/\//i.test(url)) return res.status(400).json({ error: 'Custom endpoints must use HTTPS.' });
+      if (isBlockedHost(url)) return res.status(400).json({ error: 'That endpoint host isn’t allowed.' });
+    }
     const m = model || DEFAULT_MODEL[provider] || DEFAULT_MODEL.compat;
     if (mode === 'agent' && Array.isArray(messages)) {
       return res.status(200).json(await agentStep(url, key, { messages, tools, model: m }));
