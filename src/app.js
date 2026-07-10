@@ -2373,10 +2373,11 @@ Return STRICT JSON only. Put the heavy field ("ascii" or "image_prompt") FIRST s
   web: `Search the web and answer concisely with source links.`,
   router: `You are a fast intent router for a source-linked PDF reading app. The reader typed a message on a note. Decide what should happen with it.
 Return STRICT JSON only, no prose: {"intent":"answer"|"visual"|"note","visual_type":"image"|"diagram","tags":["..."]}
-- "answer": a question, request, or instruction for the AI assistant (explain, summarize, define, compute, compare, "what/why/how", or any ask directed at the AI). When in doubt, choose "answer".
+The core test: does the message ASK the AI to answer or do something? If yes → "answer" (or "visual"). If the reader is just reacting, observing, or jotting a note for themselves → "note".
+- "answer": the message asks the assistant for something — a question, or an instruction/request directed at the AI (explain, summarize, define, compute, compare, "what/why/how", "tell me…"). Only when the reader actually wants a response. If it's genuinely ambiguous between a terse question and a request, prefer "answer".
 - "visual": the reader wants a picture or diagram GENERATED (make/draw/sketch/illustrate/render an image, "as a diagram/chart/flowchart", "make it hand-drawn", "redraw this", etc.). Set visual_type: "image" for a rendered picture / illustration / scene / photo / artistic or hand-drawn look; "diagram" for structure / process / flow / comparison / data best shown as a labeled monospace diagram (also use "diagram" when the request is about the paper's specific results or numbers, which a generated image would fabricate).
-- "note": a personal note, reminder, highlight, or fragment the reader is writing for THEMSELVES — not addressed to the AI (e.g. "reread this", "important!", "todo: check ref 12", "my take: ...").
-tags: 0–2 short labels for the note (e.g. "Question", "Claim", "Definition", "Confusion", "Action item", "Summary"). Use [] if none is clear.`,
+- "note": the reader is writing for THEMSELVES, not asking the AI — a reaction, observation, opinion, highlight, or reminder. This is the DEFAULT for any bare comment on the content with no question and no request to the AI. Examples: "interesting", "cool", "important", "nice", "hmm", "wow", "agree", "not sure about this", "revisit", "reread this", "my take: …", "todo: check ref 12". A single word or short phrase reacting to the selection is almost always a "note", NOT a question.
+tags: 0–2 short labels (e.g. "Question", "Observation", "Claim", "Definition", "Confusion", "Action item", "Summary"). Use [] if none is clear.`,
 };
 const PROMPT_KEYS = ['text', 'image', 'diagram', 'web', 'router'];
 const PROMPT_META = {
