@@ -882,7 +882,10 @@ function createFromSelection(kind /* 'yellow'|'text'|'ask' */) {
   // For "Ask AI", flag this note so the user's next message routes to the AI even without a "?".
   askNextId = (kind === 'ask') ? ann.id : null;
   if (kind !== 'yellow') openRightPanel(ann.id);   // Note / Ask AI reveal the panel; a highlight stays silent
-  selectAnnotation(ann.id, true);   // expands the note; its inline composer auto-focuses
+  selectAnnotation(ann.id, true);   // expands the note
+  // Picking Note / Ask AI *is* a "now type" intent, so raise the keyboard here. Merely selecting a
+  // note doesn't, which is why selectAnnotation no longer focuses on touch.
+  if (kind !== 'yellow') focusThreadCompose();
   drawHighlights(); drawPins();
   pendingSel = null;
 }
@@ -1175,7 +1178,10 @@ function selectAnnotation(id, scrollCard, scrollPage) {
   render(); drawPins();
   if (scrollCard) scrollNoteIntoView(id, true);
   requestAnimationFrame(drawConnector);
-  focusThreadCompose();
+  // Only on a pointer device. On a phone, focus means the keyboard: tapping a note's number to read
+  // it would throw the keyboard over half the screen. Callers that follow a "now type" intent —
+  // creating a note or a comment — still focus the composer themselves.
+  if (!drawerMQ.matches) focusThreadCompose();
 }
 
 /* ---------- auto-tagging (heuristic; swappable for a model call) ---------- */
