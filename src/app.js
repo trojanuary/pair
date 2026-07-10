@@ -2278,66 +2278,40 @@ function docNotesJSON(docId) {
 // { merge:true } it UNIONS by annotation id, newest-wins — used by auto-attach and cross-device
 // sync so re-opening the same paper elsewhere combines notes instead of clobbering them.
 // ---- import hardening ----
-// A shared .notes.json / .annotated.html can come from anyone, so validate it against a strict schema
-// before it enters state. Text is already escaped at render, so the vectors are (a) ids, which go into
-// HTML attributes and CSS selectors, and (b) image URLs in <img src>. We rebuild each note from a
-// whitelist: ids forced to a safe charset, enums to known-or-default, sizes/counts bounded, images to
-// safeImgSrc (raster/https only, never svg). Unknown fields are dropped.
+// A shared .notes.json / .annotated.html can come from anyone. Every text field is escaped at its
+// render site, and enum fields (source_type, message type, colors) are never interpolated raw into
+// HTML — so the ONLY DOM-injection vectors are (a) ids, which land in HTML attributes and CSS
+// selectors, and (b) image URLs in <img src>. Neutralize exactly those and PRESERVE every other
+// field (edited flags, errors, captions, agent traces, long text, …). We deliberately do NOT rebuild
+// from a whitelist: that silently drops legitimate content on a re-opened bundle. Only extreme sizes
+// and counts are bounded, as a denial-of-service guard, with limits far above any real document.
 const IMP_ID = /^[A-Za-z0-9_-]{1,80}$/;
-const IMP_SRC_TYPES = new Set(['text', 'screenshot', 'free_comment', 'doc', 'equation']);
-const IMP_HL = new Set(['yellow', 'blue', 'green', 'pink', 'box', 'text']);
-const IMP_ACTORS = new Set(['you', 'ai', 'system']);
-const IMP_MTYPES = new Set(['user', 'comment', 'ai_answer', 'generated_visual', 'note', 'system']);
-const impStr = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
-const impNum = (v, lo, hi, d) => { const n = +v; return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const impId = (v, p) => (typeof v === 'string' && IMP_ID.test(v)) ? v : uid(p);
+const impCap = (o, k, max) => { if (o && typeof o[k] === 'string' && o[k].length > max) o[k] = o[k].slice(0, max); };
+const IMP_TEXT_CAP = 2000000;   // ~2MB per text field — orders of magnitude above any real note/answer
 function sanitizeImportedMessage(m) {
   if (!m || typeof m !== 'object') return null;
-  const o = { id: impId(m.id, 'm'), actor: IMP_ACTORS.has(m.actor) ? m.actor : 'you',
-    text: impStr(m.text, 40000), at: impStr(m.at || m.created_at, 40), showOnCard: !!m.showOnCard };
-  if (IMP_MTYPES.has(m.type)) o.type = m.type;
-  if (m.kind === 'image' || m.kind === 'diagram') o.kind = m.kind;
-  if (typeof m.provider === 'string') o.provider = impStr(m.provider, 40);
-  if (typeof m.model === 'string') o.model = impStr(m.model, 80);
-  if (m.title) o.title = impStr(m.title, 400);
-  if (m.ascii) o.ascii = impStr(m.ascii, 40000);
-  if (m.approximation_note) o.approximation_note = impStr(m.approximation_note, 2000);
-  if (m.image) { const s = safeImgSrc(m.image); if (s) o.image = s; }
-  if (Array.isArray(m.takeaways)) o.takeaways = m.takeaways.filter(t => typeof t === 'string').slice(0, 20).map(t => t.slice(0, 500));
-  if (Array.isArray(m.chips)) o.chips = m.chips.filter(t => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 160));
-  if (Array.isArray(m.trace)) o.trace = m.trace.slice(0, 60).map(s => {
-    if (!s || typeof s !== 'object') return null;
-    const t = { type: impStr(s.type, 20) };
-    if (s.title) t.title = impStr(s.title, 200);
-    if (s.text) t.text = impStr(s.text, 20000);
-    if (s.name) t.name = impStr(s.name, 80);
-    if (s.result) t.result = impStr(s.result, 8000);
-    if (s.args && typeof s.args === 'object') { try { t.args = JSON.parse(JSON.stringify(s.args)); } catch (e) {} }
-    return t;
-  }).filter(Boolean);
+  let o; try { o = JSON.parse(JSON.stringify(m)); } catch (e) { return null; }   // deep clone; drops non-JSON values
+  o.id = impId(o.id, 'm');                                                        // safe in data-* attrs + selectors
+  if ('image' in o) o.image = o.image ? (safeImgSrc(o.image) || null) : o.image;  // only a raster/https URL reaches <img src>
+  ['text', 'ascii', 'title', 'approximation_note'].forEach(k => impCap(o, k, IMP_TEXT_CAP));
+  if (Array.isArray(o.trace)) { o.trace = o.trace.slice(0, 500); o.trace.forEach(s => { impCap(s, 'text', IMP_TEXT_CAP); impCap(s, 'result', IMP_TEXT_CAP); }); }
+  if (Array.isArray(o.takeaways)) o.takeaways = o.takeaways.slice(0, 200);
+  if (Array.isArray(o.chips)) o.chips = o.chips.slice(0, 60);
   return o;
 }
 function sanitizeImportedAnnotation(a) {
   if (!a || typeof a !== 'object') return null;
-  const o = {
-    id: impId(a.id, 'ann'), thread: impId(a.thread, 'thr'),
-    page: Math.round(impNum(a.page, 1, 100000, 1)),
-    anchor: Math.round(impNum(a.anchor, 0, 100000, 0)),
-    source_type: IMP_SRC_TYPES.has(a.source_type) ? a.source_type : 'text',
-    section: impStr(a.section, 600), selected_text: impStr(a.selected_text, 50000),
-    prefix: impStr(a.prefix, 4000), suffix: impStr(a.suffix, 4000), caption: impStr(a.caption, 4000),
-    created_at: impStr(a.created_at, 40), updated_at: impStr(a.updated_at, 40), resolved: !!a.resolved,
-    auto_tags: Array.isArray(a.auto_tags) ? a.auto_tags.filter(t => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 60)) : [],
-    manual_tags: Array.isArray(a.manual_tags) ? a.manual_tags.filter(t => typeof t === 'string').slice(0, 12).map(t => t.slice(0, 60)) : [],
-    rects: Array.isArray(a.rects) ? a.rects.slice(0, 400).map(r => (r && typeof r === 'object')
-      ? { x: impNum(r.x, -2, 3, 0), y: impNum(r.y, -2, 3, 0), w: impNum(r.w, 0, 3, 0), h: impNum(r.h, 0, 3, 0) } : null).filter(Boolean) : [],
-    messages: Array.isArray(a.messages) ? a.messages.slice(0, 300).map(sanitizeImportedMessage).filter(Boolean) : [],
-  };
-  if (IMP_HL.has(a.hlColor)) o.hlColor = a.hlColor;
-  if (a.screenshot) { const s = safeImgSrc(a.screenshot); if (s) o.screenshot = s; }
+  let o; try { o = JSON.parse(JSON.stringify(a)); } catch (e) { return null; }
+  o.id = impId(o.id, 'ann');
+  o.thread = impId(o.thread, 'thr');
+  if ('screenshot' in o) o.screenshot = o.screenshot ? (safeImgSrc(o.screenshot) || null) : o.screenshot;
+  ['selected_text', 'section', 'prefix', 'suffix', 'caption'].forEach(k => impCap(o, k, IMP_TEXT_CAP));
+  if (Array.isArray(o.rects)) o.rects = o.rects.slice(0, 5000);
+  if (Array.isArray(o.messages)) o.messages = o.messages.slice(0, 3000).map(sanitizeImportedMessage).filter(Boolean);
   return o;
 }
-const sanitizeImportedNotes = (list) => (Array.isArray(list) ? list : []).slice(0, 5000).map(sanitizeImportedAnnotation).filter(Boolean);
+const sanitizeImportedNotes = (list) => (Array.isArray(list) ? list : []).slice(0, 50000).map(sanitizeImportedAnnotation).filter(Boolean);
 
 function applyNotesJSON(obj, docId, opts) {
   if (!obj || !Array.isArray(obj.annotations)) { toast('That file has no notes to import.', 'err'); return 0; }
@@ -3232,7 +3206,9 @@ function initBundleState() {
   state.docs = [{ id: 'bundle', name: PAIR_BUNDLE.name || 'Shared paper', kind: 'bundle', sha: PAIR_BUNDLE.sha || null, addedAt: nowISO() }];
   state.ui.activeDoc = 'bundle';
   const anns = (PAIR_BUNDLE.notes && Array.isArray(PAIR_BUNDLE.notes.annotations)) ? PAIR_BUNDLE.notes.annotations : [];
-  state.annotations = anns.map(a => { const c = JSON.parse(JSON.stringify(a)); c.doc = 'bundle'; return c; });
+  // Sanitize even here (the bundle is isolated on its own origin, but this is free defense-in-depth
+  // and preserves legitimate notes unchanged).
+  state.annotations = sanitizeImportedNotes(anns).map(a => { a.doc = 'bundle'; return a; });
   state.seeded = true; state.seedVersion = SEED_VERSION;   // never seed the sample over a shared doc
 }
 // Strip the read-only viewer down to reading: hide every editing affordance, show a made-with banner.
