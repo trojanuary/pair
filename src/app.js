@@ -2432,7 +2432,7 @@ async function notesJSONForExport(docId) {
 }
 /* ---------- single-file annotated-paper sharing ----------
    Export the active document + its notes as ONE self-contained .html: the live app shell with
-   PDF.js, styles, and app code inlined (same trick as build.js), plus the PDF bytes and notes
+   PDF.js, styles, and app code inlined, plus the PDF bytes and notes
    embedded as a read-only "bundle". Opens anywhere with no server — a portable annotated paper
    with working math, connectors, highlights, and captured figures. */
 async function exportSelfContainedHTML(docId) {
@@ -2456,10 +2456,11 @@ async function exportSelfContainedHTML(docId) {
     const bundleJson = JSON.stringify(bundle).replace(/</g, '\\u003c');
     // Same hazard for the inlined code: neutralize any literal close-tag so the HTML parser can't
     // see it. "<\/script>" is byte-identical JS (a backslash before "/" is just "/") but invisible
-    // to the parser. (build.js never needed this; our own strings now contain the sequence.)
+    // to the parser. (Needed because the embedded notes and PDF bytes can contain that sequence.)
     const inlineJs = s => s.replace(/<\/script/gi, '<\\/script');
     let html = shell;
-    // Use function replacements so "$" in the inlined code/base64 is inserted verbatim (see build.js).
+    // Use function replacements so "$" in the inlined code/base64 is inserted verbatim (a plain
+    // string replacement would treat "$&", "$1", etc. as substitution patterns and corrupt the code).
     const put = (re, out) => { html = html.replace(re, () => out); };
     put(/<link\b[^>]*href="\/src\/styles\.css"[^>]*>/, '<style>\n' + css + '\n</style>');
     put(/<script src="\/vendor\/pdf\.min\.js"><\/script>/, '<script>\n' + inlineJs(pdfjs) + '\n</script>');
