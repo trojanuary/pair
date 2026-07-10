@@ -834,6 +834,9 @@ function onTextSelect() {
 function positionSelPop() {
   const sel = window.getSelection(); const pop = $('#selPop');
   if (!sel || !sel.rangeCount || !String(sel).trim()) { pop.classList.add('hidden'); return; }
+  // On a phone the popover is pinned to the bottom by CSS — iOS's own edit menu owns the space
+  // beside the selection. Drop any inline coordinates a wider layout left behind.
+  if (drawerMQ.matches) { pop.style.left = ''; pop.style.top = ''; return; }
   const rects = sel.getRangeAt(0).getClientRects(); const last = rects[rects.length - 1]; if (!last) return;
   const pw = pop.offsetWidth || 220, ph = pop.offsetHeight || 40;
   pop.style.left = clamp(last.left + last.width / 2 - pw / 2, 8, window.innerWidth - pw - 8) + 'px';
@@ -924,6 +927,20 @@ function initCaptureMask() {
   });
   mask.addEventListener('pointercancel', () => { if (box) { box.remove(); box = null; } });
 }
+// iOS keeps the layout viewport (and 100dvh) at full height when the keyboard opens, so a drawer
+// pinned to the bottom hides its own composer behind the keyboard and Safari's accessory bar.
+// visualViewport does shrink, so measure the overlap and let CSS lift the drawers by --kb.
+function initKeyboardInset() {
+  const vv = window.visualViewport; if (!vv) return;
+  const apply = () => {
+    const overlap = drawerMQ.matches ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    document.documentElement.style.setProperty('--kb', Math.round(overlap) + 'px');
+  };
+  vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply);
+  if (drawerMQ.addEventListener) drawerMQ.addEventListener('change', apply);
+  apply();
+}
+
 /* ---------- pinch to zoom ---------- */
 // Browser pinch magnifies the whole UI — toolbar, drawers and all — and only rescales the canvas'
 // existing pixels, so text goes soft. Handle the gesture ourselves: preview it with a transform,
@@ -2956,10 +2973,13 @@ function wire() {
   document.addEventListener('mouseup', e => { const t = e.target; if (t && t.nodeType === 1 && t.closest('#selPop')) return; setTimeout(onTextSelect, 0); });
   // iOS dispatches `mouseup` only for taps: a long-press that makes a selection is consumed by the
   // selection UI, so `mouseup` alone never surfaces Highlight/Note/Ask AI on a phone. Key off
-  // `selectionchange` too. Debounced (it fires on every handle nudge) and held while a finger is
-  // still down, so the highlight tool can't commit halfway through a drag.
-  let touching = 0, selTimer = null;   // read off e.touches, so a dropped touchend can't wedge it
-  const scheduleSel = ms => { clearTimeout(selTimer); selTimer = setTimeout(() => { if (!touching) onTextSelect(); }, ms); };
+  // `selectionchange` too — debounced, since it fires on every nudge of a selection handle.
+  // Never act while the pointer is still down: mid-drag, `selectionchange` fires on every character,
+  // and the highlight tool would commit a partial selection before the reader let go.
+  let touching = 0, held = false, selTimer = null;   // touching is read off e.touches, so a dropped touchend can't wedge it
+  const scheduleSel = ms => { clearTimeout(selTimer); selTimer = setTimeout(() => { if (!touching && !held) onTextSelect(); }, ms); };
+  document.addEventListener('mousedown', () => { held = true; }, true);
+  document.addEventListener('mouseup', () => { held = false; }, true);   // capture: runs before the bubble handler above
   document.addEventListener('touchstart', e => { touching = e.touches.length; }, { passive: true });
   const liftTouch = e => {
     touching = e.touches.length;
@@ -3000,7 +3020,7 @@ function wire() {
   $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
   $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
-  initCaptureMask(); initPinch();
+  initCaptureMask(); initPinch(); initKeyboardInset();
 }
 function updateZoom() { $('#zoomVal').textContent = Math.round(state.ui.zoom * 100) + '%'; save(); return state.ui.continuous ? buildContinuous() : renderPage(state.ui.page); }
 function showReaderFallback(msg) {
