@@ -13,7 +13,7 @@
 - <a href="#deploy-your-own-vercel"><b>Deploy your own →</b></a>
 - <a href="#run-locally"><b>Run locally →</b></a>
 - <a href="#how-it-works-codebase">How it works</a>
-- <a href="#privacy--keys">Privacy &amp; keys</a>
+- <a href="#privacy--keys">Privacy &amp; keys</a> · <a href="#security">Security</a>
 
 ---
 
@@ -164,6 +164,16 @@ make_sample_pdf.py    # generates the sample paper
 - **AI questions go to your model provider.** When you ask the AI, your question *plus the passage or figure you selected* is sent through the app’s `/api` proxy to your chosen model (OpenRouter by default) to generate the answer. The proxy doesn’t store it; the provider processes it under its own policy — on OpenRouter you can tighten data retention in your account settings.
 - **Keys** you enter stay in `localStorage` and are sent per-request as an override — never persisted server-side, never exposed to other users.
 - **Analytics:** privacy-friendly, cookieless page analytics (Vercel Web Analytics) — no accounts, no tracking cookies, no personal data, no access to your notes or prompts.
+
+## Security
+
+PairedX is local-first and single-user — there's no account system, no server-side database, and no user data sitting on a server to breach. The two places that handle untrusted input are hardened:
+
+- **The AI proxy can't be turned into an SSRF vector or leak the server key.** The serverless functions in `api/` only call **OpenRouter** or an **allowlist of known OpenAI-compatible providers** (OpenAI, Groq, Together, Mistral, DeepInfra, Fireworks, Perplexity, xAI, DeepSeek, Google Gemini). Unknown providers are rejected, and the "OpenAI-compatible" option is bring-your-own-key — the shared demo key is never paired with a caller-supplied URL — so the proxy can't be pointed at an internal/private host or made to forward the server's key. Outbound calls are HTTPS-only, don't follow redirects, and time out. Self-hosters can allow any endpoint — including a local model — with `ALLOW_PRIVATE_ENDPOINTS=1`.
+- **Shared files are sanitized on import.** A `.notes.json` or a shared `.annotated.html` can come from anyone, so every imported note is validated before it renders: ids are constrained to a safe character set (they end up in HTML attributes and CSS selectors), and images may only be `data:` rasters (PNG/JPEG/WebP/GIF — never SVG) or `https:` URLs — nothing else reaches an `<img src>`. All note text is HTML-escaped at render. Together this stops a malicious shared file from executing script in your browser or reading your saved key.
+- **Your API key never leaves your browser at rest.** It lives in `localStorage`, is sent per request as an override, and is **never** stored on the server or written into exported/shared files.
+
+**Reporting a vulnerability.** Please report suspected security issues privately — use **Report a vulnerability** under the repository's *Security* tab — rather than opening a public issue.
 
 ## License
 
