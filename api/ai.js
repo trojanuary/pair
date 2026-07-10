@@ -13,19 +13,18 @@ const OR_HEADERS = { 'HTTP-Referer': 'https://pairedx.com', 'X-Title': 'Source-L
 const capTokens = (m, n) => (/(^|\/)(gpt-5|o\d)/.test(m || '') ? { max_completion_tokens: n + 4000 } : { max_tokens: n });
 const baseOf = (u) => (u && String(u).trim() ? String(u).trim() : 'https://api.openai.com/v1').replace(/\/+$/, '');
 const isOR = (url) => url.indexOf('openrouter.ai') >= 0;
-// When the CALLER supplies the endpoint (the OpenAI-compatible provider), reject SSRF targets so
-// this function can't be turned into a proxy into a private network. Not a complete guard (no
-// DNS-rebind protection) — the primary defense is requiring a caller-supplied key (see handler).
-// A self-hoster pointing at a local model can set ALLOW_PRIVATE_ENDPOINTS=1.
-const isBlockedHost = (u) => {
-  let h; try { h = new URL(u).hostname.toLowerCase(); } catch (e) { return true; }
-  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal') || h === 'metadata.google.internal') return true;
-  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (m) { const a = +m[1], b = +m[2];
-    if (a === 0 || a === 127 || a === 10 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return true; }
-  if (h === '::1' || h.startsWith('fe80') || h.startsWith('fc') || h.startsWith('fd')) return true;
-  return false;
-};
+// The OpenAI-compatible provider lets the CALLER name the endpoint, so without a guard this function
+// is an SSRF proxy. A string block on private literals is bypassable — an attacker just points a
+// domain's DNS at 127.0.0.1 — so restrict server-proxied custom endpoints to an allowlist of known
+// OpenAI-compatible providers instead. Self-hosters pointing at any/local endpoint set
+// ALLOW_PRIVATE_ENDPOINTS=1. (Local models must be reached directly from the browser, not through
+// this proxy — "localhost" here is the SERVER, not the user's machine.)
+const COMPAT_HOSTS = new Set([
+  'api.openai.com', 'api.together.xyz', 'api.together.ai', 'api.groq.com', 'api.mistral.ai',
+  'api.deepinfra.com', 'api.fireworks.ai', 'api.perplexity.ai', 'api.x.ai', 'api.deepseek.com',
+  'generativelanguage.googleapis.com', 'openrouter.ai',
+]);
+const hostOf = (u) => { try { return new URL(u).hostname.toLowerCase(); } catch (e) { return ''; } };
 // A quota / credit / rate-limit failure. When it happens on the SHARED server key we nudge the user
 // to their own key instead of leaking the provider's "add credits" message (which points at the
 // owner's account, not theirs, and reads as the user's fault).
@@ -82,6 +81,9 @@ module.exports = async function handler(req, res) {
   try {
     const body = await readBody(req);
     const { provider = 'openrouter', mode, messages, tools, model, userKey, baseUrl } = body;
+    // Reject anything but the two known providers — an unknown provider name would otherwise skip
+    // the compat guards below (which key off provider === 'compat') and reach baseOf(baseUrl).
+    if (provider !== 'openrouter' && provider !== 'compat') return res.status(400).json({ error: 'Unsupported provider.' });
     const ownKey = userKey && String(userKey).trim();
     // The OpenAI-compatible provider lets the caller name the endpoint. Never pair a caller-chosen
     // URL with the server's key — that would forward our credentials to an arbitrary host. This path
@@ -93,7 +95,7 @@ module.exports = async function handler(req, res) {
     const url = provider === 'openrouter' ? OR_BASE : baseOf(baseUrl);
     if (provider === 'compat' && !process.env.ALLOW_PRIVATE_ENDPOINTS) {
       if (!/^https:\/\//i.test(url)) return res.status(400).json({ error: 'Custom endpoints must use HTTPS.' });
-      if (isBlockedHost(url)) return res.status(400).json({ error: 'That endpoint host isn’t allowed.' });
+      if (!COMPAT_HOSTS.has(hostOf(url))) return res.status(400).json({ error: 'That endpoint isn’t a recognized OpenAI-compatible provider. Use a known provider, or self-host PairedX to point at any endpoint (including a local model).' });
     }
     const m = model || DEFAULT_MODEL[provider] || DEFAULT_MODEL.compat;
     if (mode === 'agent' && Array.isArray(messages)) {

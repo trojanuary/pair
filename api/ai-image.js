@@ -6,18 +6,15 @@ const ENV = { openrouter: 'OPENROUTER_API_KEY', compat: 'OPENAI_API_KEY' };
 const DEFAULT_IMG = { openrouter: 'google/gemini-3.1-flash-lite-image', compat: 'gpt-image-1' };
 const OR_HEADERS = { 'HTTP-Referer': 'https://pairedx.com', 'X-Title': 'Source-Linked AI Reading Workspace' };
 const baseOf = (u) => (u && String(u).trim() ? String(u).trim() : 'https://api.openai.com/v1').replace(/\/+$/, '');
-// When the caller supplies the endpoint (OpenAI-compatible provider), reject SSRF targets so this
-// function can't be turned into a proxy into a private network. A self-hoster pointing at a local
-// image model can set ALLOW_PRIVATE_ENDPOINTS=1.
-const isBlockedHost = (u) => {
-  let h; try { h = new URL(u).hostname.toLowerCase(); } catch (e) { return true; }
-  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal') || h === 'metadata.google.internal') return true;
-  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (m) { const a = +m[1], b = +m[2];
-    if (a === 0 || a === 127 || a === 10 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return true; }
-  if (h === '::1' || h.startsWith('fe80') || h.startsWith('fc') || h.startsWith('fd')) return true;
-  return false;
-};
+// Server-proxied custom endpoints are restricted to an allowlist of known OpenAI-compatible
+// providers (a string block on private literals is bypassable via DNS). Self-hosters set
+// ALLOW_PRIVATE_ENDPOINTS=1 to point at any/local endpoint.
+const COMPAT_HOSTS = new Set([
+  'api.openai.com', 'api.together.xyz', 'api.together.ai', 'api.groq.com', 'api.mistral.ai',
+  'api.deepinfra.com', 'api.fireworks.ai', 'api.perplexity.ai', 'api.x.ai', 'api.deepseek.com',
+  'generativelanguage.googleapis.com', 'openrouter.ai',
+]);
+const hostOf = (u) => { try { return new URL(u).hostname.toLowerCase(); } catch (e) { return ''; } };
 // POST JSON with an abort backstop and no redirect-following (SSRF hardening).
 async function post(url, headers, body) {
   const ctrl = new AbortController();
@@ -53,7 +50,7 @@ module.exports = async function handler(req, res) {
     if (provider === 'compat' && !process.env.ALLOW_PRIVATE_ENDPOINTS) {
       const u = baseOf(baseUrl);
       if (!/^https:\/\//i.test(u)) return res.status(400).json({ error: 'Custom endpoints must use HTTPS.' });
-      if (isBlockedHost(u)) return res.status(400).json({ error: 'That endpoint host isn’t allowed.' });
+      if (!COMPAT_HOSTS.has(hostOf(u))) return res.status(400).json({ error: 'That endpoint isn’t a recognized OpenAI-compatible provider. Use a known provider, or self-host PairedX to point at any endpoint.' });
     }
     let image = null;
 
