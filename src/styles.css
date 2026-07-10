@@ -337,6 +337,10 @@ svg{display:block}
 .mini-btn.p{background:var(--blue);color:#fff;border-color:var(--blue)}
 .resolved-flag{color:var(--green);font-weight:700;font-size:11.5px;display:inline-flex;gap:5px;align-items:center}
 .card.isres{opacity:.72}
+/* count + sort row under the notes list (was inline styles, which no rule could override) */
+.nt-foot{display:flex;justify-content:space-between;padding:8px 16px;color:var(--faint);font-size:12px;
+  border-top:1px solid var(--line-2)}
+.nt-foot #sortSel{color:var(--muted);font-weight:600}
 .composer{flex:0 0 auto;border-top:1px solid var(--line);padding:12px 14px;background:var(--surface)}
 .composer .ctx{font-size:11.5px;color:var(--muted);margin-bottom:7px;display:flex;align-items:center;gap:7px}
 .composer .ctx .qn{width:16px;height:16px;font-size:10px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center}
@@ -594,6 +598,13 @@ svg{display:block}
      it looks broken — the toolbar and half the drawer slide off-screen. Keep controls at 16px here.
      Listed by class because the base rules set a smaller size and would otherwise win. */
   input,textarea,select,.pagein,.tc-input,.edit-input,#findInput{font-size:16px}
+
+  /* Typing a reply inside a note? That card's composer is the one that matters. The document-level
+     composer and the count/sort row sit right on top of it, in the room the keyboard just took.
+     Driven by a class rather than :has(:focus) — :focus doesn't match while the document is
+     unfocused, and the drawer's layout shouldn't hinge on that. */
+  #notes.replying .nt-foot,
+  #notes.replying .composer{display:none}
 }
 @media (max-width:560px){
   /* the zoom readout and the single-page/continuous toggle are the least load-bearing here */

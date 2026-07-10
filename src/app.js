@@ -933,11 +933,34 @@ function initCaptureMask() {
 // iOS keeps the layout viewport (and 100dvh) at full height when the keyboard opens, so a drawer
 // pinned to the bottom hides its own composer behind the keyboard and Safari's accessory bar.
 // visualViewport does shrink, so measure the overlap and let CSS lift the drawers by --kb.
+// Is the reader typing into a note's own composer (rather than the document-level one)?
+const isNoteField = el => !!(el && el.matches && el.matches('.tc-input,.edit-input') && el.closest('#notes'));
+
 function initKeyboardInset() {
-  const vv = window.visualViewport; if (!vv) return;
+  // A field inside the notes list sits in its own scroller. Shrinking the drawer doesn't move it,
+  // so the box you're typing in can end up behind the list's footer. Pull it back into view.
+  const revealFocused = () => {
+    const el = document.activeElement;
+    if (!el || !el.closest || !el.closest('#notes')) return;
+    try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+  };
+  // `.replying` folds away the document composer + count row, freeing the room the keyboard took.
+  const syncReplying = () => {
+    const n = document.getElementById('notes');
+    if (n) n.classList.toggle('replying', isNoteField(document.activeElement));
+  };
+  const vv = window.visualViewport;
+  // Wait out the keyboard animation and the layout it triggers before measuring where to scroll.
+  document.addEventListener('focusin', e => {
+    syncReplying();
+    if (drawerMQ.matches && e.target.closest && e.target.closest('#notes')) setTimeout(revealFocused, 320);
+  });
+  document.addEventListener('focusout', () => setTimeout(syncReplying, 0));   // activeElement settles next tick
+  if (!vv) return;
   const apply = () => {
     const overlap = drawerMQ.matches ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
     document.documentElement.style.setProperty('--kb', Math.round(overlap) + 'px');
+    if (overlap > 0) requestAnimationFrame(revealFocused);
   };
   vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply);
   if (drawerMQ.addEventListener) drawerMQ.addEventListener('change', apply);
