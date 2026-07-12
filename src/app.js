@@ -1569,8 +1569,8 @@ async function generateVisual(annId, prompt, typeHint) {
     if (plan.format === 'image' && plan.image_prompt) {
       msg.status = 'Generating image…'; save(); render();
       try {
-        msg.image = await aiImage(ip, `${plan.image_prompt}. Clean, legible, uncluttered, white background, no logos, no gibberish text.`);
-        msg.kind = 'image'; msg.model = state.settings.models[ip === 'openai' ? 'openaiImage' : ip === 'gemini' ? 'geminiImage' : 'openrouterImage'];
+        msg.image = await aiImage(ip, `${plan.image_prompt}. Compose everything inside a single square frame with generous margins — no text, label, or element may touch or run off any edge. Clean, legible, uncluttered, white background, no logos. Only depict the content described above; do not invent unrelated words, names, or examples.`);
+        msg.kind = 'image'; msg.model = state.settings.models[ip + 'Image'];
       } catch (e) { if (plan.ascii) { msg.kind = 'ascii'; msg.ascii = plan.ascii; } else { msg.error = 'Image generation failed: ' + (e.message || e); msg.title = 'Visual unavailable'; } }
     } else {
       msg.kind = 'ascii'; msg.model = state.settings.models[tp];
