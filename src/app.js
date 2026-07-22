@@ -2453,6 +2453,36 @@ function scheduleFolderSync() {
   clearTimeout(_folderSyncT);
   _folderSyncT = setTimeout(() => { writeNotesToFolder(state.ui.activeDoc, false); }, 1500);
 }
+// One-time tip for browsers without the File System Access API (Firefox, Safari, and any other
+// non-Chromium browser): explain that a web page can't open a "Save As" dialog there, and point at
+// the browser setting that makes downloads prompt for a location. Gated on feature detection — never
+// shown where showSaveFilePicker exists (Chrome/Edge get the real dialog) — and never twice per device.
+function maybeShowSaveAsTip() {
+  if (READONLY || 'showSaveFilePicker' in window) return;
+  try { if (localStorage.getItem('srw_saveas_tip') === '1') return; } catch (e) { return; }
+  const ua = navigator.userAgent || '';
+  const isFirefox = /firefox|fxios/i.test(ua);
+  const isSafari = !isFirefox && /safari/i.test(ua) && !/chrome|chromium|crios|edg|edgios|android|opr\//i.test(ua);
+  const path = isFirefox
+    ? 'Firefox → Settings → General → <b>Files and Applications</b> → “<b>Always ask you where to save files</b>.”'
+    : isSafari
+      ? 'Safari → Settings → General → <b>File download location</b> → “<b>Ask for each download</b>.”'
+      : 'your browser’s download settings → enable “<b>Always ask where to save files</b>.”';
+  const m = el(`<div class="modal-mask"><div class="confirm-box" style="max-width:460px">
+    <div class="confirm-msg" style="text-align:left;line-height:1.55">
+      <b>Downloaded to your Downloads folder.</b><br><br>
+      Your browser doesn’t let a web page open a “Save As” dialog — that only works in Chrome and Edge — so PairedX can’t choose where the file goes here. To pick the location each time (and overwrite instead of piling up “(1)” copies), turn on ${path}
+    </div>
+    <div class="confirm-acts"><button class="btn primary" data-ok>Got it</button></div>
+  </div></div>`);
+  document.getElementById('modalRoot').appendChild(m);
+  const done = () => { m.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); done(); } };
+  m.addEventListener('click', e => { if (e.target === m) done(); });
+  m.querySelector('[data-ok]').onclick = done;
+  document.addEventListener('keydown', onKey, true);
+  try { localStorage.setItem('srw_saveas_tip', '1'); } catch (e) {}
+}
 // Native "Save As" (Chrome/Edge): pop the OS save dialog so the user picks the location + filename,
 // overwriting in place if they choose an existing file (no browser "(1)" duplication). A FRESH dialog
 // every call — we deliberately remember NO handle, so there's no silent re-save and no cross-visit
@@ -2460,7 +2490,7 @@ function scheduleFolderSync() {
 // just makes the dialog re-open in the last place they saved to (a convenience, not a grant).
 // Returns { status:'saved'|'cancelled'|'fallback', name? }; 'fallback' → the caller should download.
 async function saveAsFile(suggestedName, contents, accept) {
-  if (typeof window === 'undefined' || !('showSaveFilePicker' in window)) return { status: 'fallback' };
+  if (typeof window === 'undefined' || !('showSaveFilePicker' in window)) { maybeShowSaveAsTip(); return { status: 'fallback' }; }
   let handle;
   try {
     handle = await window.showSaveFilePicker({
