@@ -2453,6 +2453,33 @@ function scheduleFolderSync() {
   clearTimeout(_folderSyncT);
   _folderSyncT = setTimeout(() => { writeNotesToFolder(state.ui.activeDoc, false); }, 1500);
 }
+// Native "Save As" (Chrome/Edge): pop the OS save dialog so the user picks the location + filename,
+// overwriting in place if they choose an existing file (no browser "(1)" duplication). A FRESH dialog
+// every call — we deliberately remember NO handle, so there's no silent re-save and no cross-visit
+// "allow on every visit" permission prompt; the only dialog is the picker the user asked for. `id`
+// just makes the dialog re-open in the last place they saved to (a convenience, not a grant).
+// Returns { status:'saved'|'cancelled'|'fallback', name? }; 'fallback' → the caller should download.
+async function saveAsFile(suggestedName, contents, accept) {
+  if (typeof window === 'undefined' || !('showSaveFilePicker' in window)) return { status: 'fallback' };
+  let handle;
+  try {
+    handle = await window.showSaveFilePicker({
+      id: 'srw-save', startIn: 'documents', suggestedName,
+      types: accept ? [{ description: accept.desc, accept: accept.map }] : undefined,
+    });
+  } catch (e) {
+    return { status: (e && e.name === 'AbortError') ? 'cancelled' : 'fallback' };   // user backed out → save nothing
+  }
+  try {
+    const w = await handle.createWritable();
+    await w.write(contents);
+    await w.close();
+    return { status: 'saved', name: handle.name || suggestedName };
+  } catch (e) {
+    toast('Couldn’t write there: ' + (e && e.message || e) + ' — downloading a copy instead.', 'err');
+    return { status: 'fallback' };
+  }
+}
 function downloadNotesJSON(docId) {
   try {
     const blob = new Blob([JSON.stringify(docNotesJSON(docId), null, 2)], { type: 'application/json' });
@@ -2518,22 +2545,33 @@ async function exportSelfContainedHTML(docId) {
     put(/<script>window\.va=[\s\S]*?<\/script>\s*/, '');                    // strip analytics — a shared file must not phone home
     put(/<script defer src="\/_vercel\/insights\/script\.js"><\/script>\s*/, '');
     const base = (doc.name || 'paper').replace(/\.pdf$/i, '').replace(/[^\w.\- ]+/g, '_').trim() || 'paper';
+    const fname = base + '.annotated.html';
+    const sizeMB = (html.length / 1048576).toFixed(1);
+    // Save As so the user chooses where the shared file lands; fall back to a download where unsupported.
+    const r = await saveAsFile(fname, html, { desc: 'Annotated paper (HTML)', map: { 'text/html': ['.html'] } });
+    if (r.status === 'saved') { toast('Saved ' + r.name + ' — ' + sizeMB + ' MB, opens anywhere.'); return; }
+    if (r.status === 'cancelled') return;                     // dialog dismissed → export nothing
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = base + '.annotated.html'; document.body.appendChild(a); a.click(); a.remove();
+    a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Exported ' + base + '.annotated.html — ' + (html.length / 1048576).toFixed(1) + ' MB, opens anywhere.');
+    toast('Exported ' + fname + ' — ' + sizeMB + ' MB, opens anywhere.');
   } catch (e) { toast('Could not build the file: ' + (e && e.message || e), 'err'); }
 }
 function flashSaved() { const b = document.getElementById('btnSaveNotes'); if (b) { b.classList.add('saved'); setTimeout(() => b.classList.remove('saved'), 1400); } }
-// Save button: write to the chosen folder; if none is set, offer to pick one (Chromium) or download.
+// Save button. If a sync folder is set (Settings → Storage) it silently overwrites there; otherwise
+// it pops a Save As dialog so the user chooses where — and can overwrite in place instead of piling
+// up "(1)" copies. Nothing is remembered, so it never silently re-saves or re-prompts. Browsers
+// without showSaveFilePicker fall back to a plain download.
 async function saveNotesNow() {
-  // The Save button never opens the OS folder picker (that lives in Settings → Choose folder),
-  // so it can't trigger Chrome's "folder contains system files" prompt. It writes to an already
-  // chosen folder, otherwise downloads a portable JSON. Nothing "saves" on a cancelled prompt.
   if (storageCfg().mode === 'folder' && await writeNotesToFolder(state.ui.activeDoc, true)) {
     toast('Saved to “' + storageCfg().folderName + '”.'); flashSaved(); return;
   }
+  const r = await saveAsFile(notesFileName(state.ui.activeDoc),
+    JSON.stringify(docNotesJSON(state.ui.activeDoc), null, 2),
+    { desc: 'Notes JSON', map: { 'application/json': ['.json'] } });
+  if (r.status === 'saved') { toast('Saved ' + r.name + '.'); flashSaved(); return; }
+  if (r.status === 'cancelled') return;                       // dialog dismissed → save nothing
   downloadNotesJSON(state.ui.activeDoc); flashSaved();
 }
 function injectNotesButtons() {
