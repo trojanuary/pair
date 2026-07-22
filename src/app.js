@@ -2463,17 +2463,28 @@ function maybeShowSaveAsTip() {
   const ua = navigator.userAgent || '';
   const isFirefox = /firefox|fxios/i.test(ua);
   const isSafari = !isFirefox && /safari/i.test(ua) && !/chrome|chromium|crios|edg|edgios|android|opr\//i.test(ua);
-  const path = isFirefox
-    ? 'Firefox → Settings → General → <b>Files and Applications</b> → “<b>Always ask you where to save files</b>.”'
+  const browser = isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'your browser';
+  const cfg = isFirefox
+    ? { steps: ['Open <b>Settings → General</b>', 'Scroll to <b>Files and Applications</b>'], setting: 'Always ask you where to save files', control: 'toggle' }
     : isSafari
-      ? 'Safari → Settings → General → <b>File download location</b> → “<b>Ask for each download</b>.”'
-      : 'your browser’s download settings → enable “<b>Always ask where to save files</b>.”';
-  const m = el(`<div class="modal-mask"><div class="confirm-box" style="max-width:460px">
-    <div class="confirm-msg" style="text-align:left;line-height:1.55">
-      <b>Downloaded to your Downloads folder.</b><br><br>
-      Your browser doesn’t let a web page open a “Save As” dialog — that only works in Chrome and Edge — so PairedX can’t choose where the file goes here. To pick the location each time (and overwrite instead of piling up “(1)” copies), turn on ${path}
-    </div>
-    <div class="confirm-acts"><button class="btn primary" data-ok>Got it</button></div>
+      ? { steps: ['Open <b>Settings → General</b>', 'Find <b>File download location</b>'], setting: 'Ask for each download', control: 'check' }
+      : { steps: ['Open your browser’s <b>download settings</b>'], setting: 'Always ask where to save files', control: 'toggle' };
+  // A numbered stepper: indigo badges joined by a connector line, ending in a mock of the exact
+  // control to flip (a toggle for Firefox / a selected option ✓ for Safari) so it's recognizable.
+  const BADGE = 'position:relative;flex:0 0 27px;height:27px;border-radius:50%;background:#4F46E5;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center';
+  const LINE = 'position:absolute;left:12.5px;top:27px;bottom:-3px;width:2px;background:var(--line,#E5E7EB)';
+  const step = (n, html, withLine) => `<div style="position:relative;display:flex;gap:14px;align-items:flex-start;padding-bottom:16px">${withLine ? `<div style="${LINE}"></div>` : ''}<div style="${BADGE}">${n}</div><div style="flex:1;padding-top:4px;font-size:14px;color:var(--text,#111827);line-height:1.45">${html}</div></div>`;
+  const control = cfg.control === 'toggle'
+    ? '<span style="flex:0 0 auto;width:40px;height:23px;border-radius:999px;background:#4F46E5;position:relative;display:inline-block"><span style="position:absolute;top:2px;right:2px;width:19px;height:19px;border-radius:50%;background:#fff"></span></span>'
+    : '<span style="flex:0 0 auto;color:#4F46E5;font-weight:800;font-size:18px;line-height:1">✓</span>';
+  const settingBox = `<div style="display:flex;align-items:center;gap:12px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:11px 13px"><span style="flex:1;font-weight:700;font-size:14px;color:#312E81">${cfg.setting}</span>${control}</div>`;
+  const stepsHTML = cfg.steps.map((s, i) => step(i + 1, s, true)).join('')
+    + `<div style="position:relative;display:flex;gap:14px;align-items:flex-start"><div style="${BADGE}">${cfg.steps.length + 1}</div><div style="flex:1"><div style="font-size:14px;color:var(--text,#111827);margin:4px 0 8px">Turn on:</div>${settingBox}</div></div>`;
+  const m = el(`<div class="modal-mask"><div class="confirm-box" style="max-width:470px;text-align:left">
+    <div style="font-weight:800;font-size:17px;color:var(--text,#111827)">Choose where your files save</div>
+    <div style="font-size:13.5px;color:var(--muted,#6B7280);margin:7px 0 20px;line-height:1.5">In <b>${browser}</b>, turn on one setting to pick where each download goes — and overwrite instead of piling up “(1)” copies.</div>
+    ${stepsHTML}
+    <div class="confirm-acts" style="margin-top:22px;justify-content:flex-end"><button class="btn primary" data-ok>Got it</button></div>
   </div></div>`);
   document.getElementById('modalRoot').appendChild(m);
   const done = () => { m.remove(); document.removeEventListener('keydown', onKey, true); };
