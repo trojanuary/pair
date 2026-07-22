@@ -2453,6 +2453,74 @@ function scheduleFolderSync() {
   clearTimeout(_folderSyncT);
   _folderSyncT = setTimeout(() => { writeNotesToFolder(state.ui.activeDoc, false); }, 1500);
 }
+// One-time tip for browsers without the File System Access API (Firefox, Safari, and any other
+// non-Chromium browser): explain that a web page can't open a "Save As" dialog there, and point at
+// the browser setting that makes downloads prompt for a location. Gated on feature detection — never
+// shown where showSaveFilePicker exists (Chrome/Edge get the real dialog) — and never twice per device.
+function maybeShowSaveAsTip() {
+  if (READONLY || 'showSaveFilePicker' in window) return;
+  try { if (localStorage.getItem('srw_saveas_tip') === '1') return; } catch (e) { return; }
+  const ua = navigator.userAgent || '';
+  const isFirefox = /firefox|fxios/i.test(ua);
+  const isSafari = !isFirefox && /safari/i.test(ua) && !/chrome|chromium|crios|edg|edgios|android|opr\//i.test(ua);
+  const browser = isFirefox ? 'Firefox' : isSafari ? 'Safari' : 'your browser';
+  const cfg = isFirefox
+    ? { steps: ['Open <b>Settings → General</b>', 'Scroll to <b>Files and Applications</b>'], setting: 'Always ask you where to save files', control: 'toggle' }
+    : isSafari
+      ? { steps: ['Open <b>Settings → General</b>', 'Find <b>File download location</b>'], setting: 'Ask for each download', control: 'check' }
+      : { steps: ['Open your browser’s <b>download settings</b>'], setting: 'Always ask where to save files', control: 'toggle' };
+  // A numbered stepper: indigo badges joined by a connector line, ending in a mock of the exact
+  // control to flip (a toggle for Firefox / a selected option ✓ for Safari) so it's recognizable.
+  const BADGE = 'position:relative;flex:0 0 27px;height:27px;border-radius:50%;background:#4F46E5;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center';
+  const LINE = 'position:absolute;left:12.5px;top:27px;bottom:-3px;width:2px;background:var(--line,#E5E7EB)';
+  const step = (n, html, withLine) => `<div style="position:relative;display:flex;gap:14px;align-items:flex-start;padding-bottom:16px">${withLine ? `<div style="${LINE}"></div>` : ''}<div style="${BADGE}">${n}</div><div style="flex:1;padding-top:4px;font-size:14px;color:var(--text,#111827);line-height:1.45">${html}</div></div>`;
+  const control = cfg.control === 'toggle'
+    ? '<span style="flex:0 0 auto;width:40px;height:23px;border-radius:999px;background:#4F46E5;position:relative;display:inline-block"><span style="position:absolute;top:2px;right:2px;width:19px;height:19px;border-radius:50%;background:#fff"></span></span>'
+    : '<span style="flex:0 0 auto;color:#4F46E5;font-weight:800;font-size:18px;line-height:1">✓</span>';
+  const settingBox = `<div style="display:flex;align-items:center;gap:12px;background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:11px 13px"><span style="flex:1;font-weight:700;font-size:14px;color:#312E81">${cfg.setting}</span>${control}</div>`;
+  const stepsHTML = cfg.steps.map((s, i) => step(i + 1, s, true)).join('')
+    + `<div style="position:relative;display:flex;gap:14px;align-items:flex-start"><div style="${BADGE}">${cfg.steps.length + 1}</div><div style="flex:1"><div style="font-size:14px;color:var(--text,#111827);margin:4px 0 8px">Turn on:</div>${settingBox}</div></div>`;
+  const m = el(`<div class="modal-mask"><div class="confirm-box" style="max-width:470px;text-align:left">
+    <div style="font-weight:800;font-size:17px;color:var(--text,#111827)">Choose where your files save</div>
+    <div style="font-size:13.5px;color:var(--muted,#6B7280);margin:7px 0 20px;line-height:1.5">In <b>${browser}</b>, turn on one setting to pick where each download goes — and overwrite instead of piling up “(1)” copies.</div>
+    ${stepsHTML}
+    <div class="confirm-acts" style="margin-top:22px;justify-content:flex-end"><button class="btn primary" data-ok>Got it</button></div>
+  </div></div>`);
+  document.getElementById('modalRoot').appendChild(m);
+  const done = () => { m.remove(); document.removeEventListener('keydown', onKey, true); };
+  const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); done(); } };
+  m.addEventListener('click', e => { if (e.target === m) done(); });
+  m.querySelector('[data-ok]').onclick = done;
+  document.addEventListener('keydown', onKey, true);
+  try { localStorage.setItem('srw_saveas_tip', '1'); } catch (e) {}
+}
+// Native "Save As" (Chrome/Edge): pop the OS save dialog so the user picks the location + filename,
+// overwriting in place if they choose an existing file (no browser "(1)" duplication). A FRESH dialog
+// every call — we deliberately remember NO handle, so there's no silent re-save and no cross-visit
+// "allow on every visit" permission prompt; the only dialog is the picker the user asked for. `id`
+// just makes the dialog re-open in the last place they saved to (a convenience, not a grant).
+// Returns { status:'saved'|'cancelled'|'fallback', name? }; 'fallback' → the caller should download.
+async function saveAsFile(suggestedName, contents, accept) {
+  if (typeof window === 'undefined' || !('showSaveFilePicker' in window)) { maybeShowSaveAsTip(); return { status: 'fallback' }; }
+  let handle;
+  try {
+    handle = await window.showSaveFilePicker({
+      id: 'srw-save', startIn: 'documents', suggestedName,
+      types: accept ? [{ description: accept.desc, accept: accept.map }] : undefined,
+    });
+  } catch (e) {
+    return { status: (e && e.name === 'AbortError') ? 'cancelled' : 'fallback' };   // user backed out → save nothing
+  }
+  try {
+    const w = await handle.createWritable();
+    await w.write(contents);
+    await w.close();
+    return { status: 'saved', name: handle.name || suggestedName };
+  } catch (e) {
+    toast('Couldn’t write there: ' + (e && e.message || e) + ' — downloading a copy instead.', 'err');
+    return { status: 'fallback' };
+  }
+}
 function downloadNotesJSON(docId) {
   try {
     const blob = new Blob([JSON.stringify(docNotesJSON(docId), null, 2)], { type: 'application/json' });
@@ -2518,22 +2586,33 @@ async function exportSelfContainedHTML(docId) {
     put(/<script>window\.va=[\s\S]*?<\/script>\s*/, '');                    // strip analytics — a shared file must not phone home
     put(/<script defer src="\/_vercel\/insights\/script\.js"><\/script>\s*/, '');
     const base = (doc.name || 'paper').replace(/\.pdf$/i, '').replace(/[^\w.\- ]+/g, '_').trim() || 'paper';
+    const fname = base + '.annotated.html';
+    const sizeMB = (html.length / 1048576).toFixed(1);
+    // Save As so the user chooses where the shared file lands; fall back to a download where unsupported.
+    const r = await saveAsFile(fname, html, { desc: 'Annotated paper (HTML)', map: { 'text/html': ['.html'] } });
+    if (r.status === 'saved') { toast('Saved ' + r.name + ' — ' + sizeMB + ' MB, opens anywhere.'); return; }
+    if (r.status === 'cancelled') return;                     // dialog dismissed → export nothing
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = base + '.annotated.html'; document.body.appendChild(a); a.click(); a.remove();
+    a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
-    toast('Exported ' + base + '.annotated.html — ' + (html.length / 1048576).toFixed(1) + ' MB, opens anywhere.');
+    toast('Exported ' + fname + ' — ' + sizeMB + ' MB, opens anywhere.');
   } catch (e) { toast('Could not build the file: ' + (e && e.message || e), 'err'); }
 }
 function flashSaved() { const b = document.getElementById('btnSaveNotes'); if (b) { b.classList.add('saved'); setTimeout(() => b.classList.remove('saved'), 1400); } }
-// Save button: write to the chosen folder; if none is set, offer to pick one (Chromium) or download.
+// Save button. If a sync folder is set (Settings → Storage) it silently overwrites there; otherwise
+// it pops a Save As dialog so the user chooses where — and can overwrite in place instead of piling
+// up "(1)" copies. Nothing is remembered, so it never silently re-saves or re-prompts. Browsers
+// without showSaveFilePicker fall back to a plain download.
 async function saveNotesNow() {
-  // The Save button never opens the OS folder picker (that lives in Settings → Choose folder),
-  // so it can't trigger Chrome's "folder contains system files" prompt. It writes to an already
-  // chosen folder, otherwise downloads a portable JSON. Nothing "saves" on a cancelled prompt.
   if (storageCfg().mode === 'folder' && await writeNotesToFolder(state.ui.activeDoc, true)) {
     toast('Saved to “' + storageCfg().folderName + '”.'); flashSaved(); return;
   }
+  const r = await saveAsFile(notesFileName(state.ui.activeDoc),
+    JSON.stringify(docNotesJSON(state.ui.activeDoc), null, 2),
+    { desc: 'Notes JSON', map: { 'application/json': ['.json'] } });
+  if (r.status === 'saved') { toast('Saved ' + r.name + '.'); flashSaved(); return; }
+  if (r.status === 'cancelled') return;                       // dialog dismissed → save nothing
   downloadNotesJSON(state.ui.activeDoc); flashSaved();
 }
 function injectNotesButtons() {
