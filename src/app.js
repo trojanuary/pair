@@ -1339,7 +1339,7 @@ function retrievePassages(question, excludePage) {
 }
 function chipsFor(a, opts) {
   const chips = [];
-  chips.push(`Page ${a.page}`);
+  chips.push(`Page ${a.page}`);   // chipRow() escapes each chip at render
   if (a.section) chips.push(a.section.replace(/^(\d+(\.\d+)*)\s+/, m => 'Section ' + m.trim() + ' ').trim());
   if (a.source_type === 'screenshot') { chips.push('Used screenshot'); if (a.caption) chips.push('Used nearby caption'); }
   else if (a.source_type === 'free_comment') { chips.push('Page comment'); }
@@ -1445,7 +1445,7 @@ async function aiAgentStep(provider, model, messages, tools) {
   return j;
 }
 function agentChips(a, used) {
-  const chips = [`Page ${a.page}`];
+  const chips = [`Page ${a.page}`];   // chipRow() escapes each chip at render
   if (a.section) chips.push(a.section.replace(/^(\d+(\.\d+)*)\s+/, m => 'Section ' + m.trim() + ' ').trim());
   if (used.has('read_full_document')) chips.push('Read full paper');
   if (used.has('search_document')) chips.push('Searched document');
@@ -1769,7 +1769,7 @@ function msgToText(a, m) {
   return '';
 }
 function noteToText(a) {
-  const L = [`${srcLabel(a)} — Page ${a.page}${a.section ? ' · ' + a.section : ''}`];
+  const L = [`${srcLabel(a)} — Page ${a.page}${a.section ? ' · ' + a.section : ''}`];   // plain text for the clipboard, never HTML
   if (a.selected_text) L.push(`"${a.selected_text}"`);
   (a.messages || []).forEach(m => { const t = msgToText(a, m); if (t) L.push(t); });
   const tags = [...(a.auto_tags || []), ...(a.manual_tags || [])]; if (tags.length) L.push(`Tags: ${tags.join(', ')}`);
@@ -1796,7 +1796,7 @@ function msgCard(a, m, isFirst) {
   const editing = state.ui.editing === m.id;
   let body = '';
   if (isFirst) {
-    body += `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>`;
+    body += `<div class="q-src"><span class="qn">${esc(a.anchor)}</span>${srcLabel(a)} · Page ${esc(a.page)}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>`;
     if (a.source_type === 'screenshot' && a.screenshot) body += `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>`;
     else if (a.selected_text) body += quoteBlock(a.selected_text);
   }
@@ -1892,7 +1892,7 @@ function compactCard(a) {
       <div class="cc-main">
         ${previews}
         ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>` : ''}
-        <div class="loc-line">Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
+        <div class="loc-line">Page ${esc(a.page)}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
       </div>
     </div></div>`);
   wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],button')) return; if (window.getSelection && String(window.getSelection()).trim()) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
@@ -1910,7 +1910,7 @@ function annCard(a) {
   } else {
     headHtml = `<div class="card-h">${actorAvatar({ actor: 'you' })}<span class="who">${esc(state.settings.actorName || 'You')}</span><span class="when">${timeLabel(a.created_at)}</span>`
       + `<button class="mact collapse-btn" data-collapse="${a.id}" title="Collapse thread">${ICON_CHEVUP}</button><span class="macts"><button class="mact" data-copynote="${a.id}" title="Copy note">${ICON_COPY}</button><button class="mact" data-delnote="${a.id}" title="Delete note">${ICON_TRASH}</button></span></div>`;
-    firstBody = `<div class="q-src"><span class="qn">${a.anchor}</span>${srcLabel(a)} · Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>`
+    firstBody = `<div class="q-src"><span class="qn">${esc(a.anchor)}</span>${srcLabel(a)} · Page ${esc(a.page)}${a.section ? ' · ' + esc(a.section) : ''}</div>`
       + (a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>` : (a.selected_text ? quoteBlock(a.selected_text) : ''));
   }
   let replies = '';
@@ -2288,6 +2288,8 @@ function docNotesJSON(docId) {
 const IMP_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const impId = (v, p) => (typeof v === 'string' && IMP_ID.test(v)) ? v : uid(p);
 const impCap = (o, k, max) => { if (o && typeof o[k] === 'string' && o[k].length > max) o[k] = o[k].slice(0, max); };
+// A plain non-negative integer, or the fallback. Rejects strings, NaN, Infinity and huge values.
+const impInt = (v, dflt) => { const n = parseInt(v, 10); return (Number.isFinite(n) && n >= 0 && n <= 1e6) ? n : dflt; };
 const IMP_TEXT_CAP = 2000000;   // ~2MB per text field — orders of magnitude above any real note/answer
 function sanitizeImportedMessage(m) {
   if (!m || typeof m !== 'object') return null;
@@ -2305,6 +2307,11 @@ function sanitizeImportedAnnotation(a) {
   let o; try { o = JSON.parse(JSON.stringify(a)); } catch (e) { return null; }
   o.id = impId(o.id, 'ann');
   o.thread = impId(o.thread, 'thr');
+  // page and anchor are numbers everywhere the app creates them, but they land in HTML text and in a
+  // [data-page="…"] selector — so a string here is both a broken selector and an injection vector.
+  // Force them to plain integers on the way in; the render sites escape as well (belt and braces).
+  o.page = impInt(o.page, 1);
+  o.anchor = impInt(o.anchor, 0);
   if ('screenshot' in o) o.screenshot = o.screenshot ? (safeImgSrc(o.screenshot) || null) : o.screenshot;
   ['selected_text', 'section', 'prefix', 'suffix', 'caption'].forEach(k => impCap(o, k, IMP_TEXT_CAP));
   if (Array.isArray(o.rects)) o.rects = o.rects.slice(0, 5000);
@@ -2898,7 +2905,7 @@ function buildSheet() {
       if (m.type === 'generated_visual' && inc.visuals && !m.pending && m.image) right.push(`<div class="ex-resp"><div class="ex-sub">Generated visual</div><div class="ex-shot"><img src="${safeImgSrc(m.image)}"></div>${m.approximation_note ? `<div style="margin-top:6px"><span class="badge-appx">Approximate</span></div>` : ''}</div>`);
     });
     if (!left.length && !right.length) { n--; return; }
-    html += `<div class="ex-item ${compact ? 'compact' : ''}"><div class="ex-left"><div class="ex-loc"><span class="ex-num">${n}</span>Page ${a.page}${a.section ? ' · ' + esc(a.section) : ''}</div>${left.join('')}</div><div class="ex-right">${right.join('') || '<div class="ex-sub" style="color:#9CA3AF">—</div>'}</div></div>`;
+    html += `<div class="ex-item ${compact ? 'compact' : ''}"><div class="ex-left"><div class="ex-loc"><span class="ex-num">${n}</span>Page ${esc(a.page)}${a.section ? ' · ' + esc(a.section) : ''}</div>${left.join('')}</div><div class="ex-right">${right.join('') || '<div class="ex-sub" style="color:#9CA3AF">—</div>'}</div></div>`;
   });
   if (n === 0) html += `<div class="empty">Nothing selected to export. Toggle include options or add notes.</div>`;
   sheet.innerHTML = html;
