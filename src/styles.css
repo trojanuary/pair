@@ -204,7 +204,15 @@ svg{display:block}
    text layer's normally-transparent glyphs. They don't line up with the glyphs
    painted on the canvas, so selecting text drew a second, offset copy of it.
    Keep the ink transparent and let the canvas underneath show through. */
-.textLayer ::selection{background:color-mix(in oklch, var(--teal-500) 32%, transparent);
+/* Same hue family as a committed note highlight, so selecting no longer reads
+   as a different colour system — but deliberately NOT the same colour. This
+   wash means "pending"; the green fill means "saved". If they matched you
+   could not tell a fresh selection from an existing highlight, or see what you
+   were selecting across one.
+   Kept saturated at low alpha rather than pale at high alpha: unlike the
+   highlights this paints ABOVE the canvas glyphs and can't use multiply, so a
+   pale wash would grey the ink (4.6:1) where this leaves it at 15:1. */
+.textLayer ::selection{background:color-mix(in oklch, var(--green-600) 26%, transparent);
   color:transparent;-webkit-text-fill-color:transparent}
 .textLayer .search-hit{background:color-mix(in oklch, var(--amber-400) 50%, transparent);border-radius:2px}
 .textLayer mark.sh{background:color-mix(in oklch, var(--amber-400) 45%, transparent);color:inherit;border-radius:2px;padding:0}
