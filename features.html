@@ -480,8 +480,9 @@ footer nav{margin-left:auto;display:flex;gap:18px}
 (function(){
   // The page's markup predates the design system, so rather than hand-tag
   // every block, opt the structural ones in here.
-  // .tocbar's jump links are bare <a>s, hence the descendant selector
-  var PILLS='.tocbar a, .chip';
+  // Both pill families are unclassed: .tocbar's jump links are bare <a>s and
+  // the per-feature chips are bare <span>s, so both need descendant selectors.
+  var PILLS='.tocbar a, .chips > span, .chip';
   document.querySelectorAll(PILLS).forEach(function(el){
     el.setAttribute('data-glass','pill'); el.classList.add('glass-fill');
   });
