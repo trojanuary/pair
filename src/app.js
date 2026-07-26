@@ -1077,7 +1077,11 @@ async function captureRegion(l, t, w, h) {
   });
   setTool('cursor');
   openRightPanel(ann.id);           // reveal the panel so the captured note is visible
-  selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
+  // drawHighlights too, not just the pin: the captured region persists as a
+  // dashed .figbox, and without this the outline only appeared the next time
+  // something else forced a redraw (a zoom, a page change). From the user's
+  // side the box simply vanished the moment the drag ended.
+  selectAnnotation(ann.id, true); render(); drawHighlights(); drawPins(); focusComposer();
   toast('Region captured — ask the AI about it below.');
 }
 
