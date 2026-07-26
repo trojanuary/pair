@@ -173,11 +173,44 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .cat li em{font-style:normal;color:var(--ink-2)}
 
 /* cta + footer */
-.cta{text-align:center;padding:58px 24px}
-.cta h2{font-family:var(--serif);font-weight:600;font-size:32px;margin:0 0 16px}
+/* Closing CTA — the same dark glass panel the landing page ends on, so both
+   pages land the same way instead of this one trailing off into bare text. */
+.cta{position:relative;text-align:center;padding:34px 24px 76px}
+.wash--cta{position:absolute;z-index:0;pointer-events:none;
+  top:18px;bottom:36px;left:50%;transform:translateX(-50%);
+  width:min(calc(100% - 88px), calc(1240px - 48px));
+  mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
+  -webkit-mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
+  background:
+    radial-gradient(44% 56% at 18% 26%, color-mix(in oklch, var(--accent) 24%, transparent), transparent 70%),
+    radial-gradient(40% 52% at 82% 32%, color-mix(in oklch, var(--clay-500) 22%, transparent), transparent 72%),
+    radial-gradient(34% 40% at 60% 74%, color-mix(in oklch, var(--amber-400) 8%, transparent), transparent 72%)}
+.ctapanel{position:relative;z-index:1;overflow:hidden;text-align:left;
+  background:linear-gradient(152deg, color-mix(in oklch, var(--teal-800) 97%, transparent), color-mix(in oklch, var(--teal-800) 87%, transparent));
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--radius-2xl);
+  box-shadow:var(--shadow-xl),inset 0 1px 0 rgba(255,255,255,.26);
+  padding:56px 56px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.cta-orb{position:absolute;border-radius:50%;pointer-events:none}
+.cta-orb--1{right:-120px;top:-120px;width:380px;height:380px;background:rgba(255,255,255,.05)}
+.cta-orb--2{right:40px;bottom:-140px;width:260px;height:260px;background:rgba(255,255,255,.035)}
+.cta h2{position:relative;font-family:var(--serif);font-weight:600;color:#FCFDFC;
+  font-size:clamp(26px,3.4vw,40px);line-height:1.12;letter-spacing:-.015em;margin:0}
+.cta p{position:relative;margin:0 0 26px;font-size:17px;line-height:1.65;color:var(--teal-200);max-width:26rem}
+.cta-actions{position:relative;display:flex;gap:12px;flex-wrap:wrap}
+.marked{position:relative;display:inline-block}
+.swash{position:absolute;left:0;bottom:-.03em;width:100%;height:.14em;overflow:visible}
+.swash path{stroke-width:5;stroke-linecap:round;fill:none;opacity:.92;stroke-dasharray:330;stroke-dashoffset:330}
+[data-reveal].in .swash path{animation:swash-draw .9s var(--ease-out) forwards}
+@keyframes swash-draw{to{stroke-dashoffset:0}}
+@media (max-width:900px){.ctapanel{grid-template-columns:1fr;gap:26px;padding:40px 32px}}
 .btn{display:inline-block;background:var(--blue);color:#fff;font-weight:700;padding:12px 26px;border-radius:12px;font-size:16px}
 .btn:hover{background:var(--blue-2);text-decoration:none}
 .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);margin-left:8px}
+.btn.onDark{background:#FCFDFC;color:var(--teal-800);box-shadow:var(--shadow-md)}
+.btn.onDark:hover{background:var(--teal-100);color:var(--teal-900)}
+.btn.onDarkGhost{background:transparent;color:#FCFDFC;border:1px solid rgba(255,255,255,.34);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.btn.onDarkGhost:hover{background:rgba(255,255,255,.1);color:#FCFDFC}
 footer{border-top:1px solid var(--line);color:var(--ink-2);font-size:13.5px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:14px;align-items:center;height:auto;padding:22px 24px}
 footer nav{margin-left:auto;display:flex;gap:18px}
@@ -457,9 +490,16 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   </div>
 </div></section>
 
-<section class="cta"><div class="wrap">
-  <h2>Try it — no signup, no install.</h2>
-  <a class="btn" href="/app">Open the app</a><a class="btn ghost" href="https://github.com/trojanuary/pair">View on GitHub</a>
+<section class="cta"><div class="wash--cta" aria-hidden="true"></div><div class="wrap">
+  <div class="ctapanel" data-glass="dark">
+    <div class="cta-orb cta-orb--1" aria-hidden="true"></div>
+    <div class="cta-orb cta-orb--2" aria-hidden="true"></div>
+    <h2>Try it — no signup, <span class="marked">no install.<svg class="swash" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 62 2, 112 13, 168 6 S 256 2, 297 9" stroke="var(--amber-400)"/></svg></span></h2>
+    <p>Open a PDF and start annotating — it runs entirely in your browser.</p>
+    <div class="cta-actions">
+      <a class="btn onDark" href="/app">Open the app</a><a class="btn onDarkGhost" href="https://github.com/trojanuary/pair">View on GitHub</a>
+    </div>
+  </div>
 </div></section>
 
 <footer><div class="wrap">
@@ -501,7 +541,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   document.querySelectorAll('.shot').forEach(function(el){
     el.setAttribute('data-glass',''); el.setAttribute('data-lift','');
   });
-  var REVEAL='.row, .cat, .shot, .band > *, .legend, .cta > *, .annot';
+  var REVEAL='.row, .cat, .shot, .band > *, .legend, .ctapanel, .annot';
   var all=[].slice.call(document.querySelectorAll(REVEAL));
   all.forEach(function(e){ e.setAttribute('data-reveal',''); });
   var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
