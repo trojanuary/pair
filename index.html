@@ -26,6 +26,65 @@ html{overflow-x:clip}
 .wrap{max-width:var(--content-max);margin:0 auto;padding:0 32px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
+/* ============================ ambient washes ============================
+   Soft colour fields behind the content. The page-level one is fixed so it
+   stays put while you scroll; section-level ones are masked at their edges
+   so they bleed into the paper instead of ending on a line. */
+.page{position:relative;background:var(--paper);min-height:100vh}
+.wash{position:absolute;z-index:0;pointer-events:none}
+.page-content{position:relative;z-index:1}
+.wash--page{position:fixed;inset:0;background:
+  radial-gradient(46% 34% at 8% 2%, color-mix(in oklch, var(--accent) 20%, transparent), transparent 70%),
+  radial-gradient(38% 30% at 96% 6%, color-mix(in oklch, var(--amber-400) 6%, transparent), transparent 72%),
+  radial-gradient(52% 34% at 88% 98%, color-mix(in oklch, var(--clay-500) 18%, transparent), transparent 72%),
+  radial-gradient(40% 26% at 4% 92%, color-mix(in oklch, var(--accent) 14%, transparent), transparent 72%)}
+.wash--hero{inset:-40px 0;
+  mask-image:linear-gradient(to bottom, #000 76%, transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom, #000 76%, transparent 100%);
+  background:
+  radial-gradient(38% 46% at 22% 8%, color-mix(in oklch, var(--accent) 22%, transparent), transparent 70%),
+  radial-gradient(34% 34% at 82% 16%, color-mix(in oklch, var(--amber-400) 6%, transparent), transparent 74%),
+  radial-gradient(48% 40% at 50% 92%, color-mix(in oklch, var(--accent) 20%, transparent), transparent 70%),
+  radial-gradient(34% 34% at 92% 74%, color-mix(in oklch, var(--clay-500) 20%, transparent), transparent 72%)}
+.wash--feat{inset:-60px 0;
+  mask-image:linear-gradient(to bottom, transparent 0, #000 14%, #000 82%, transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 14%, #000 82%, transparent 100%);
+  background:
+  radial-gradient(44% 42% at 14% 34%, color-mix(in oklch, var(--accent) 24%, transparent), transparent 70%),
+  radial-gradient(40% 40% at 86% 30%, color-mix(in oklch, var(--amber-400) 14%, transparent), transparent 72%),
+  radial-gradient(46% 38% at 62% 88%, color-mix(in oklch, var(--clay-500) 22%, transparent), transparent 72%)}
+.wash--cta{inset:18px 44px 106px;
+  mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
+  -webkit-mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
+  background:
+  radial-gradient(44% 56% at 18% 26%, color-mix(in oklch, var(--accent) 24%, transparent), transparent 70%),
+  radial-gradient(40% 52% at 82% 32%, color-mix(in oklch, var(--clay-500) 22%, transparent), transparent 72%),
+  radial-gradient(34% 40% at 60% 74%, color-mix(in oklch, var(--amber-400) 8%, transparent), transparent 72%)}
+.section-inner{position:relative;z-index:1}
+
+/* ============================= liquid glass =============================
+   Two declarations per selector on purpose. The first is a plain frost that
+   every engine understands; the second adds real refraction through an SVG
+   displacement filter and is simply dropped by engines that won't take a
+   url() inside backdrop-filter (Safari, Firefox), leaving the frost. */
+[data-glass]{position:relative}
+[data-glass]{backdrop-filter:blur(18px) saturate(1.7);-webkit-backdrop-filter:blur(18px) saturate(1.7)}
+[data-glass]{backdrop-filter:url(#lg-refract) blur(6px) saturate(1.7)}
+[data-glass="pill"]{backdrop-filter:blur(14px) saturate(1.7);-webkit-backdrop-filter:blur(14px) saturate(1.7)}
+[data-glass="pill"]{backdrop-filter:url(#lg-refract-sm) blur(5px) saturate(1.7)}
+[data-glass="dark"]{backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5)}
+[data-glass="dark"]{backdrop-filter:url(#lg-refract) blur(8px) saturate(1.5)}
+/* specular rim + chromatic fringe: bright top-left edge, cool/warm split on
+   the far edges — what sells it as glass rather than as a blur. */
+[data-glass]::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:inset 0 1.5px 1px -.5px rgba(255,255,255,.95),inset 1.5px 0 1px -.5px rgba(255,255,255,.6),inset 0 -1.5px 1px -.5px rgba(150,205,255,.5),inset -1.5px 0 1px -.5px rgba(255,205,155,.4);
+  background:linear-gradient(138deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 22%, rgba(255,255,255,0) 78%, rgba(255,255,255,.16) 100%)}
+[data-glass="dark"]::after{
+  box-shadow:inset 0 1.5px 1px -.5px rgba(255,255,255,.5),inset 1.5px 0 1px -.5px rgba(255,255,255,.22),inset 0 -1.5px 1px -.5px rgba(150,205,255,.28),inset -1.5px 0 1px -.5px rgba(255,205,155,.2);
+  background:linear-gradient(138deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 26%, rgba(255,255,255,0) 80%, rgba(255,255,255,.07) 100%)}
+/* the shared glass fill — a raking gradient over whatever it sits on */
+.glass-fill{background:linear-gradient(152deg, rgba(252,253,252,.78), rgba(252,253,252,.42));border:1px solid rgba(255,255,255,.72)}
+
 /* ------------------------------- shared -------------------------------- */
 .eyebrow{display:block;font:var(--type-eyebrow);text-transform:uppercase;letter-spacing:var(--tracking-caps);color:var(--accent)}
 .section-head{text-align:center;margin:0 auto 44px}
@@ -55,40 +114,42 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .nlinks a:hover{color:var(--text-strong);text-decoration:none}
 .nav-cta{margin-left:auto;display:flex;gap:10px;align-items:center}
 .nav-cta .px-btn{border-radius:var(--radius-lg)}
-/* icon-only GitHub link — stands in for “Clone from GitHub” on narrow screens */
-.nav-cta .iconly{display:none;padding:0;width:40px}
+/* icon-only GitHub link — stands in for “Clone from GitHub” on narrow screens.
+   align-self:stretch matches its height to the tallest sibling (Enter) rather
+   than letting padding:0 collapse it to the glyph. */
+.nav-cta .iconly{display:none;padding:0;width:40px;align-self:stretch}
 .nav-cta .iconly .px-i{font-size:20px}
 
 /* -------------------------------- hero --------------------------------- */
-.hero{padding:76px 0 8px}
-.hero .wrap:first-child{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center}
-.hero .eyebrow{margin-bottom:20px;animation:px-rise .6s var(--ease-out) .06s both}
-.hero h1{font-family:var(--font-display);font-weight:var(--weight-regular);font-size:clamp(42px,5vw,60px);line-height:1.04;letter-spacing:var(--tracking-tight);color:var(--ink-strong);margin:0 0 24px;animation:px-rise .7s var(--ease-out) .14s both}
+.hero{position:relative;padding:76px 0 8px}
+.hero .wrap:first-of-type{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center}
+.hero .eyebrow{margin-bottom:20px;animation:px-pop var(--dur-slower) var(--ease-out) 60ms both}
+.hero h1{font-family:var(--font-display);font-weight:var(--weight-regular);font-size:clamp(42px,5vw,60px);line-height:1.04;letter-spacing:var(--tracking-tight);color:var(--ink-strong);margin:0 0 24px;animation:px-pop var(--dur-slower) var(--ease-out) 140ms both}
 .hl{position:relative;display:inline-block;background:var(--highlight-fill);padding:.06em .22em .1em;margin-left:-.22em}
 .hl .swash{left:.22em;bottom:.14em;width:calc(100% - .44em);height:.1em}
-.hero .lead{font-size:var(--text-lg);line-height:1.55;color:var(--text-muted);max-width:31rem;margin:0 0 28px;animation:px-rise .7s var(--ease-out) .22s both}
-.hrows{display:flex;flex-direction:column;gap:14px;animation:px-rise .7s var(--ease-out) .3s both}
+.hero .lead{font-size:var(--text-lg);line-height:1.55;color:var(--text-muted);max-width:31rem;margin:0 0 28px;animation:px-pop var(--dur-slower) var(--ease-out) 220ms both}
+.hrows{display:flex;flex-direction:column;gap:14px;animation:px-pop var(--dur-slower) var(--ease-out) 300ms both}
 .hrow{display:flex;align-items:flex-start;gap:13px}
 .hrow .px-i{font-size:19px;color:var(--accent);margin-top:2px}
-.hrow p{margin:0;font-size:16px;line-height:1.5;color:var(--text-muted)}
+.hrow p{margin:0;flex:1;min-width:0;font-size:16px;line-height:1.5;color:var(--text-muted)}
 .heroart{display:flex;align-items:center;justify-content:center}
-.heroart img{width:100%;max-width:520px;height:auto;animation:px-fade .9s var(--ease-out) .2s both,px-float 7.5s var(--ease-in-out) 1.4s infinite}
+.heroart img{width:100%;max-width:520px;height:auto;animation:px-fade var(--dur-slower) var(--ease-out) 200ms both}
 
 /* shared-key note */
-.keynote{max-width:860px;margin:26px auto 0;display:flex;gap:14px;align-items:flex-start;background:var(--accent-tint-soft);border:1px solid var(--accent-tint);border-radius:var(--radius-xl);padding:18px 22px}
+.keynote{max-width:860px;margin:26px auto 0;display:flex;gap:14px;align-items:flex-start;border-radius:var(--radius-xl);padding:18px 22px;box-shadow:var(--shadow-sm),inset 0 1px 0 rgba(255,255,255,.85)}
 .keynote .px-i{font-size:19px;color:var(--accent);margin-top:2px}
 .keynote p{margin:0;font-size:15px;line-height:1.6;color:var(--text-muted)}
 
 /* trust tags */
 .tags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:28px}
-.tags .px-tag{padding:9px 16px;border-radius:var(--radius-full);font-size:14px;background:var(--surface-card);box-shadow:var(--shadow-xs)}
+.tags .px-tag{padding:9px 16px;border-radius:var(--radius-full);font-size:14px;background:linear-gradient(152deg, rgba(252,253,252,.8), rgba(252,253,252,.44));border-color:rgba(255,255,255,.78);box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.85)}
 .tags .px-i{font-size:16px;color:var(--accent)}
 
 /* scroll hint */
 .scrollhint{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:44px;color:var(--text-soft)}
 .scrollhint:hover{color:var(--text-muted);text-decoration:none}
 .scrollhint span{font:var(--type-eyebrow);text-transform:uppercase;letter-spacing:var(--tracking-caps)}
-.scrollhint .px-i{font-size:18px;color:var(--accent);animation:px-bob 2.6s var(--ease-in-out) infinite}
+.scrollhint .px-i{font-size:18px;color:var(--accent)}
 
 /* ------------------------------ demo reel ------------------------------ */
 .demo{padding:40px 0 76px}
@@ -97,11 +158,16 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .demo .cap{max-width:640px;margin:20px auto 0;text-align:center;font-size:15px;line-height:1.6;color:var(--text-soft)}
 
 /* ------------------------------ features ------------------------------- */
-.feat{padding:24px 0 84px}
+.feat{position:relative;padding:24px 0 84px}
 .fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.fcard{position:relative;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-xl);box-shadow:var(--shadow-sm);padding:26px 26px 28px;transition:transform var(--dur-base) var(--ease-standard),box-shadow var(--dur-base) var(--ease-standard),border-color var(--dur-base) var(--ease-standard)}
-.fcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--border)}
+.fcard{position:relative;border-radius:var(--radius-xl);box-shadow:var(--shadow-sm),inset 0 1px 0 rgba(255,255,255,.85);padding:26px 26px 28px}
 .fcard-n{position:absolute;top:22px;right:26px;font-family:var(--font-display);font-size:var(--text-xl);color:var(--border-strong)}
+
+/* lift + icon tilt, shared by the feature cards and the privacy chips */
+[data-lift]{transition:transform var(--dur-base) var(--ease-standard),box-shadow var(--dur-base) var(--ease-standard),border-color var(--dur-base) var(--ease-standard)}
+[data-lift]:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--border)}
+[data-lift] .px-i{transition:transform var(--dur-base) var(--ease-out)}
+[data-lift]:hover .px-i{transform:rotate(-8deg) scale(1.08)}
 .fcard-ic{display:flex;width:42px;height:42px;border-radius:var(--radius-lg);background:var(--accent-tint);color:var(--accent-hover);align-items:center;justify-content:center;margin-bottom:20px}
 .fcard-ic .px-i{font-size:21px}
 .fcard h3{font:var(--type-h3);color:var(--ink-strong);margin:0 0 10px}
@@ -131,8 +197,7 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 /* ------------------------------ privacy -------------------------------- */
 .priv{padding:0 0 84px}
 .priv .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.pchip{display:flex;align-items:center;gap:12px;background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-xl);box-shadow:var(--shadow-xs);padding:18px 20px;transition:transform var(--dur-base) var(--ease-standard),box-shadow var(--dur-base) var(--ease-standard),border-color var(--dur-base) var(--ease-standard)}
-.pchip:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--border)}
+.pchip{display:flex;align-items:center;gap:12px;border-radius:var(--radius-xl);box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.85);padding:18px 20px}
 .pchip .px-i{font-size:19px;color:var(--accent)}
 .pchip span{font-size:15px;color:var(--text-body)}
 
@@ -163,16 +228,20 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
 .cmp-note strong{color:var(--text-muted)}
 
 /* ------------------------------ CTA band ------------------------------- */
-.cta{padding:0 0 84px}
-.ctapanel{position:relative;overflow:hidden;background:var(--teal-800);border-radius:var(--radius-2xl);box-shadow:var(--shadow-xl);padding:66px 64px;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
-.ctapanel::before,.ctapanel::after{content:"";position:absolute;border-radius:50%;pointer-events:none}
-.ctapanel::before{right:-120px;top:-120px;width:380px;height:380px;background:rgba(255,255,255,.05)}
-.ctapanel::after{right:40px;bottom:-140px;width:260px;height:260px;background:rgba(255,255,255,.035)}
+.cta{position:relative;padding:0 0 84px}
+.ctapanel{position:relative;overflow:hidden;background:linear-gradient(152deg, color-mix(in oklch, var(--teal-800) 97%, transparent), color-mix(in oklch, var(--teal-800) 87%, transparent));border:1px solid rgba(255,255,255,.16);border-radius:var(--radius-2xl);box-shadow:var(--shadow-xl),inset 0 1px 0 rgba(255,255,255,.26);padding:66px 64px;display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+/* Real elements, not pseudo-elements: ::after on this panel belongs to the
+   glass rim ([data-glass="dark"]::after). */
+.cta-orb{position:absolute;border-radius:50%;pointer-events:none}
+.cta-orb--1{right:-120px;top:-120px;width:380px;height:380px;background:rgba(255,255,255,.05)}
+.cta-orb--2{right:40px;bottom:-140px;width:260px;height:260px;background:rgba(255,255,255,.035)}
 .ctapanel h2{position:relative;color:#FCFDFC;margin:0}
 .cta-right{position:relative}
 .cta-right p{margin:0 0 30px;font-size:var(--text-md);line-height:1.65;color:var(--teal-200);max-width:27rem}
 .cta-actions{display:flex;gap:12px;flex-wrap:wrap}
-.cta-actions .px-btn{border-radius:var(--radius-lg)}
+/* above the panel's ::after glass rim, or the rim washes over them */
+.cta-actions .px-btn{position:relative;z-index:1;border-radius:var(--radius-lg)}
+.cta-actions .px-btn--onDarkGhost{border-color:rgba(255,255,255,.34);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 
 /* ------------------------------- footer -------------------------------- */
 .foot{border-top:1px solid var(--border-subtle);padding:30px 0 44px}
@@ -194,11 +263,10 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
 .social .px-i{font-size:21px}
 .social .px-i--x{font-size:17px}
 
-/* ------------------------------- motion -------------------------------- */
-@keyframes px-rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
-@keyframes px-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
-@keyframes px-bob{0%,100%{transform:translateY(0);opacity:.7}50%{transform:translateY(4px);opacity:1}}
-[data-reveal]{opacity:0;transform:translateY(16px);transition:opacity .62s var(--ease-out),transform .62s var(--ease-out)}
+/* ------------------------------- motion --------------------------------
+   px-pop / px-fade come from the design system (assets/ds.css). */
+[data-reveal]{opacity:0;transform:scale(.97) translateY(8px);transition:opacity var(--dur-slower) var(--ease-out),transform var(--dur-slower) var(--ease-out)}
+[data-reveal][data-slide]{transform:translateX(16px)}
 [data-reveal].in{opacity:1;transform:none}
 
 /* ----------------------------- responsive ------------------------------ */
@@ -237,6 +305,27 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="i-map-pin" viewBox="0 0 256 256"><path d="M128,64a40,40,0,1,0,40,40A40,40,0,0,0,128,64Zm0,64a24,24,0,1,1,24-24A24,24,0,0,1,128,128Zm0-112a88.1,88.1,0,0,0-88,88c0,31.4,14.51,64.68,42,96.25a254.19,254.19,0,0,0,41.45,38.3,8,8,0,0,0,9.18,0A254.19,254.19,0,0,0,174,200.25c27.45-31.57,42-64.85,42-96.25A88.1,88.1,0,0,0,128,16Zm0,206c-16.53-13-72-60.75-72-118a72,72,0,0,1,144,0C200,161.23,144.53,209,128,222Z"/></symbol><symbol id="i-cloud-slash" viewBox="0 0 256 256"><path d="M53.92,34.62A8,8,0,1,0,42.08,45.38L81.32,88.55l-.06.12A65,65,0,0,0,72,88a64,64,0,0,0,0,128h88a87.34,87.34,0,0,0,31.8-5.93l10.28,11.31a8,8,0,1,0,11.84-10.76ZM160,200H72a48,48,0,0,1,0-96c1.1,0,2.2,0,3.3.12A88.4,88.4,0,0,0,72,128a8,8,0,0,0,16,0,72.25,72.25,0,0,1,5.06-26.54l87,95.7A71.66,71.66,0,0,1,160,200Zm88-72a87.89,87.89,0,0,1-22.35,58.61A8,8,0,0,1,213.71,176,72,72,0,0,0,117.37,70a8,8,0,0,1-9.48-12.89A88,88,0,0,1,248,128Z"/></symbol><symbol id="i-sliders-horizontal" viewBox="0 0 256 256"><path d="M40,88H73a32,32,0,0,0,62,0h81a8,8,0,0,0,0-16H135a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16Zm64-24A16,16,0,1,1,88,80,16,16,0,0,1,104,64ZM216,168H199a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16h97a32,32,0,0,0,62,0h17a8,8,0,0,0,0-16Zm-48,24a16,16,0,1,1,16-16A16,16,0,0,1,168,192Z"/></symbol><symbol id="i-lock-simple" viewBox="0 0 256 256"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"/></symbol><symbol id="i-code" viewBox="0 0 256 256"><path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"/></symbol><symbol id="i-gift" viewBox="0 0 256 256"><path d="M216,72H180.92c.39-.33.79-.65,1.17-1A29.53,29.53,0,0,0,192,49.57,32.62,32.62,0,0,0,158.44,16,29.53,29.53,0,0,0,137,25.91a54.94,54.94,0,0,0-9,14.48,54.94,54.94,0,0,0-9-14.48A29.53,29.53,0,0,0,97.56,16,32.62,32.62,0,0,0,64,49.57,29.53,29.53,0,0,0,73.91,71c.38.33.78.65,1.17,1H40A16,16,0,0,0,24,88v32a16,16,0,0,0,16,16v64a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V136a16,16,0,0,0,16-16V88A16,16,0,0,0,216,72ZM149,36.51a13.69,13.69,0,0,1,10-4.5h.49A16.62,16.62,0,0,1,176,49.08a13.69,13.69,0,0,1-4.5,10c-9.49,8.4-25.24,11.36-35,12.4C137.7,60.89,141,45.5,149,36.51Zm-64.09.36A16.63,16.63,0,0,1,96.59,32h.49a13.69,13.69,0,0,1,10,4.5c8.39,9.48,11.35,25.2,12.39,34.92-9.72-1-25.44-4-34.92-12.39a13.69,13.69,0,0,1-4.5-10A16.6,16.6,0,0,1,84.87,36.87ZM40,88h80v32H40Zm16,48h64v64H56Zm144,64H136V136h64Zm16-80H136V88h80v32Z"/></symbol><symbol id="i-shield-check" viewBox="0 0 256 256"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></symbol><symbol id="i-user" viewBox="0 0 256 256"><path d="M230.92,212c-15.23-26.33-38.7-45.21-66.09-54.16a72,72,0,1,0-73.66,0C63.78,166.78,40.31,185.66,25.08,212a8,8,0,1,0,13.85,8c18.84-32.56,52.14-52,89.07-52s70.23,19.44,89.07,52a8,8,0,1,0,13.85-8ZM72,96a56,56,0,1,1,56,56A56.06,56.06,0,0,1,72,96Z"/></symbol><symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol><symbol id="i-caret-down" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></symbol><symbol id="i-eye" viewBox="0 0 256 256"><path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"/></symbol><symbol id="i-download-simple" viewBox="0 0 256 256"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z"/></symbol><symbol id="i-chat-text" viewBox="0 0 256 256"><path d="M216,48H40A16,16,0,0,0,24,64V224a15.85,15.85,0,0,0,9.24,14.5A16.13,16.13,0,0,0,40,240a15.89,15.89,0,0,0,10.25-3.78l.09-.07L83,208H216a16,16,0,0,0,16-16V64A16,16,0,0,0,216,48ZM40,224h0ZM216,192H80a8,8,0,0,0-5.23,1.95L40,224V64H216ZM88,112a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H96A8,8,0,0,1,88,112Zm0,32a8,8,0,0,1,8-8h64a8,8,0,1,1,0,16H96A8,8,0,0,1,88,144Z"/></symbol><symbol id="i-file-text" viewBox="0 0 256 256"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-32-80a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,136Zm0,32a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,168Z"/></symbol><symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol><symbol id="i-git-fork" viewBox="0 0 256 256"><path d="M224,64a32,32,0,1,0-40,31v17a8,8,0,0,1-8,8H80a8,8,0,0,1-8-8V95a32,32,0,1,0-16,0v17a24,24,0,0,0,24,24h40v25a32,32,0,1,0,16,0V136h40a24,24,0,0,0,24-24V95A32.06,32.06,0,0,0,224,64ZM48,64A16,16,0,1,1,64,80,16,16,0,0,1,48,64Zm96,128a16,16,0,1,1-16-16A16,16,0,0,1,144,192ZM192,80a16,16,0,1,1,16-16A16,16,0,0,1,192,80Z"/></symbol><symbol id="i-arrow-right" viewBox="0 0 256 256"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></symbol><symbol id="i-github-logo" viewBox="0 0 256 256"><path d="M216,104v8a56.06,56.06,0,0,1-48.44,55.47A39.8,39.8,0,0,1,176,192v40a8,8,0,0,1-8,8H104a8,8,0,0,1-8-8V216H72a40,40,0,0,1-40-40A24,24,0,0,0,8,152a8,8,0,0,1,0-16,40,40,0,0,1,40,40,24,24,0,0,0,24,24H96v-8a39.8,39.8,0,0,1,8.44-24.53A56.06,56.06,0,0,1,56,112v-8a58.14,58.14,0,0,1,7.69-28.32A59.78,59.78,0,0,1,69.07,28,8,8,0,0,1,76,24a59.75,59.75,0,0,1,48,24h24a59.75,59.75,0,0,1,48-24,8,8,0,0,1,6.93,4,59.74,59.74,0,0,1,5.37,47.68A58,58,0,0,1,216,104Z"/></symbol><symbol id="i-x-logo" viewBox="0 0 256 256"><path d="M215,219.85a8,8,0,0,1-7,4.15H160a8,8,0,0,1-6.75-3.71l-40.49-63.63L53.92,221.38a8,8,0,0,1-11.84-10.76l61.77-68L41.25,44.3A8,8,0,0,1,48,32H96a8,8,0,0,1,6.75,3.71l40.49,63.63,58.84-64.72a8,8,0,0,1,11.84,10.76l-61.77,67.95,62.6,98.38A8,8,0,0,1,215,219.85Z"/></symbol></svg>
 
+<!-- Displacement maps for the liquid-glass surfaces. Chrome uses these via
+     backdrop-filter:url(); other engines fall back to a plain frost. -->
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;pointer-events:none">
+  <filter id="lg-refract" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feImage result="mx" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='400'%20height='300'%3E%3ClinearGradient%20id='x'%20x1='0'%20y1='0'%20x2='1'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='rgb(255,128,128)'/%3E%3Cstop%20offset='.17'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.83'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(0,128,128)'/%3E%3C/linearGradient%3E%3Crect%20width='400'%20height='300'%20fill='url(%23x)'/%3E%3C/svg%3E"></feImage>
+    <feImage result="my" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='400'%20height='300'%3E%3ClinearGradient%20id='y'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='rgb(128,255,128)'/%3E%3Cstop%20offset='.17'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.83'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(128,0,128)'/%3E%3C/linearGradient%3E%3Crect%20width='400'%20height='300'%20fill='url(%23y)'/%3E%3C/svg%3E"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="mx" scale="26" xChannelSelector="R" yChannelSelector="B" result="dx"></feDisplacementMap>
+    <feDisplacementMap in="dx" in2="my" scale="26" xChannelSelector="B" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+  <filter id="lg-refract-sm" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feImage result="mx" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='60'%3E%3ClinearGradient%20id='x'%20x1='0'%20y1='0'%20x2='1'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='rgb(255,128,128)'/%3E%3Cstop%20offset='.22'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.78'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(0,128,128)'/%3E%3C/linearGradient%3E%3Crect%20width='200'%20height='60'%20fill='url(%23x)'/%3E%3C/svg%3E"></feImage>
+    <feImage result="my" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='60'%3E%3ClinearGradient%20id='y'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='rgb(128,255,128)'/%3E%3Cstop%20offset='.3'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.7'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(128,0,128)'/%3E%3C/linearGradient%3E%3Crect%20width='200'%20height='60'%20fill='url(%23y)'/%3E%3C/svg%3E"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="mx" scale="11" xChannelSelector="R" yChannelSelector="B" result="dx"></feDisplacementMap>
+    <feDisplacementMap in="dx" in2="my" scale="11" xChannelSelector="B" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+</svg>
+
+<div class="page">
+<div class="wash wash--page" aria-hidden="true"></div>
+<div class="page-content">
+
 <header class="nav" id="nav">
   <div class="wrap">
     <a class="brand" href="#top"><span class="brand-tile" aria-hidden="true">Px</span><span>Paired<b>X</b></span></a>
@@ -256,6 +345,8 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
 
 <main id="top">
   <section class="hero">
+    <div class="wash wash--hero" aria-hidden="true"></div>
+    <div class="section-inner">
     <div class="wrap">
       <div class="hero-copy">
         <span class="eyebrow">Your paired reading partner</span>
@@ -273,24 +364,25 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
     </div>
 
     <div class="wrap">
-      <div class="keynote" data-reveal>
+      <div class="keynote glass-fill" data-reveal data-glass>
         <svg class="px-i" aria-hidden="true"><use href="#i-lock-simple"></use></svg>
         <p>The public app runs on a <strong>shared key with a small quota</strong> so you can try it instantly. For real use, add your own key in Settings — it stays <strong>in your browser</strong> and is never saved on our servers.</p>
       </div>
 
       <div class="tags" data-stagger>
-        <span class="px-tag px-tag--outline" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-code"></use></svg>Open-source</span>
-        <span class="px-tag px-tag--outline" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-gift"></use></svg>Free</span>
-        <span class="px-tag px-tag--outline" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-shield-check"></use></svg>No tracking</span>
-        <span class="px-tag px-tag--outline" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-cloud-slash"></use></svg>No cloud upload</span>
-        <span class="px-tag px-tag--outline" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-user"></use></svg>No login</span>
-        <span class="px-tag px-tag--outline" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-sun"></use></svg>Customizable</span>
+        <span class="px-tag px-tag--outline" data-reveal data-glass="pill"><svg class="px-i" aria-hidden="true"><use href="#i-code"></use></svg>Open-source</span>
+        <span class="px-tag px-tag--outline" data-reveal data-glass="pill"><svg class="px-i" aria-hidden="true"><use href="#i-gift"></use></svg>Free</span>
+        <span class="px-tag px-tag--outline" data-reveal data-glass="pill"><svg class="px-i" aria-hidden="true"><use href="#i-shield-check"></use></svg>No tracking</span>
+        <span class="px-tag px-tag--outline" data-reveal data-glass="pill"><svg class="px-i" aria-hidden="true"><use href="#i-cloud-slash"></use></svg>No cloud upload</span>
+        <span class="px-tag px-tag--outline" data-reveal data-glass="pill"><svg class="px-i" aria-hidden="true"><use href="#i-user"></use></svg>No login</span>
+        <span class="px-tag px-tag--outline" data-reveal data-glass="pill"><svg class="px-i" aria-hidden="true"><use href="#i-sun"></use></svg>Customizable</span>
       </div>
 
       <a class="scrollhint" href="#app" aria-label="Scroll to see the live demo">
         <span>See it in action</span>
         <svg class="px-i" aria-hidden="true"><use href="#i-caret-down"></use></svg>
       </a>
+    </div>
     </div>
   </section>
 
@@ -304,49 +396,52 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
   </section>
 
   <section class="feat" id="features">
+    <div class="wash wash--feat" aria-hidden="true"></div>
+    <div class="section-inner">
     <div class="wrap">
       <div class="section-head" data-reveal>
         <span class="eyebrow">What makes it different</span>
         <h2 class="display">Source-linked. Private. Yours.</h2>
       </div>
       <div class="fgrid" data-stagger>
-        <article class="fcard" data-reveal>
+        <article class="fcard glass-fill" data-reveal data-lift data-glass>
           <span class="fcard-n" aria-hidden="true">1</span>
           <span class="fcard-ic"><svg class="px-i" aria-hidden="true"><use href="#i-map-pin"></use></svg></span>
           <h3>Pinned to the source</h3>
           <p>Every highlight, screenshot, and AI answer anchors to the exact page coordinate — trace any claim back with one click.</p>
         </article>
-        <article class="fcard" data-reveal>
+        <article class="fcard glass-fill" data-reveal data-lift data-glass>
           <span class="fcard-n" aria-hidden="true">2</span>
           <span class="fcard-ic"><svg class="px-i" aria-hidden="true"><use href="#i-cloud-slash"></use></svg></span>
           <h3>Nothing leaves your machine</h3>
           <p>Your PDF opens locally in the browser. No upload, no backend database, no account — we can never see it.</p>
         </article>
-        <article class="fcard" data-reveal>
+        <article class="fcard glass-fill" data-reveal data-lift data-glass>
           <span class="fcard-n" aria-hidden="true">3</span>
           <span class="fcard-ic"><svg class="px-i" aria-hidden="true"><use href="#i-sliders-horizontal"></use></svg></span>
           <h3>Bring your own model</h3>
           <p>Point it at OpenRouter or any OpenAI-compatible endpoint. Your key stays in your browser, sent per request.</p>
         </article>
-        <article class="fcard" data-reveal>
+        <article class="fcard glass-fill" data-reveal data-lift data-glass>
           <span class="fcard-n" aria-hidden="true">4</span>
           <span class="fcard-ic"><svg class="px-i" aria-hidden="true"><use href="#i-eye"></use></svg></span>
           <h3>See the agent’s work</h3>
           <p>Every answer is inspectable — expand the trace to read each step, tool call, and source it drew from.</p>
         </article>
-        <article class="fcard" data-reveal>
+        <article class="fcard glass-fill" data-reveal data-lift data-glass>
           <span class="fcard-n" aria-hidden="true">5</span>
           <span class="fcard-ic"><svg class="px-i" aria-hidden="true"><use href="#i-download-simple"></use></svg></span>
           <h3>Notes are a file you own</h3>
           <p>Everything exports to portable JSON (or PDF) that lives right next to your PDF. No lock-in, ever.</p>
         </article>
-        <article class="fcard" data-reveal>
+        <article class="fcard glass-fill" data-reveal data-lift data-glass>
           <span class="fcard-n" aria-hidden="true">6</span>
           <span class="fcard-ic"><svg class="px-i" aria-hidden="true"><use href="#i-git-fork"></use></svg></span>
           <h3>Open-source &amp; self-hostable</h3>
           <p>AGPL-licensed and dependency-light. Read it, fork it, run it yourself — and edit every prompt.</p>
         </article>
       </div>
+    </div>
     </div>
   </section>
 
@@ -359,7 +454,7 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
         <a class="px-btn px-btn--primary px-btn--lg" href="/app.html"><svg class="px-i" aria-hidden="true"><use href="#i-sliders-horizontal"></use></svg>Open Settings</a>
       </div>
       <div class="shot-right">
-        <img class="shot" data-reveal src="assets/settings-ai.webp" width="900" height="1302" loading="lazy" alt="Settings — the AI &amp; Tools tab, with model, endpoint, and per-tool switches">
+        <img class="shot" data-reveal data-slide src="assets/settings-ai.webp" width="900" height="1302" loading="lazy" alt="Settings — the AI &amp; Tools tab, with model, endpoint, and per-tool switches">
       </div>
     </div>
   </section>
@@ -393,10 +488,10 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
 
   <section class="priv" id="privacy">
     <div class="wrap" data-stagger>
-      <div class="pchip" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-code"></use></svg><span>Open-source and free</span></div>
-      <div class="pchip" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-shield-check"></use></svg><span>Cookieless analytics</span></div>
-      <div class="pchip" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-lock-simple"></use></svg><span>We never see your PDF</span></div>
-      <div class="pchip" data-reveal><svg class="px-i" aria-hidden="true"><use href="#i-chat-text"></use></svg><span>Notes stay in your browser</span></div>
+      <div class="pchip glass-fill" data-reveal data-lift data-glass><svg class="px-i" aria-hidden="true"><use href="#i-code"></use></svg><span>Open-source and free</span></div>
+      <div class="pchip glass-fill" data-reveal data-lift data-glass><svg class="px-i" aria-hidden="true"><use href="#i-shield-check"></use></svg><span>Cookieless analytics</span></div>
+      <div class="pchip glass-fill" data-reveal data-lift data-glass><svg class="px-i" aria-hidden="true"><use href="#i-lock-simple"></use></svg><span>We never see your PDF</span></div>
+      <div class="pchip glass-fill" data-reveal data-lift data-glass><svg class="px-i" aria-hidden="true"><use href="#i-chat-text"></use></svg><span>Notes stay in your browser</span></div>
     </div>
   </section>
 
@@ -488,8 +583,12 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
   </section>
 
   <section class="cta">
+    <div class="wash wash--cta" aria-hidden="true"></div>
+    <div class="section-inner">
     <div class="wrap">
-      <div class="ctapanel" data-reveal>
+      <div class="ctapanel" data-reveal data-glass="dark">
+        <div class="cta-orb cta-orb--1" aria-hidden="true"></div>
+        <div class="cta-orb cta-orb--2" aria-hidden="true"></div>
         <h2 class="display">Active learning<br>in the <span class="marked">age of AI.<svg class="swash" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 62 2, 112 13, 168 6 S 256 2, 297 9" stroke="var(--amber-400)"/></svg></span></h2>
         <div class="cta-right">
           <p>Don’t just read — question it, summarize it, and keep what you learn. Every note stays linked to its source.</p>
@@ -499,6 +598,7 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
           </div>
         </div>
       </div>
+    </div>
     </div>
   </section>
 </main>
@@ -519,6 +619,9 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
     </nav>
   </div>
 </footer>
+
+</div>
+</div>
 
 <script>
 (function(){
