@@ -242,9 +242,17 @@ svg{display:block}
 /* A glass thread rather than a plain line: a blurred white glow, a soft light
    core, the dashed clay hairline, then a specular sliver riding on top. Only
    the hairline is dashed — dashing the glow would make it flicker. */
-#connectors path{fill:none;stroke-linecap:round}
-#connectors path.glow{stroke:rgba(255,255,255,.6);stroke-width:8;filter:url(#lg-glow)}
-#connectors path.core{stroke:rgba(255,255,255,.38);stroke-width:4}
+/* The BASE rule is the whole connector on its own — a dashed clay hairline.
+   It has to be, because an unclassed path is what a stale cached app.js or an
+   exported HTML bundle (which carries its own copy of the app) will emit; when
+   the base rule only set fill and linecap, those cases drew nothing at all.
+   The glow/core/spec layers are enhancement on top. */
+#connectors path{fill:none;stroke:var(--clay-600);stroke-width:1.8;stroke-linecap:round;
+  opacity:.75;stroke-dasharray:7 6;animation:connflow 1.1s linear infinite}
+#connectors path.glow{stroke:rgba(255,255,255,.6);stroke-width:8;opacity:1;
+  stroke-dasharray:none;animation:none;filter:url(#lg-glow)}
+#connectors path.core{stroke:rgba(255,255,255,.38);stroke-width:4;opacity:1;
+  stroke-dasharray:none;animation:none}
 #connectors path.dash{stroke:var(--clay-600);stroke-width:1.8;opacity:.75;
   stroke-dasharray:7 6;animation:connflow 1.1s linear infinite}
 #connectors path.spec{stroke:rgba(255,255,255,.95);stroke-width:.9;opacity:.75;
