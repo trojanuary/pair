@@ -192,7 +192,12 @@ svg{display:block}
   opacity:1;line-height:1;z-index:2}
 .textLayer > span{color:transparent;position:absolute;white-space:pre;cursor:text;
   transform-origin:0% 0%}
-.textLayer ::selection{background:color-mix(in oklch, var(--teal-500) 32%, transparent)}
+/* The ::selection pseudo resets `color` to the UA default, which un-hides the
+   text layer's normally-transparent glyphs. They don't line up with the glyphs
+   painted on the canvas, so selecting text drew a second, offset copy of it.
+   Keep the ink transparent and let the canvas underneath show through. */
+.textLayer ::selection{background:color-mix(in oklch, var(--teal-500) 32%, transparent);
+  color:transparent;-webkit-text-fill-color:transparent}
 .textLayer .search-hit{background:color-mix(in oklch, var(--amber-400) 50%, transparent);border-radius:2px}
 .textLayer mark.sh{background:color-mix(in oklch, var(--amber-400) 45%, transparent);color:inherit;border-radius:2px;padding:0}
 .textLayer mark.sh.cur{background:var(--amber-400);box-shadow:0 0 0 1.5px var(--amber-600)}
@@ -237,7 +242,9 @@ svg{display:block}
   text-shadow:0 1px 0 rgba(255,255,255,.55);
   pointer-events:auto;cursor:pointer;transform:translate(6px,-4px);
   transition:all var(--dur-base) var(--ease-out)}
-.pin{backdrop-filter:url(#lg-distort) blur(1.5px) saturate(1.8)}
+/* A gentler displacement than the panels use: at the panel's scale a 25px bead
+   sitting directly on body text smears the words under it. */
+.pin{backdrop-filter:url(#lg-distort-pin) blur(1.5px) saturate(1.8)}
 /* top rim-light gloss */
 .pin::before{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
   background:linear-gradient(180deg,rgba(255,255,255,.66) 0%,rgba(255,255,255,.1) 40%,transparent 60%)}
