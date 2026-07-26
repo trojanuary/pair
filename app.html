@@ -5,17 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PairedX — Source-Linked AI Reading Workspace</title>
 <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preload" href="/assets/fonts/PublicSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/ds.css">
 <link rel="stylesheet" href="/src/styles.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
+<!-- Refraction map for the glass panels and source pins. Chrome takes it via
+     backdrop-filter:url(); other engines fall back to a plain frost. -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute">
+  <filter id="lg-distort" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+    <feTurbulence type="fractalNoise" baseFrequency="0.02 0.02" numOctaves="2" seed="7" result="noise"></feTurbulence>
+    <feGaussianBlur in="noise" stdDeviation="1.1" result="softNoise"></feGaussianBlur>
+    <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="14" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+  <filter id="lg-glow" x="-60%" y="-60%" width="220%" height="220%">
+    <feGaussianBlur stdDeviation="2.2"></feGaussianBlur>
+  </filter>
+</svg>
 <div id="app">
 
   <!-- ===== Left library ===== -->
   <aside id="sidebar">
     <div class="sb-top">
       <div class="brand">Px</div>
+      <div class="wordmark">Paired<b>X</b></div>
       <button class="icon-btn" id="btnCollapseLeft" title="Collapse">«</button>
     </div>
     <button class="new-btn" id="newBtn" title="Open a PDF, notes (.json), or a shared paper (.html)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V6a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v1"/><path d="M3 8h18l-1.6 9.3a1 1 0 0 1-1 .7H5.6a1 1 0 0 1-1-.7z"/></svg> Open PDF or bundle</button>
@@ -116,10 +130,10 @@
 </div>
 
 <!-- selection popover -->
-<div id="selPop" class="hidden" style="position:fixed;z-index:60;background:#0B0F19;color:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.3);display:flex;gap:2px;padding:5px">
-  <button id="spHi" style="color:#fff;padding:6px 10px;border-radius:7px;font-weight:600;font-size:12.5px">Highlight</button>
-  <button id="spNote" style="color:#fff;padding:6px 10px;border-radius:7px;font-weight:600;font-size:12.5px">Note</button>
-  <button id="spAsk" style="color:#C4B5FD;padding:6px 10px;border-radius:7px;font-weight:700;font-size:12.5px">✦ Ask AI</button>
+<div id="selPop" class="hidden" style="position:fixed;z-index:60;background:var(--ink-strong);color:#fff;border-radius:12px;box-shadow:0 20px 44px -18px rgba(28,34,32,.5);display:flex;gap:2px;padding:5px">
+  <button id="spHi" style="color:#fff;padding:6px 10px;border-radius:8px;font-weight:600;font-size:12.5px">Highlight</button>
+  <button id="spNote" style="color:#fff;padding:6px 10px;border-radius:8px;font-weight:600;font-size:12.5px">Note</button>
+  <button id="spAsk" style="color:var(--teal-200);padding:6px 10px;border-radius:8px;font-weight:700;font-size:12.5px">✦ Ask AI</button>
 </div>
 
 <svg id="connectors"></svg>
