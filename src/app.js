@@ -42,9 +42,9 @@ const SEED_VERSION = 3;   // bumped when the bundled sample changes, so existing
 const PAIR_BUNDLE = (typeof window !== 'undefined' && window.__PAIR_BUNDLE__) || null;
 const READONLY = !!(PAIR_BUNDLE && PAIR_BUNDLE.readOnly);
 const ACTORS = {
-  you:   { name: 'You',            initials: 'YO', color: '#2563EB', type: 'human' },
-  sara:  { name: 'Sara Davis',     initials: 'SD', color: '#059669', type: 'human' },
-  bonnie:{ name: 'Bonnie Kearney', initials: 'BK', color: '#2563EB', type: 'human' },
+  you:   { name: 'You',            initials: 'YO', color: '#547089', type: 'human' },
+  sara:  { name: 'Sara Davis',     initials: 'SD', color: '#488048', type: 'human' },
+  bonnie:{ name: 'Bonnie Kearney', initials: 'BK', color: '#7B6A8D', type: 'human' },
 };
 const PROVIDER_LABEL = { openrouter: 'OpenRouter', compat: 'OpenAI-compatible' };
 const DEFAULT_MODELS = {
@@ -1177,9 +1177,22 @@ function drawConnector() {
   const y2 = Math.max(lb.top + 6, Math.min(lb.bottom - 6, cr.top + 22));   // anchor clamped into the visible band
   const mx = (x1 + x2) / 2;
   const NS = 'http://www.w3.org/2000/svg';
-  const path = document.createElementNS(NS, 'path');
-  path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
-  svg.appendChild(path);
+  // Drawn as stacked strokes so the thread reads as glass rather than as a line:
+  // a blurred white glow, a soft light core, the dashed clay hairline, then a
+  // specular sliver riding on top. Only the hairline is dashed — dashing the
+  // glow as well would make it flicker rather than glow.
+  const d = `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  for (const cls of ['glow', 'core', 'dash', 'spec']) {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', cls);
+    svg.appendChild(path);
+  }
+  // the bead where the thread leaves the pin
+  const dot = document.createElementNS(NS, 'circle');
+  dot.setAttribute('cx', x1); dot.setAttribute('cy', y1); dot.setAttribute('r', 3.6);
+  dot.setAttribute('class', 'endcap');
+  svg.appendChild(dot);
 }
 
 /* ---------- selection / navigation of notes ---------- */
@@ -1715,7 +1728,7 @@ function actorAvatar(m) {
     const p = m.provider, cls = p === 'openrouter' ? 'openrouter' : p === 'compat' ? 'compat' : p === 'openai' ? 'gpt' : p === 'anthropic' ? 'claude' : p === 'gemini' ? 'gemini' : '';
     return `<div class="avatar ai brand ${cls}" title="${esc(PROVIDER_LABEL[p] || 'AI')}">${providerGlyph(p)}</div>`;
   }
-  const ac = ACTORS[m.actor] || { initials: state.settings.actorInitials || 'YO', color: '#2563EB' };
+  const ac = ACTORS[m.actor] || { initials: state.settings.actorInitials || 'YO', color: '#547089' };
   return `<div class="avatar" style="background:${ac.color}">${esc(ac.initials)}</div>`;
 }
 function actorName(m) { return m.actor === 'ai' ? (PROVIDER_LABEL[m.provider] || 'AI') : (ACTORS[m.actor]?.name || state.settings.actorName || 'You'); }
