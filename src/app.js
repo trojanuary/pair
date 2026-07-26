@@ -1157,7 +1157,29 @@ function setPanel(side, open) {
   state.ui[PANEL_KEY[side]] = !open;
   app.classList.toggle('collapse-' + side, !open);
   save();
-  requestAnimationFrame(() => { if (viewport) drawConnector(); });
+  trackConnector();
+}
+/* #app animates grid-template-columns, so the panel keeps moving for ~180ms
+   after the class flips. A single rAF measures it one frame in — the line
+   freezes pointing at where the card used to be, until some later event
+   (a scroll) happens to redraw it. Track it across the whole transition
+   instead, which also lets the line follow the panel rather than jump. */
+let _connTrack = 0;
+function trackConnector(ms = 260) {
+  if (!viewport) return;
+  const token = ++_connTrack;
+  const start = performance.now();
+  const draw = () => { if (token === _connTrack) { try { drawConnector(); } catch (e) {} } };
+  const step = () => {
+    if (token !== _connTrack) return;          // a newer toggle owns the loop
+    draw();
+    if (performance.now() - start < ms) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  // rAF is throttled to nothing in a background/hidden tab, which would leave
+  // the line stranded at its pre-transition position. These land it anyway.
+  setTimeout(draw, 210);
+  setTimeout(draw, ms + 40);
 }
 function drawConnector() {
   const svg = $('#connectors'); if (!svg) return; while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -3193,6 +3215,11 @@ function wire() {
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
   $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
   $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
+  // final word on the column transition, so the line lands exactly even if the
+  // CSS duration is retuned out from under trackConnector()
+  $('#app').addEventListener('transitionend', (e) => {
+    if (e.propertyName === 'grid-template-columns') requestAnimationFrame(drawConnector);
+  });
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
   initCaptureMask(); initPinch(); initKeyboardInset();
 }
