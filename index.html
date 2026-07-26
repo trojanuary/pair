@@ -54,7 +54,13 @@ html{overflow-x:clip}
   radial-gradient(44% 42% at 14% 34%, color-mix(in oklch, var(--accent) 24%, transparent), transparent 70%),
   radial-gradient(40% 40% at 86% 30%, color-mix(in oklch, var(--amber-400) 14%, transparent), transparent 72%),
   radial-gradient(46% 38% at 62% 88%, color-mix(in oklch, var(--clay-500) 22%, transparent), transparent 72%)}
-.wash--cta{inset:18px 44px 106px;
+/* Centred on the panel rather than the viewport. In the mockup this wash sat
+   inside the 1180px wrap, so its 44px inset was relative to that; here it is a
+   child of the full-width section, so the same inset made it far wider than
+   the panel — it stuck out ~150px either side and terminated at its own edges,
+   reading as bands flanking the CTA instead of as light behind it. */
+.wash--cta{top:18px;bottom:106px;left:50%;transform:translateX(-50%);
+  width:min(calc(100% - 88px), calc(var(--content-max) - 64px));
   mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
   -webkit-mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
   background:
