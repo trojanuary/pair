@@ -840,6 +840,38 @@ details.pt-item>summary:hover{background:var(--surface-2)}
 details.pt-item .pt-badge{margin-left:auto;color:var(--violet);font-weight:700;font-size:10.5px;background:var(--violet-weak);padding:1px 9px;border-radius:99px}
 details.pt-item .pt-body{padding:0 12px 12px}
 .pt-actions-row{display:flex;justify-content:flex-end;margin:2px 0 6px}
+/* ---------- Settings: provider cards ----------
+   The two providers used to run together with no boundary, and their three
+   model fields were inline inputs separated by "·" that wrapped mid-label.
+   Each provider is a card now, and the models are a real grid with labels
+   above — so the form scans instead of having to be read. */
+.set-lead{margin:0 0 18px;font:var(--type-ui);line-height:1.6;color:var(--text-muted)}
+.set-lead b{color:var(--text-strong);font-weight:600}
+.set-foot{margin:2px 0 4px;font:12px var(--font-sans);line-height:1.55;color:var(--text-soft)}
+.set-foot b{color:var(--text-muted);font-weight:600}
+.set-note{background:var(--teal-50);border:1px solid var(--teal-100);color:var(--teal-700);
+  border-radius:var(--radius-lg);padding:10px 12px;font:13px var(--font-sans);line-height:1.5}
+
+.provider{border:1px solid var(--border-subtle);border-radius:var(--radius-xl);background:var(--surface);
+  padding:15px 16px 16px;margin-bottom:14px;transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
+/* the default provider is the one that answers — say so structurally */
+.provider.on{border-color:var(--teal-200);box-shadow:0 0 0 3px var(--teal-50)}
+.provider__hd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px}
+.provider__name{font:600 14.5px var(--font-sans);color:var(--text-strong)}
+.provider__rec{font:600 11px var(--font-sans);color:var(--green-600);background:var(--green-100);
+  border-radius:var(--radius-full);padding:2px 8px;margin-left:5px;vertical-align:1px}
+.provider__desc{margin:0 0 13px;font:12.5px var(--font-sans);line-height:1.5;color:var(--text-soft)}
+.provider .field{margin-bottom:11px}
+.provider .field:last-child{margin-bottom:0}
+
+/* three models side by side, wrapping to two then one as the dialog narrows */
+.modelgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.modelgrid .field{margin-bottom:0;min-width:0}
+.modelgrid input{font:12.5px var(--font-mono);padding:7px 10px}
+.lbl-note{font:400 11px var(--font-sans);color:var(--text-soft);margin-left:4px}
+@media (max-width:620px){.modelgrid{grid-template-columns:1fr 1fr}}
+@media (max-width:460px){.modelgrid{grid-template-columns:1fr}}
+
 .pt-sec{font:600 10.5px var(--font-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--text-soft);margin:20px 0 10px}
 
 

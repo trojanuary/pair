@@ -2810,19 +2810,43 @@ function openSettings(note) {
     <div class="body">
       <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button><button type="button" class="settab" data-tab="storage">Storage</button></div>
       <div class="tabpane" data-pane="ai">
-      ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">AI runs through a <b>shared key</b> so you can try it instantly — but that key has a <b>small test quota</b>. For real use, add your <b>own key</b> below: it's stored only in this browser and sent per‑request as an override — <b>never saved on the server</b>. <b>OpenRouter</b> is the recommended default (text, images, and the tool‑using agent); or use any <b>OpenAI‑compatible API</b> (base URL + key + models). Mark one as <b>Default</b>, or type <b>@ai</b> in a note.</div>
-      <div class="field">
-        <div class="lbl-row"><label>OpenRouter <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
-        <input id="kOpenrouter" type="password" placeholder="API key — sk-or-… (optional; server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"> · Router <span style="color:var(--muted)">(fast/cheap)</span>: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mOpenrouterRouter" value="${esc((s.models && s.models.openrouterRouter) || '')}"></div>
+      ${note ? `<div class="field"><div class="set-note">${esc(note)}</div></div>` : ''}
+      <p class="set-lead">AI runs through a <b>shared key</b> so you can try it instantly, on a <b>small test quota</b>. Add your own key below for real use — it stays in this browser and is never saved on our servers.</p>
+
+      <div class="provider ${s.provider === 'openrouter' ? 'on' : ''}">
+        <div class="provider__hd">
+          <div class="provider__name">OpenRouter <span class="provider__rec">recommended</span></div>
+          <button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button>
+        </div>
+        <p class="provider__desc">Text, images, and the tool-using agent.</p>
+        <div class="field"><label for="kOpenrouter">API key</label>
+          <input id="kOpenrouter" type="password" placeholder="sk-or-…  (optional — the server key is used by default)" value="${esc(s.keys.openrouter || '')}"></div>
+        <div class="modelgrid">
+          <div class="field"><label for="mOpenrouter">Text model</label><input id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"></div>
+          <div class="field"><label for="mOpenrouterImg">Image model</label><input id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
+          <div class="field"><label for="mOpenrouterRouter">Router model <span class="lbl-note">fast &amp; cheap</span></label><input id="mOpenrouterRouter" value="${esc((s.models && s.models.openrouterRouter) || '')}"></div>
+        </div>
       </div>
-      <div class="field">
-        <div class="lbl-row"><label>OpenAI-compatible API</label><button type="button" class="def-radio ${s.provider === 'compat' ? 'on' : ''}" data-def="compat"><span class="rdot"></span>Default</button></div>
-        <div class="hint" style="margin-top:0">Any OpenAI-compatible endpoint (OpenAI, Together, Groq, a local model…). Used for text, images, and the tool-using agent.</div>
-        <input id="cBase" placeholder="Base URL — e.g. https://api.openai.com/v1" value="${esc(s.compatBaseUrl || '')}" style="margin-top:8px">
-        <input id="kCompat" type="password" placeholder="API key" value="${esc((s.keys && s.keys.compat) || '')}" style="margin-top:8px">
-        <div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompat" value="${esc((s.models && s.models.compat) || '')}"> · Image model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"> · Router model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:130px" id="mCompatRouter" value="${esc((s.models && s.models.compatRouter) || '')}"></div>
+
+      <div class="provider ${s.provider === 'compat' ? 'on' : ''}">
+        <div class="provider__hd">
+          <div class="provider__name">OpenAI-compatible API</div>
+          <button type="button" class="def-radio ${s.provider === 'compat' ? 'on' : ''}" data-def="compat"><span class="rdot"></span>Default</button>
+        </div>
+        <p class="provider__desc">Any OpenAI-compatible endpoint — OpenAI, Together, Groq, or a local model.</p>
+        <div class="field"><label for="cBase">Base URL</label>
+          <input id="cBase" placeholder="https://api.openai.com/v1" value="${esc(s.compatBaseUrl || '')}"></div>
+        <div class="field"><label for="kCompat">API key</label>
+          <input id="kCompat" type="password" placeholder="sk-…" value="${esc((s.keys && s.keys.compat) || '')}"></div>
+        <div class="modelgrid">
+          <div class="field"><label for="mCompat">Text model</label><input id="mCompat" value="${esc((s.models && s.models.compat) || '')}"></div>
+          <div class="field"><label for="mCompatImg">Image model</label><input id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"></div>
+          <div class="field"><label for="mCompatRouter">Router model <span class="lbl-note">fast &amp; cheap</span></label><input id="mCompatRouter" value="${esc((s.models && s.models.compatRouter) || '')}"></div>
+        </div>
       </div>
+
+      <p class="set-foot">Mark a provider as <b>Default</b>, or type <b>@ai</b> in a note to pick one per question.</p>
+
       <div class="field"><label>Your identity (actor)</label>
         <div style="display:flex;gap:8px"><input id="actorName" placeholder="Your name" value="${esc(s.actorName)}" style="flex:1"><input id="actorInit" placeholder="IN" maxlength="2" value="${esc(s.actorInitials)}" style="width:70px;text-transform:uppercase"></div></div>
       <div class="field"><label>Tools</label>
