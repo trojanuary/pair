@@ -31,6 +31,10 @@
   --serif:var(--font-display);
 
   --left-w:238px; --right-w:392px;
+  /* Reader toolbar height. #captureMask, .capbar and .find-bar are all
+     positioned against it — they used to hardcode 60px, and silently went out
+     of alignment when the bar was restyled to 52. Single source of truth. */
+  --rd-top-h:52px;
   --desk-gap:14px;                 /* gutter between the floating panels */
   --kb:0px;   /* on-screen keyboard overlap, measured from visualViewport (see initKeyboardInset) */
 }
@@ -153,7 +157,7 @@ svg{display:block}
 
 /* ---------- Center reader ---------- */
 #reader{display:flex;flex-direction:column;min-width:0;background:var(--paper);overflow:clip;position:relative}
-.rd-top{height:52px;flex:0 0 auto;display:flex;align-items:center;gap:6px;
+.rd-top{height:var(--rd-top-h);flex:0 0 auto;display:flex;align-items:center;gap:6px;
   padding:0 12px;background:transparent;border-bottom:1px solid var(--border-subtle);position:relative}
 .rd-mid{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px}
 .rd-mid .zoom{order:1}.rd-mid #btnContinuous{order:2}.rd-mid #btnSearch{order:3}.rd-mid #btnExportTop{order:4}
@@ -217,7 +221,7 @@ svg{display:block}
 .textLayer .search-hit{background:color-mix(in oklch, var(--amber-400) 50%, transparent);border-radius:2px}
 .textLayer mark.sh{background:color-mix(in oklch, var(--amber-400) 45%, transparent);color:inherit;border-radius:2px;padding:0}
 .textLayer mark.sh.cur{background:var(--amber-400);box-shadow:0 0 0 1.5px var(--amber-600)}
-.find-bar{position:absolute;top:68px;right:16px;z-index:40;display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px 8px}
+.find-bar{position:absolute;top:calc(var(--rd-top-h) + 8px);right:16px;z-index:40;display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:6px 8px}
 .find-bar.hidden{display:none}
 .find-bar .find-ic{width:16px;height:16px;color:var(--muted);flex:0 0 auto;margin:0 3px}
 #findInput{border:0;outline:none;background:transparent;font-size:13.5px;color:var(--ink);width:210px;font-family:inherit}
@@ -299,13 +303,13 @@ svg{display:block}
 @keyframes connflow{to{stroke-dashoffset:-13}}
 @media (prefers-reduced-motion:reduce){#connectors path{animation:none!important}}
 /* screenshot capture */
-.capbar{position:absolute;top:74px;left:50%;transform:translateX(-50%);z-index:31;
+.capbar{position:absolute;top:calc(var(--rd-top-h) + 14px);left:50%;transform:translateX(-50%);z-index:31;
   background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);
   display:flex;align-items:center;gap:14px;padding:9px 12px 9px 14px;font-weight:600;color:var(--blue)}
 .capbar .x{color:var(--muted);font-weight:500;cursor:pointer;padding-left:8px;border-left:1px solid var(--line)}
 .selbox{position:absolute;border:1.5px dashed var(--blue);background:color-mix(in oklch, var(--teal-500) 10%, transparent);z-index:15;pointer-events:none}
 .selhandle{position:absolute;width:9px;height:9px;background:#fff;border:1.5px solid var(--blue);border-radius:2px}
-#captureMask{position:absolute;left:0;right:0;top:60px;bottom:0;z-index:30;cursor:crosshair;display:none;touch-action:none}
+#captureMask{position:absolute;left:0;right:0;top:var(--rd-top-h);bottom:0;z-index:30;cursor:crosshair;display:none;touch-action:none}
 
 /* ---------- Right notes panel ---------- */
 #notes{display:flex;flex-direction:column;min-width:0;overflow:clip;position:relative}
@@ -724,7 +728,7 @@ svg{display:block}
   #connectors{display:none}
   .col-resizer{display:none}
 
-  /* Keep .rd-top at its 60px height — #captureMask, .capbar and .find-bar are offset against it.
+  /* Keep .rd-top at its --rd-top-h height — #captureMask, .capbar and .find-bar are offset against it.
      Static so the tools bar below resolves against #reader, not this. Nothing else needs it
      positioned (#findBar hangs off #reader; .capbar off .rd-scroll). */
   .rd-top{gap:4px;padding:0 4px;position:static}
