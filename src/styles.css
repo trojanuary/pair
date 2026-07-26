@@ -663,9 +663,13 @@ svg{display:block}
 .card.compact .cc{display:flex;gap:10px;align-items:flex-start;padding:11px 13px 12px}
 .card.compact .cc-badge{width:22px;height:22px;border-radius:50%;color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto;margin-top:1px}
 .card.compact .cc-main{flex:1 1 auto;min-width:0}
-.card.compact .cc-main .msg{padding-right:46px}
-.card.compact .cc-main .msg + .msg{margin-top:6px;padding-right:0}
-.card.compact .cc-when{position:absolute;top:12px;right:14px;color:var(--faint);font-size:12px}
+/* The timestamp used to be absolutely positioned, with a fixed 46px of padding
+   reserved on the preview text to clear it. Any longer stamp ("10:33 AM", a
+   24-hour locale, a date) overran that reservation and collided with the text.
+   It is a flex item in the row now, so the preview simply wraps before it and
+   the two can't overlap whatever the format. */
+.card.compact .cc-when{flex:none;align-self:flex-start;margin-left:auto;padding-left:8px;
+  color:var(--faint);font:11px var(--font-mono);white-space:nowrap;line-height:1.5}
 .cc-tag{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.03em;padding:1px 5px;border-radius:5px;margin-right:6px;vertical-align:1.5px}
 /* AI is the accent; a user's own contribution carries the steel-blue clay */
 .cc-tag.ai{background:var(--teal-100);color:var(--teal-700)}
@@ -674,7 +678,7 @@ svg{display:block}
 .card.compact .cc-full{white-space:normal;overflow:visible}
 .card.compact .cc-full > .cc-tag{margin-bottom:4px}
 /* A checked generated visual keeps its image + takeaways on the collapsed card (not just the title). */
-.card.compact .cc-full{padding-right:0}
+/* nothing to reserve any more — the stamp is out of the text's way */
 .card.compact .cc-vis{margin-top:4px;padding:10px}
 .card.compact .cc-vis h4{font-size:13px;margin-bottom:6px}
 .card.compact .cc-vis img{max-height:220px;width:auto;max-width:100%;margin:0 auto}

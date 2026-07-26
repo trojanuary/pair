@@ -1921,7 +1921,6 @@ function compactCard(a) {
   if (!previews && a.selected_text) previews = `<div class="msg clamp">${esc(a.selected_text)}</div>`;
   const wrap = el(`<div class="card compact k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${!a.resolved ? '<span class="unread-dot"></span>' : ''}
-    <span class="cc-when">${when}</span>
     <div class="cc">
       <span class="cc-badge" style="background:${badge}">${a.anchor}</span>
       <div class="cc-main">
@@ -1929,6 +1928,7 @@ function compactCard(a) {
         ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>` : ''}
         <div class="loc-line">Page ${esc(a.page)}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
       </div>
+      <span class="cc-when">${when}</span>
     </div></div>`);
   wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],button')) return; if (window.getSelection && String(window.getSelection()).trim()) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
   return wrap;
