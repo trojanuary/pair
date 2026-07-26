@@ -206,10 +206,24 @@ svg{display:block}
 .find-nav{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--ink-2);flex:0 0 auto;background:transparent;border:0;cursor:pointer}
 .find-nav:hover{background:var(--surface-2);color:var(--ink)}
 .find-nav svg{width:16px;height:16px}
-.overlay{position:absolute;left:0;top:0;pointer-events:none;z-index:3}
-.hl-rect{position:absolute;border-radius:2px;pointer-events:auto;cursor:pointer}
-.hl-rect.text{background:color-mix(in oklch, var(--clay-500) 26%, transparent)}
-.hl-rect.yellow{background:color-mix(in oklch, var(--highlight-fill) 80%, transparent)}
+/* No z-index here on purpose. A stacking context would isolate the highlight
+   layer, and mix-blend-mode only sees the backdrop within its own context —
+   the highlights would stop blending with the page canvas and go back to
+   greying the text. Being positioned already paints it above the canvas.
+   #pins keeps an explicit layer so beads stay above the text layer. */
+.overlay{position:absolute;left:0;top:0;pointer-events:none}
+#pins{z-index:4}
+/* Highlights sit ON TOP of the rendered page, so a plain alpha fill greys the
+   glyphs underneath — the paler the fill, the worse it reads. multiply tints
+   the paper and leaves the ink alone: light * white = the tint, light * black
+   = black. Alpha stays moderate so it still looks right if a stacking context
+   ever isolates the blend. */
+.hl-rect{position:absolute;border-radius:2px;pointer-events:auto;cursor:pointer;
+  mix-blend-mode:multiply}
+.hl-rect.text{background:color-mix(in oklch, var(--clay-100) 88%, transparent)}
+.hl-rect.yellow{background:color-mix(in oklch, var(--highlight-fill) 88%, transparent)}
+/* box/figbox are outlines, not fills — blending them just muddies the stroke */
+.hl-rect.box,.hl-rect.figbox{mix-blend-mode:normal}
 .hl-rect.box{background:transparent;border:1.5px solid var(--blue);border-radius:6px}
 .hl-rect.figbox{background:transparent;border:1.5px dashed var(--blue);border-radius:6px}
 /* Source pins are glass beads: they refract the page under them rather than
