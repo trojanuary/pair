@@ -526,23 +526,39 @@ svg{display:block}
 
 /* ---------- Modal / Settings ---------- */
 .modal-mask{position:fixed;inset:0;background:var(--scrim);z-index:120;display:grid;place-items:center;padding:20px}
-.modal{background:var(--surface);border-radius:16px;box-shadow:var(--shadow-lg);width:560px;max-width:100%;
-  max-height:90vh;overflow:auto}
-.modal h3{margin:0;padding:18px 20px;border-bottom:1px solid var(--line);font-size:17px;
+/* Same surface language as the three workspace panels: 18px radius, white rim,
+   layered shadow. It was a flat 16px slab and read as a different product. */
+.modal{background:rgba(252,253,252,.92);border:1px solid rgba(255,255,255,.75);border-radius:18px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 6px rgba(28,34,32,.06),0 50px 90px -40px rgba(28,34,32,.5);
+  backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);
+  width:600px;max-width:100%;max-height:90vh;overflow:auto}
+/* panel titles are serif everywhere else ("Notes") — match them */
+.modal h3{margin:0;padding:18px 20px 14px;border-bottom:1px solid var(--border-subtle);
+  font:500 21px var(--font-display);color:var(--ink-strong);
   display:flex;align-items:center;justify-content:space-between}
-.modal .body{padding:18px 20px}
+.modal .body{padding:18px 20px 22px}
 .field{margin-bottom:16px}
-.field label{display:block;font-weight:600;margin-bottom:6px;font-size:13px}
-.field .hint{color:var(--muted);font-size:12px;margin-top:5px}
-.field input,.field select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
-.field input:focus,.field select:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-weak)}
+.field label{display:block;font:600 13px var(--font-sans);color:var(--text-strong);margin-bottom:6px}
+.field .hint{color:var(--text-soft);font:12px var(--font-sans);margin-top:6px;line-height:1.5}
+.field input,.field select{width:100%;border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:9px 12px;background:var(--surface);color:var(--text-body);font:var(--type-ui);
+  box-shadow:var(--shadow-inset);transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
+.field input::placeholder{color:var(--text-soft)}
+.field input:hover,.field select:hover{border-color:var(--border-strong)}
+.field input:focus,.field select:focus{outline:0;border-color:var(--accent-ring);box-shadow:0 0 0 3px var(--focus-ring)}
+/* the inline model inputs were ragged next to the full-width ones */
+.field input[size],.field input.sm{width:auto}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
-.seg button{border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-weight:600;color:var(--ink-2)}
-.seg button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.seg button{border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 13px;
+  font:600 13px var(--font-sans);color:var(--text-muted);background:var(--surface);transition:all var(--dur-fast)}
+.seg button:hover{border-color:var(--border-strong);color:var(--text-strong)}
+.seg button.on{background:var(--teal-600);color:#fff;border-color:var(--teal-600)}
 .chk{display:flex;align-items:center;gap:10px;padding:8px 0}
 .chk .sw{flex:0 0 auto}
-.modal .foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
-.btn{border-radius:10px;padding:9px 16px;font-weight:600}
+.modal .foot{padding:14px 20px;border-top:1px solid var(--border-subtle);background:var(--surface-2);
+  display:flex;justify-content:flex-end;gap:10px}
+.btn{border-radius:var(--radius-lg);padding:9px 17px;font:600 var(--text-base) var(--font-sans);
+  transition:background var(--dur-fast),border-color var(--dur-fast)}
 .btn.primary{background:var(--blue);color:#fff}.btn.primary:hover{background:var(--blue-2)}
 .btn.ghost{border:1px solid var(--line);color:var(--ink-2)}.btn.ghost:hover{background:var(--surface-2)}
 .confirm-mask{z-index:200}
@@ -661,9 +677,10 @@ svg{display:block}
 /* Settings: "Default" radio sits next to each provider (no dedicated row) */
 .lbl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
 .lbl-row label{margin:0}
-.def-radio{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:99px;
-  padding:4px 12px 4px 9px;font-size:11.5px;font-weight:700;color:var(--muted);background:var(--surface);cursor:pointer}
-.def-radio:hover{background:var(--surface-2)}
+.def-radio{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:var(--radius-full);
+  padding:5px 13px 5px 10px;font:600 11.5px var(--font-sans);color:var(--text-muted);background:var(--surface);cursor:pointer;
+  transition:all var(--dur-fast)}
+.def-radio:hover{background:var(--surface-hover);border-color:var(--border-strong)}
 .def-radio .rdot{width:13px;height:13px;border-radius:50%;border:2px solid var(--border-strong);flex:0 0 auto}
 .def-radio.on{color:var(--blue);border-color:var(--blue);background:var(--blue-weak)}
 .def-radio.on .rdot{border:4px solid var(--blue)}
@@ -795,10 +812,15 @@ body.col-resizing #app{transition:none}
 mjx-container svg{display:inline-block}
 .msg mjx-container[display="true"] svg,.ex-sheet mjx-container[display="true"] svg{display:block;margin:0 auto}
 /* ---- Settings tabs + Templates (prompt) editors ---- */
-.settabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-2px 0 16px}
-.settab{padding:8px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:8px 8px 0 0}
-.settab:hover{color:var(--ink);background:var(--surface-2)}
-.settab.on{color:var(--blue);border-bottom-color:var(--blue)}
+/* A sunken segmented control, like the reader's tool picker and the notes
+   sort — underline tabs were the only ones of their kind in the app. */
+.settabs{display:inline-flex;gap:3px;padding:3px;margin:0 0 20px;
+  background:var(--surface-sunken);border-radius:11px;border-bottom:none}
+.settab{padding:7px 15px;border:none;border-radius:8px;margin:0;
+  font:600 13px var(--font-sans);color:var(--text-muted);
+  transition:all var(--dur-fast) var(--ease-out)}
+.settab:hover{color:var(--text-strong);background:transparent}
+.settab.on{background:var(--surface);color:var(--teal-700);box-shadow:var(--shadow-sm)}
 .tabpane.hidden{display:none}
 .pt-actions{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .pt-item{margin-bottom:18px}
@@ -818,7 +840,7 @@ details.pt-item>summary:hover{background:var(--surface-2)}
 details.pt-item .pt-badge{margin-left:auto;color:var(--violet);font-weight:700;font-size:10.5px;background:var(--violet-weak);padding:1px 9px;border-radius:99px}
 details.pt-item .pt-body{padding:0 12px 12px}
 .pt-actions-row{display:flex;justify-content:flex-end;margin:2px 0 6px}
-.pt-sec{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.pt-sec{font:600 10.5px var(--font-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--text-soft);margin:20px 0 10px}
 
 
 /* ---------- non-blocking "open notes?" announcement banner ---------- */
