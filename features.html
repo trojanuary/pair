@@ -19,7 +19,10 @@
   --card:var(--surface);
   --ink-2:var(--ink-muted);
   --faint:var(--ink-soft);
-  --line:var(--border);
+  /* the landing page draws its dividers and card hairlines with
+     --border-subtle; --border is a step darker and made every section seam
+     (most visibly the footer's) read as a hard band edge */
+  --line:var(--border-subtle);
   --blue:var(--teal-600); --blue-2:var(--teal-700); --blue-wash:var(--teal-100);
   --green:var(--green-600);
   --serif:var(--font-display); --sans:var(--font-sans);
@@ -30,7 +33,14 @@ html{scroll-behavior:smooth}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
 html{overflow-x:clip}
 /* the landing page's fixed ambient wash, so the two pages share a ground */
-.wash--page{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+/* Masked at top and bottom. Being fixed, this paints at a static screen
+   position, so an unmasked gradient terminates hard at the viewport edge —
+   which read as a tonal band across the footer rather than as ambient colour.
+   The landing page masks its section washes for the same reason. */
+.wash--page{position:fixed;inset:0;z-index:0;pointer-events:none;
+  mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 82%, transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 82%, transparent 100%);
+  background:
   radial-gradient(46% 34% at 8% 2%, color-mix(in oklch, var(--accent) 20%, transparent), transparent 70%),
   radial-gradient(38% 30% at 96% 6%, color-mix(in oklch, var(--amber-400) 6%, transparent), transparent 72%),
   radial-gradient(52% 34% at 88% 98%, color-mix(in oklch, var(--clay-500) 18%, transparent), transparent 72%),
@@ -145,7 +155,9 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .band .shot{max-width:1180px;margin:0 auto;text-align:left}
 
 /* everything-else grid */
-.all{background:var(--card);border-top:1px solid var(--line)}
+/* was an opaque --card slab: against the new paper that step read as a
+   hard band across the page, and it blocked the ambient wash behind it */
+.all{background:transparent;border-top:1px solid var(--line)}
 .all .wrap{padding:52px 24px 60px}
 .all h2{font-family:var(--serif);font-weight:600;font-size:30px;text-align:center;margin:0 0 6px}
 .all .sub{text-align:center;color:var(--ink-2);margin:0 0 30px}
