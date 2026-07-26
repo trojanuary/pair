@@ -8,28 +8,59 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%232555F5'/%3E%3Ctext x='12' y='17' font-size='13' font-family='Georgia,serif' font-weight='700' fill='white' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" href="assets/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/PublicSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/ds.css">
 <style>
+/* Token bridge onto the design system (assets/ds.css), same approach as the
+   app: this page's rules were all written against these legacy names, so
+   re-pointing them converts the page instead of rewriting every rule.
+   --paper and --ink already exist in the design system and mean the same
+   thing, so they are left to inherit. */
 :root{
-  --paper:#F7F3EA; --card:#FDFBF6; --ink:#191510; --ink-2:#6E655A; --faint:#9A9082;
-  --line:#E7DECD; --blue:#2555F5; --blue-2:#1B44D6; --blue-wash:#E9EEFE; --green:#0E9F6E;
-  --serif:'Fraunces',Georgia,serif; --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  --sh-sm:0 1px 2px rgba(30,24,14,.05); --sh:0 18px 44px -20px rgba(46,36,20,.28); --radius:16px;
+  --card:var(--surface);
+  --ink-2:var(--ink-muted);
+  --faint:var(--ink-soft);
+  --line:var(--border);
+  --blue:var(--teal-600); --blue-2:var(--teal-700); --blue-wash:var(--teal-100);
+  --green:var(--green-600);
+  --serif:var(--font-display); --sans:var(--font-sans);
+  --sh-sm:var(--shadow-xs); --sh:var(--shadow-xl); --radius:var(--radius-2xl);
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+html{overflow-x:clip}
+/* the landing page's fixed ambient wash, so the two pages share a ground */
+.wash--page{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(46% 34% at 8% 2%, color-mix(in oklch, var(--accent) 20%, transparent), transparent 70%),
+  radial-gradient(38% 30% at 96% 6%, color-mix(in oklch, var(--amber-400) 6%, transparent), transparent 72%),
+  radial-gradient(52% 34% at 88% 98%, color-mix(in oklch, var(--clay-500) 18%, transparent), transparent 72%),
+  radial-gradient(40% 26% at 4% 92%, color-mix(in oklch, var(--accent) 14%, transparent), transparent 72%)}
+.page-content{position:relative;z-index:1}
+/* glass bar, same ramp mechanic as the landing page */
+header{--nav-solid:0;position:sticky;top:0;z-index:50;
+  background-color:rgb(252 253 252 / calc(34% + 50% * var(--nav-solid)));
+  background-image:linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 62%);
+  border-bottom:1px solid rgb(255 255 255 / calc(52% * var(--nav-solid)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 20px -14px rgb(24 30 28 / calc(38% * var(--nav-solid)))}
+header{backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8)}
+header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;pointer-events:none;opacity:var(--nav-solid);
+  background:linear-gradient(90deg, rgba(150,205,255,.6), rgba(255,255,255,.9) 28%, rgba(255,255,255,.9) 72%, rgba(255,205,155,.55))}
 a{color:var(--blue);text-decoration:none}
 a:hover{text-decoration:underline}
 .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
 svg{display:block}
 
 /* header */
-header{position:sticky;top:0;z-index:50;background:rgba(247,243,234,.82);backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid transparent;transition:border-color .3s}
+/* (the original cream bar lived here; superseded by the glass rules above —
+   it was winning on source order and putting back the old blur + cream) */
 header.scrolled{border-color:var(--line)}
 header .wrap{display:flex;align-items:center;gap:14px;height:68px}
 .brand{display:flex;align-items:center;gap:11px;font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:-.01em;line-height:1.6;color:var(--ink)}
-.logo{width:30px;height:30px;flex:none}
+.brand-tile{width:30px;height:30px;flex:none;border-radius:var(--radius-md);background:var(--accent);color:var(--text-on-accent);
+  display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:14px;font-weight:600;letter-spacing:-.02em}
+.brand b{color:var(--accent);font-weight:inherit}
 header nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-weight:600;font-size:14.5px}
 header nav a{color:var(--ink-2)}
 header .enter{background:var(--blue);color:#fff;padding:8px 16px;border-radius:10px}
@@ -113,8 +144,11 @@ footer nav{margin-left:auto;display:flex;gap:18px}
 </head>
 <body>
 
+<div class="wash--page" aria-hidden="true"></div>
+<div class="page-content">
+
 <header><div class="wrap">
-  <a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="#2555F5"/><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="url(#g)"/><defs><linearGradient id="g" x1="4" y1="3" x2="28" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#3b6bff"/><stop offset="1" stop-color="#1636c9"/></linearGradient></defs><path d="M12 10.5h5.2c2.3 0 3.8 1.4 3.8 3.5s-1.5 3.6-3.8 3.6H14.5V22" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>PairedX</a>
+  <a class="brand" href="/"><span class="brand-tile" aria-hidden="true">Px</span><span>Paired<b>X</b></span></a>
   <nav>
     <a class="hide-sm" href="/#features">Home</a>
     <a class="hide-sm" href="https://github.com/trojanuary/pair">GitHub</a>
@@ -375,10 +409,26 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   <nav><a href="/#features">Home</a><a href="/app">App</a><a href="https://github.com/trojanuary/pair">GitHub</a><a href="/#privacy">Privacy</a></nav>
 </div></footer>
 
+</div>
+
 <script>
   // match the landing: header border only appears once you scroll (no line at the top)
   const _h=document.querySelector('header');
   addEventListener('scroll',()=>_h.classList.toggle('scrolled',scrollY>4),{passive:true});
+</script>
+<script>
+(function(){
+  // Ramp the bar's --nav-solid across the first 140px of scroll, matching the
+  // landing page: interpolating a background-image gradient is impossible, so
+  // every state-dependent value derives from this one property via calc().
+  var nav=document.querySelector('header'), last=-1;
+  var onScroll=function(){
+    var t=Math.min(1, Math.max(0, window.scrollY/140));
+    t=Math.round(t*100)/100;
+    if(t!==last){ last=t; nav.style.setProperty('--nav-solid', t); }
+  };
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+})();
 </script>
 </body>
 </html>
