@@ -38,7 +38,8 @@ html{overflow-x:clip}
   radial-gradient(38% 30% at 96% 6%, color-mix(in oklch, var(--amber-400) 6%, transparent), transparent 72%),
   radial-gradient(52% 34% at 88% 98%, color-mix(in oklch, var(--clay-500) 18%, transparent), transparent 72%),
   radial-gradient(40% 26% at 4% 92%, color-mix(in oklch, var(--accent) 14%, transparent), transparent 72%)}
-.wash--hero{inset:-40px 0;
+/* runs up behind the sticky nav — glass needs something to refract at rest */
+.wash--hero{inset:-108px 0 -40px;
   mask-image:linear-gradient(to bottom, #000 76%, transparent 100%);
   -webkit-mask-image:linear-gradient(to bottom, #000 76%, transparent 100%);
   background:
@@ -102,8 +103,23 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 @keyframes swash-draw{to{stroke-dashoffset:0}}
 
 /* --------------------------------- nav --------------------------------- */
-.nav{position:sticky;top:0;z-index:var(--z-sticky);background:color-mix(in oklch,var(--paper) 84%,transparent);backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid transparent;transition:border-color var(--dur-slow) var(--ease-standard);animation:px-fade .5s var(--ease-out) both}
-.nav.scrolled{border-bottom-color:var(--border-subtle)}
+/* Glass bar. Same two-declaration pattern as the card surfaces, but the rim
+   lives on the bottom edge — a top highlight would sit off-screen. */
+.nav{position:sticky;top:0;z-index:var(--z-sticky);border-bottom:1px solid transparent;
+  background:linear-gradient(180deg, rgba(252,253,252,.6), rgba(252,253,252,.34));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
+  transition:background var(--dur-slow) var(--ease-standard),border-color var(--dur-slow) var(--ease-standard),box-shadow var(--dur-slow) var(--ease-standard);
+  animation:px-fade var(--dur-slow) var(--ease-out) both}
+.nav{backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8)}
+.nav{backdrop-filter:url(#lg-refract-sm) blur(7px) saturate(1.8)}
+/* the hairline doubles as the chromatic fringe: cool one side, warm the other */
+.nav::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;pointer-events:none;opacity:0;transition:opacity var(--dur-slow) var(--ease-standard);
+  background:linear-gradient(90deg, rgba(150,205,255,.6), rgba(255,255,255,.9) 28%, rgba(255,255,255,.9) 72%, rgba(255,205,155,.55))}
+/* Once scrolled, arbitrary content passes underneath — including the reel's
+   black frame. Glass has to keep a luminance floor or the nav links stop
+   being readable, so the scrolled state trades some transparency for it. */
+.nav.scrolled{background:linear-gradient(180deg, rgba(252,253,252,.88), rgba(252,253,252,.78));border-bottom-color:rgba(255,255,255,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 6px 20px -14px rgba(24,30,28,.35)}
+.nav.scrolled::after{opacity:1}
 .nav .wrap{height:68px;display:flex;align-items:center;gap:32px}
 .brand{display:flex;align-items:center;gap:10px;color:var(--ink-strong);font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-tight)}
 .brand:hover{color:var(--ink-strong);text-decoration:none}
