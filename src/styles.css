@@ -178,7 +178,15 @@ svg{display:block}
 /* pan freely, but leave pinch to initPinch() — the browser's own zoom would magnify the toolbar
    and drawers along with the page, and blur the canvas instead of re-rendering it. */
 .rd-scroll{flex:1;overflow:auto;padding:26px 0 60px;position:relative;touch-action:pan-x pan-y}
-.page-wrap{width:max-content;margin:0 auto;position:relative}
+/* isolate:
+   the highlight rects blend with multiply, and a blended element composites
+   against whatever group encloses it. Left implicit, that group depends on
+   which ancestor happens to be promoted — so opening a modal (a new
+   compositing layer over the page) re-rooted the blend and the rects painted
+   as white boxes over the page instead of tinting it. Pinning the group here
+   makes the backdrop exactly what it should be: the page canvas, and nothing
+   outside .page-wrap. */
+.page-wrap{width:max-content;margin:0 auto;position:relative;isolation:isolate}
 /* continuous scroll: stacked pages.
    `safe center` centers a page that fits but falls back to start-alignment when it doesn't —
    plain `center` pushes the overflow outside the scroll range, stranding the page's left edge. */
@@ -225,7 +233,7 @@ svg{display:block}
    ever isolates the blend. */
 .hl-rect{position:absolute;border-radius:2px;pointer-events:auto;cursor:pointer;
   mix-blend-mode:multiply}
-.hl-rect.text{background:color-mix(in oklch, var(--clay-100) 88%, transparent)}
+.hl-rect.text{background:color-mix(in oklch, var(--green-100) 92%, transparent)}
 .hl-rect.yellow{background:color-mix(in oklch, var(--highlight-fill) 88%, transparent)}
 /* box/figbox are outlines, not fills — blending them just muddies the stroke */
 .hl-rect.box,.hl-rect.figbox{mix-blend-mode:normal}
