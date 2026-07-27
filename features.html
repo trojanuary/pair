@@ -145,6 +145,11 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .row .shot.sm{max-width:330px}
 .shot.tall{max-height:430px;position:relative}
 .shot.tall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:62px;background:linear-gradient(to bottom,transparent,var(--card))}
+/* The library shot is the sidebar panel, not a crop out of a bigger surface, so
+   at 330px its chrome rendered ~1.25x life size and the 430px cap sliced the
+   nav list through the middle of "Starred". Show it whole, near 1:1. */
+#library .shot{max-width:240px;max-height:none}
+#library .shot::after{content:none}
 .shot.pad{padding:12px;background:var(--paper)}
 .shot.pad img{border-radius:9px;border:1px solid var(--line)}
 /* bands: full-app / full-screen screenshots, shown large */
@@ -278,7 +283,6 @@ footer nav{margin-left:auto;display:flex;gap:18px}
     <div class="copy">
       <div class="eyebrow">Read &amp; annotate</div>
       <h2>Highlight text or box a figure.</h2>
-      <p class="lead">Select text for a quick <b>Highlight · Note · Ask&nbsp;AI</b> popover, drop a point comment anywhere, or screenshot a figure/equation to ask about it directly.</p>
       <div class="chips"><span>Highlight</span><span>Comment</span><span>Screenshot a region</span><span>Continuous or single page</span><span>Find in document</span></div>
     </div>
     <div class="shot pad"><img src="docs/screenshots/03-toolbar.png" alt="The reader toolbar: select, highlight, comment, screenshot tools"></div>
