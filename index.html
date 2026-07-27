@@ -152,7 +152,10 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 
 /* -------------------------------- hero --------------------------------- */
 .hero{position:relative;padding:76px 0 8px}
-.hero .wrap:first-of-type{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center}
+/* minmax(0,…) so the fr ratio is actually honoured: the art item's min-content
+   was claiming ~40px more than its share and squeezing the first hero bullet
+   onto two lines. The art is capped at 520px anyway, so it loses nothing. */
+.hero .wrap:first-of-type{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:56px;align-items:center}
 .hero .eyebrow{margin-bottom:20px;animation:px-pop var(--dur-slower) var(--ease-out) 60ms both}
 .hero h1{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:clamp(42px,5vw,60px);line-height:1.04;letter-spacing:var(--tracking-tight);color:var(--ink-strong);margin:0 0 24px;animation:px-pop var(--dur-slower) var(--ease-out) 140ms both}
 .hl{position:relative;display:inline-block;background:var(--highlight-fill);padding:.06em .22em .1em;margin-left:-.22em}
