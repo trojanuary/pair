@@ -214,14 +214,21 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .split.rev p{max-width:27rem}
 .split .px-btn{border-radius:var(--radius-lg)}
 .shot-right{display:flex;justify-content:flex-end}
-.shot{width:100%;max-width:560px;height:auto;border-radius:var(--radius-xl);border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl)}
+/* These two are portrait shots of the Settings modal, so their height is what
+   drives the section — at 560px wide they ran over 1000px tall and swamped the
+   copy beside them. Cap the width instead of the height so the modal's own type
+   stays close to native size. */
+.shot{width:100%;max-width:470px;height:auto;border-radius:var(--radius-xl);border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl)}
 
 /* --------------------------------- OCR --------------------------------- */
 .ocr{padding:40px 0 76px}
 .ocr .section-head{max-width:760px}
 .ocr .eyebrow{display:inline-flex;align-items:center;gap:8px}
 .ocr h2{margin-bottom:20px}
-.ocr-frame{border-radius:var(--radius-2xl);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);background:var(--surface-card);max-height:620px}
+/* The shot is the whole workspace now (a landscape 2.09:1), so the frame no
+   longer needs the max-height that used to hard-clip the tall reader crop
+   mid-sentence. 70% of the wrap keeps it from dominating the section. */
+.ocr-frame{width:70%;margin:0 auto;border-radius:var(--radius-2xl);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);background:var(--surface-card)}
 .ocr-frame img{width:100%;height:auto;display:block}
 
 /* ------------------------------ privacy -------------------------------- */
@@ -306,6 +313,7 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
   .split.rev .shot-left{order:2}
   .shot-right{justify-content:center}
   .shot{margin:0 auto}
+  .ocr-frame{width:100%}     /* no room to spare once the columns stack */
   .ctapanel{padding:44px 36px;gap:28px}
 }
 @media (max-width:900px){
@@ -492,7 +500,7 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
   <section class="split rev">
     <div class="wrap">
       <div class="shot-left">
-        <img class="shot" data-reveal src="docs/screenshots/settings-templates.jpg" width="1120" height="1468" loading="lazy" alt="Settings — the Templates tab: every system prompt and the agent’s tool descriptions are editable, with Export / Import / Reset">
+        <img class="shot" data-reveal src="docs/screenshots/settings-templates.jpg" width="1120" height="1838" loading="lazy" alt="Settings — the Templates tab: every system prompt and the agent’s tool descriptions are editable, with Export / Import / Reset">
       </div>
       <div data-reveal>
         <span class="eyebrow">Editable prompts</span>
@@ -511,7 +519,7 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
         <p class="lede">Open an image-only PDF and PairedX offers one-tap OCR that runs <strong>right in your browser</strong> — your file never leaves your machine. It rebuilds a true text layer, so highlights, search, and the AI all work like any other PDF.</p>
       </div>
       <div class="ocr-frame" data-reveal>
-        <img src="docs/screenshots/feat-ocr-banner.jpg" width="2094" height="1756" loading="lazy" alt="PairedX detecting a scanned PDF and offering one-tap, on-device OCR">
+        <img src="docs/screenshots/feat-ocr-banner.jpg" width="2880" height="1380" loading="lazy" alt="PairedX detecting a scanned PDF and offering one-tap, on-device OCR">
       </div>
     </div>
   </section>
