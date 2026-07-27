@@ -151,17 +151,17 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .nav-cta .iconly .px-i{font-size:20px}
 
 /* -------------------------------- hero --------------------------------- */
-.hero{position:relative;padding:76px 0 8px}
+.hero{position:relative;padding:44px 0 8px}
 /* minmax(0,…) so the fr ratio is actually honoured: the art item's min-content
    was claiming ~40px more than its share and squeezing the first hero bullet
    onto two lines. The art is capped at 520px anyway, so it loses nothing. */
 .hero .wrap:first-of-type{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:56px;align-items:center}
-.hero .eyebrow{margin-bottom:20px;animation:px-pop var(--dur-slower) var(--ease-out) 60ms both}
-.hero h1{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:clamp(42px,5vw,60px);line-height:1.04;letter-spacing:var(--tracking-tight);color:var(--ink-strong);margin:0 0 24px;animation:px-pop var(--dur-slower) var(--ease-out) 140ms both}
+.hero .eyebrow{margin-bottom:14px;animation:px-pop var(--dur-slower) var(--ease-out) 60ms both}
+.hero h1{font-family:var(--font-display);font-weight:var(--weight-bold);font-size:clamp(42px,5vw,60px);line-height:1.04;letter-spacing:var(--tracking-tight);color:var(--ink-strong);margin:0 0 16px;animation:px-pop var(--dur-slower) var(--ease-out) 140ms both}
 .hl{position:relative;display:inline-block;background:var(--highlight-fill);padding:.06em .22em .1em;margin-left:-.22em}
 .hl .swash{left:.22em;bottom:.14em;width:calc(100% - .44em);height:.1em}
-.hero .lead{font-size:var(--text-lg);line-height:1.55;color:var(--text-muted);max-width:31rem;margin:0 0 28px;animation:px-pop var(--dur-slower) var(--ease-out) 220ms both}
-.hrows{display:flex;flex-direction:column;gap:14px;animation:px-pop var(--dur-slower) var(--ease-out) 300ms both}
+.hero .lead{font-size:var(--text-lg);line-height:1.55;color:var(--text-muted);max-width:31rem;margin:0 0 20px;animation:px-pop var(--dur-slower) var(--ease-out) 220ms both}
+.hrows{display:flex;flex-direction:column;gap:12px;animation:px-pop var(--dur-slower) var(--ease-out) 300ms both}
 .hrow{display:flex;align-items:flex-start;gap:13px}
 .hrow .px-i{font-size:19px;color:var(--accent);margin-top:2px}
 .hrow p{margin:0;flex:1;min-width:0;font-size:16px;line-height:1.5;color:var(--text-muted)}
@@ -169,17 +169,17 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .heroart img{width:100%;max-width:520px;height:auto;animation:px-fade var(--dur-slower) var(--ease-out) 200ms both}
 
 /* shared-key note */
-.keynote{max-width:860px;margin:26px auto 0;display:flex;gap:14px;align-items:flex-start;border-radius:var(--radius-xl);padding:18px 22px;box-shadow:var(--shadow-sm),inset 0 1px 0 rgba(255,255,255,.85)}
+.keynote{max-width:860px;margin:18px auto 0;display:flex;gap:14px;align-items:flex-start;border-radius:var(--radius-xl);padding:16px 22px;box-shadow:var(--shadow-sm),inset 0 1px 0 rgba(255,255,255,.85)}
 .keynote .px-i{font-size:19px;color:var(--accent);margin-top:2px}
 .keynote p{margin:0;font-size:15px;line-height:1.6;color:var(--text-muted)}
 
 /* trust tags */
-.tags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:28px}
+.tags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:20px}
 .tags .px-tag{padding:9px 16px;border-radius:var(--radius-full);font-size:14px;background:linear-gradient(152deg, rgba(252,253,252,.8), rgba(252,253,252,.44));border-color:rgba(255,255,255,.78);box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.85)}
 .tags .px-i{font-size:16px;color:var(--accent)}
 
 /* scroll hint */
-.scrollhint{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:44px;color:var(--text-soft)}
+.scrollhint{display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:22px;color:var(--text-soft)}
 .scrollhint:hover{color:var(--text-muted);text-decoration:none}
 .scrollhint span{font:var(--type-eyebrow);text-transform:uppercase;letter-spacing:var(--tracking-caps)}
 .scrollhint .px-i{font-size:18px;color:var(--accent)}
