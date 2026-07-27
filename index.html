@@ -222,6 +222,11 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
    copy beside them. Cap the width instead of the height so the modal's own type
    stays close to native size. */
 .shot{width:100%;max-width:470px;height:auto;border-radius:var(--radius-xl);border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl)}
+/* Capped per side rather than together: both are portrait, but the AI & Tools
+   modal is the taller of the two (0.53 vs 0.61), so an equal width leaves it
+   ~140px taller. These land them at 758px and 689px — near enough to a screen. */
+.shot-right .shot{max-width:400px}
+.shot-left .shot{max-width:435px}
 
 /* --------------------------------- OCR --------------------------------- */
 .ocr{padding:40px 0 76px}
@@ -231,7 +236,7 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 /* The shot is the whole workspace now (a landscape 2.09:1), so the frame no
    longer needs the max-height that used to hard-clip the tall reader crop
    mid-sentence. 70% of the wrap keeps it from dominating the section. */
-.ocr-frame{width:84%;margin:0 auto;border-radius:var(--radius-2xl);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);background:var(--surface-card)}
+.ocr-frame{width:92%;margin:0 auto;border-radius:var(--radius-2xl);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);background:var(--surface-card)}
 .ocr-frame img{width:100%;height:auto;display:block}
 
 /* ------------------------------ privacy -------------------------------- */
