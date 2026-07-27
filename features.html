@@ -150,6 +150,10 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
    nav list through the middle of "Starred". Show it whole, near 1:1. */
 #library .shot{max-width:240px;max-height:none}
 #library .shot::after{content:none}
+/* 03-toolbar is a wide, short strip. Squeezed into one 554px grid column it
+   rendered at roughly half life size; given the whole row it sits near 1:1. */
+#annotate{grid-template-columns:1fr}
+#annotate .shot{max-width:830px;margin-inline:0}
 .shot.pad{padding:12px;background:var(--paper)}
 .shot.pad img{border-radius:9px;border:1px solid var(--line)}
 /* bands: full-app / full-screen screenshots, shown large */
