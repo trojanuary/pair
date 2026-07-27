@@ -235,10 +235,9 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .ocr h2{margin-bottom:20px}
 /* The shot is the whole workspace now (a landscape 2.09:1), so the frame no
    longer needs the max-height that used to hard-clip the tall reader crop
-   mid-sentence. The negative inline margin cancels .wrap's 32px gutter, so the
-   figure bleeds out to the wrap's full 1180px — the widest it can go without
-   escaping the content column. */
-.ocr-frame{width:auto;margin:0 -32px;border-radius:var(--radius-2xl);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);background:var(--surface-card)}
+   mid-sentence. Full width of .wrap's content box, so the figure lines up edge
+   for edge with the comparison table in #compare. */
+.ocr-frame{width:100%;margin:0 auto;border-radius:var(--radius-2xl);overflow:hidden;border:1px solid var(--border-subtle);box-shadow:var(--shadow-xl);background:var(--surface-card)}
 .ocr-frame img{width:100%;height:auto;display:block}
 
 /* ------------------------------ privacy -------------------------------- */
@@ -323,7 +322,6 @@ table.cmp sup{font-size:10px;color:var(--text-soft)}
   .split.rev .shot-left{order:2}
   .shot-right{justify-content:center}
   .shot{margin:0 auto}
-  .ocr-frame{width:100%;margin-inline:0}   /* no room to spare once the columns stack */
   .ctapanel{padding:44px 36px;gap:28px}
 }
 @media (max-width:900px){
