@@ -1117,19 +1117,107 @@ function drawHighlights() {
     });
   });
 }
+// A pin can be nudged off its anchor when it covers something you want to read.
+// The offset is stored on the annotation as a fraction of the page box — not as
+// pixels — so it holds through zoom, window resize and re-render, and travels in
+// the .notes.json like any other field. Capped so a pin stays a nudge from its
+// own highlight rather than wandering off and losing the association.
+const PIN_NUDGE_MAX = 0.12;
+const pinOffset = a => [
+  clamp(Number(a.pinDx) || 0, -PIN_NUDGE_MAX, PIN_NUDGE_MAX),
+  clamp(Number(a.pinDy) || 0, -PIN_NUDGE_MAX, PIN_NUDGE_MAX)
+];
+const pinLeft = (rc, w, dx) => clamp((rc.x + rc.w + dx) * w.vp.width, 0, w.vp.width - 25);
+const pinTop = (rc, w, dy) => clamp((rc.y + dy) * w.vp.height, 0, w.vp.height - 25);
+function placePin(p, rc, w, dx, dy) {
+  // keep the bead on the page even when the anchor sits at an edge
+  p.style.left = pinLeft(rc, w, dx) + 'px';
+  p.style.top = pinTop(rc, w, dy) + 'px';
+  // A moved pin would otherwise read as unattached, so run a hairline back to
+  // where it belongs. Both ends carry .pin's translate(6px,-4px), so the offsets
+  // below just put the line through the bead's centre in the same space.
+  const t = p._tether; if (!t) return;
+  const x1 = pinLeft(rc, w, 0) + 18.5, y1 = pinTop(rc, w, 0) + 8.5;
+  const x2 = pinLeft(rc, w, dx) + 18.5, y2 = pinTop(rc, w, dy) + 8.5;
+  t.style.left = x1 + 'px'; t.style.top = y1 + 'px';
+  t.style.width = Math.hypot(x2 - x1, y2 - y1) + 'px';
+  t.style.transform = 'rotate(' + Math.atan2(y2 - y1, x2 - x1) + 'rad)';
+}
 function drawPins() {
   pageWrappers().forEach(w => {
     const pins = w.pins; if (!pins) return; pins.innerHTML = ''; pins.style.width = w.vp.width + 'px'; pins.style.height = w.vp.height + 'px';
     state.annotations.filter(a => inActiveDoc(a) && a.page === w.page && a.rects && a.rects.length).forEach(a => {
       const rc = a.rects[0];
-      const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}" data-ann="${a.id}">${a.anchor}</div>`);
-      p.style.left = (rc.x + rc.w) * w.vp.width + 'px';
-      p.style.top = rc.y * w.vp.height + 'px';
-      p.onclick = () => { openRightPanel(a.id); selectAnnotation(a.id, true, false); };   // clicking a note's number reveals the panel + scrolls its card in — but does NOT move the reader (the pin is already visible)
+      const [dx, dy] = pinOffset(a);
+      const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}${dx || dy ? ' moved' : ''}" data-ann="${a.id}" title="Drag to move · double-click to put it back">${a.anchor}</div>`);
+      p._tether = el('<div class="pin-tether"></div>');
+      p._tether.hidden = !(dx || dy);
+      pins.appendChild(p._tether);
+      placePin(p, rc, w, dx, dy);
+      attachPinDrag(p, a, rc, w);
       pins.appendChild(p);
     });
   });
   drawConnector();
+}
+// Drag-to-nudge. Click still selects: a press only becomes a drag once it passes
+// a small threshold, and the click that the browser fires after the drag is
+// swallowed. Pointer capture keeps the move events coming even when the cursor
+// outruns the 25px bead.
+function attachPinDrag(p, a, rc, w) {
+  const DRAG_MIN = 3;
+  let x0 = 0, y0 = 0, dx0 = 0, dy0 = 0, down = false, moved = false;
+
+  p.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0) return;
+    down = true; moved = false;
+    x0 = ev.clientX; y0 = ev.clientY;
+    [dx0, dy0] = pinOffset(a);
+    try { p.setPointerCapture(ev.pointerId); } catch (e) {}
+    // NB: no preventDefault here — it would suppress the compatibility click
+    // and break selecting a note by its pin. .pin carries user-select:none and
+    // touch-action:none instead.
+  });
+
+  p.addEventListener('pointermove', ev => {
+    if (!down) return;
+    const mx = ev.clientX - x0, my = ev.clientY - y0;
+    if (!moved && Math.hypot(mx, my) < DRAG_MIN) return;
+    if (!moved) { moved = true; p.classList.add('dragging'); if (p._tether) p._tether.hidden = false; }
+    a.pinDx = clamp(dx0 + mx / w.vp.width, -PIN_NUDGE_MAX, PIN_NUDGE_MAX);
+    a.pinDy = clamp(dy0 + my / w.vp.height, -PIN_NUDGE_MAX, PIN_NUDGE_MAX);
+    placePin(p, rc, w, a.pinDx, a.pinDy);
+    drawConnector();                       // the thread tracks the bead as it moves
+  });
+
+  const finish = ev => {
+    if (!down) return;
+    down = false;
+    p.classList.remove('dragging');
+    try { p.releasePointerCapture(ev.pointerId); } catch (e) {}
+    if (!moved) return;
+    p.classList.add('moved');
+    a.updated_at = nowISO(); save();
+    p._ateClick = true;                    // cleared by the click handler below
+  };
+  p.addEventListener('pointerup', finish);
+  p.addEventListener('pointercancel', finish);
+
+  // clicking a note's number reveals the panel + scrolls its card in — but does
+  // NOT move the reader (the pin is already visible)
+  p.addEventListener('click', ev => {
+    if (p._ateClick) { p._ateClick = false; ev.stopPropagation(); return; }
+    openRightPanel(a.id); selectAnnotation(a.id, true, false);
+  });
+
+  p.addEventListener('dblclick', ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    if (!a.pinDx && !a.pinDy) return;
+    delete a.pinDx; delete a.pinDy;
+    a.updated_at = nowISO(); save();
+    drawPins();
+    toast('Pin put back');
+  });
 }
 // Open the notes panel if it's collapsed (used when a note/answer/screenshot/comment is created, so
 // the new card is visible and the connector has something to point at). Highlighting doesn't call this.

@@ -260,8 +260,15 @@ svg{display:block}
   box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -2.5px 3px rgba(84,112,137,.22),
              inset 0 0 0 1px rgba(255,255,255,.5),0 5px 12px -4px rgba(31,59,55,.42),0 1px 2px rgba(31,59,55,.16);
   text-shadow:0 1px 0 rgba(255,255,255,.55);
-  pointer-events:auto;cursor:pointer;transform:translate(6px,-4px);
+  pointer-events:auto;cursor:grab;transform:translate(6px,-4px);
+  user-select:none;-webkit-user-select:none;touch-action:none;
   transition:all var(--dur-base) var(--ease-out)}
+/* while dragging: no transition, or the bead lags the pointer by a frame */
+.pin.dragging{cursor:grabbing;transition:none;z-index:7}
+/* a nudged pin keeps a hairline back to the spot it marks */
+.pin-tether{position:absolute;height:0;border-top:1.5px dotted var(--clay-500);
+  opacity:.45;transform-origin:0 50%;pointer-events:none;z-index:4}
+.pin-tether[hidden]{display:none}
 /* A gentler displacement than the panels use: at the panel's scale a 25px bead
    sitting directly on body text smears the words under it. */
 .pin{backdrop-filter:url(#lg-distort-pin) blur(1.5px) saturate(1.8)}
