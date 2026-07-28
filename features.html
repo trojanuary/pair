@@ -145,11 +145,6 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .row .shot.sm{max-width:330px}
 .shot.tall{max-height:430px;position:relative}
 .shot.tall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:62px;background:linear-gradient(to bottom,transparent,var(--card))}
-/* The library shot is the sidebar panel, not a crop out of a bigger surface, so
-   at 330px its chrome rendered ~1.25x life size and the 430px cap sliced the
-   nav list through the middle of "Starred". Show it whole, near 1:1. */
-#library .shot{max-width:240px;max-height:none}
-#library .shot::after{content:none}
 /* 03-toolbar is a wide, short strip. Squeezed into one 554px grid column it
    rendered at roughly half life size; given the whole row it sits near 1:1. */
 #annotate{grid-template-columns:1fr}
@@ -261,7 +256,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   <h1>The whole feature set,<br>at a glance.</h1>
   <p>A source-linked AI reading workspace — every highlight, note, screenshot, and answer stays pinned to the exact spot it came from. Private, portable, yours.</p>
   <div class="tocbar">
-    <a href="#annotate">Annotate</a><a href="#linked">Source-linked</a><a href="#ai">Ask AI</a><a href="#agent">Agent</a><a href="#notes">Notes</a><a href="#library">Library</a><a href="#share">Share &amp; export</a><a href="#byo">Your model</a><a href="#all">Everything else</a>
+    <a href="#annotate">Annotate</a><a href="#linked">Source-linked</a><a href="#ai">Ask AI</a><a href="#agent">Agent</a><a href="#notes">Notes</a><a href="#share">Share &amp; export</a><a href="#byo">Your model</a><a href="#all">Everything else</a>
   </div>
 
   <div class="annot">
@@ -338,16 +333,6 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <div class="chips"><span>Show on card</span><span>Tags</span><span>Resolve</span><span>Filter &amp; search</span><span>Sort by time / page</span></div>
     </div>
     <div class="shot tall sm"><img src="docs/screenshots/feat-show-on-card.jpg" alt="A collapsed card showing the full AI answer, tagged AI"></div>
-  </div>
-
-  <div class="row" id="library">
-    <div class="copy">
-      <div class="eyebrow">Your library</div>
-      <h2>A real multi-document library.</h2>
-      <p class="lead">Home, Recents, Starred, and Trash. Star, trash, restore, or delete — the same PDF opened again is recognized by content (SHA-256) so its notes just re-attach.</p>
-      <div class="chips"><span>Home / Recents / Starred / Trash</span><span>Content-addressed</span><span>Notes auto-attach</span></div>
-    </div>
-    <div class="shot tall sm"><img src="docs/screenshots/feat-library.jpg" alt="The library sidebar with documents and star/trash actions"></div>
   </div>
 
   <div class="band" id="share">
