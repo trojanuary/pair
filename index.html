@@ -136,7 +136,7 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .brand{display:flex;align-items:center;gap:10px;color:var(--ink-strong);font-family:var(--font-display);font-size:var(--text-lg);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-tight)}
 .brand:hover{color:var(--ink-strong);text-decoration:none}
 .brand b{color:var(--accent);font-weight:inherit}
-.brand-tile{width:30px;height:30px;flex:none;border-radius:var(--radius-md);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:14px;font-weight:var(--weight-semibold);letter-spacing:-.02em}
+.brand-tile{width:30px;height:30px;flex:none;border-radius:var(--radius-md);background:var(--accent);color:var(--text-on-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:var(--text-base);font-weight:var(--weight-semibold);letter-spacing:-.02em}
 .nlinks{display:flex;gap:26px;margin-left:4px}
 /* matches the button labels beside them — --type-label (13px) read as a
    different size from the 15px buttons sharing the bar */
@@ -164,7 +164,7 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 .hrows{display:flex;flex-direction:column;gap:12px;animation:px-pop var(--dur-slower) var(--ease-out) 300ms both}
 .hrow{display:flex;align-items:flex-start;gap:13px}
 .hrow .px-i{font-size:19px;color:var(--accent);margin-top:2px}
-.hrow p{margin:0;flex:1;min-width:0;font-size:16px;line-height:1.5;color:var(--text-muted)}
+.hrow p{margin:0;flex:1;min-width:0;font-size:var(--text-base);line-height:1.5;color:var(--text-muted)}
 .heroart{display:flex;align-items:center;justify-content:center}
 .heroart img{width:100%;max-width:520px;height:auto;animation:px-fade var(--dur-slower) var(--ease-out) 200ms both}
 
@@ -175,7 +175,7 @@ strong{color:var(--ink-strong);font-weight:var(--weight-semibold)}
 
 /* trust tags */
 .tags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:20px}
-.tags .px-tag{padding:9px 16px;border-radius:var(--radius-full);font-size:14px;background:linear-gradient(152deg, rgba(252,253,252,.8), rgba(252,253,252,.44));border-color:rgba(255,255,255,.78);box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.85)}
+.tags .px-tag{padding:9px 16px;border-radius:var(--radius-full);font-size:var(--text-sm);background:linear-gradient(152deg, rgba(252,253,252,.8), rgba(252,253,252,.44));border-color:rgba(255,255,255,.78);box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.85)}
 .tags .px-i{font-size:16px;color:var(--accent)}
 
 /* scroll hint */
@@ -260,7 +260,7 @@ table.cmp thead .rowlab{font:var(--type-label);font-weight:var(--weight-semibold
 table.cmp .pair{background:var(--accent-tint-soft)}
 table.cmp thead th.pair{color:var(--accent);font-weight:var(--weight-bold)}
 table.cmp tbody tr:last-child td{border-bottom:none}
-table.cmp sup{font-size:10px;color:var(--text-soft)}
+table.cmp sup,.cmp-note sup{font-size:var(--text-2xs);color:var(--text-soft)}
 .cmp-mark{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;border-radius:var(--radius-full)}
 .cmp-mark .px-i{font-size:14px}
 .cmp-yes{background:var(--accent-tint);color:var(--accent-hover)}
