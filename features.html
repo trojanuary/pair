@@ -5,32 +5,103 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PairedX — Features</title>
 <meta name="description" content="Every feature of PairedX, the source-linked AI reading workspace — at a glance.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%232555F5'/%3E%3Ctext x='12' y='17' font-size='13' font-family='Georgia,serif' font-weight='700' fill='white' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2333645C'/%3E%3Cpath d='M12 10.5h5.2c2.3 0 3.8 1.4 3.8 3.5s-1.5 3.6-3.8 3.6H14.5V22' stroke='%23FCFDFC' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="preload" href="assets/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/PublicSans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/ds.css">
 <style>
+/* Token bridge onto the design system (assets/ds.css), same approach as the
+   app: this page's rules were all written against these legacy names, so
+   re-pointing them converts the page instead of rewriting every rule.
+   --paper and --ink already exist in the design system and mean the same
+   thing, so they are left to inherit. */
 :root{
-  --paper:#F7F3EA; --card:#FDFBF6; --ink:#191510; --ink-2:#6E655A; --faint:#9A9082;
-  --line:#E7DECD; --blue:#2555F5; --blue-2:#1B44D6; --blue-wash:#E9EEFE; --green:#0E9F6E;
-  --serif:'Fraunces',Georgia,serif; --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  --sh-sm:0 1px 2px rgba(30,24,14,.05); --sh:0 18px 44px -20px rgba(46,36,20,.28); --radius:16px;
+  --card:var(--surface);
+  --ink-2:var(--ink-muted);
+  --faint:var(--ink-soft);
+  /* the landing page draws its dividers and card hairlines with
+     --border-subtle; --border is a step darker and made every section seam
+     (most visibly the footer's) read as a hard band edge */
+  --line:var(--border-subtle);
+  --blue:var(--teal-600); --blue-2:var(--teal-700); --blue-wash:var(--teal-100);
+  --green:var(--green-600);
+  --serif:var(--font-display); --sans:var(--font-sans);
+  --sh-sm:var(--shadow-xs); --sh:var(--shadow-xl); --radius:var(--radius-2xl);
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:var(--text-base);line-height:1.5;-webkit-font-smoothing:antialiased}
+html{overflow-x:clip}
+/* the landing page's fixed ambient wash, so the two pages share a ground */
+/* Masked at top and bottom. Being fixed, this paints at a static screen
+   position, so an unmasked gradient terminates hard at the viewport edge —
+   which read as a tonal band across the footer rather than as ambient colour.
+   The landing page masks its section washes for the same reason. */
+.wash--page{position:fixed;inset:0;z-index:0;pointer-events:none;
+  mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 82%, transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 12%, #000 82%, transparent 100%);
+  background:
+  radial-gradient(46% 34% at 8% 2%, color-mix(in oklch, var(--accent) 20%, transparent), transparent 70%),
+  radial-gradient(38% 30% at 96% 6%, color-mix(in oklch, var(--amber-400) 6%, transparent), transparent 72%),
+  radial-gradient(52% 34% at 88% 98%, color-mix(in oklch, var(--clay-500) 18%, transparent), transparent 72%),
+  radial-gradient(40% 26% at 4% 92%, color-mix(in oklch, var(--accent) 14%, transparent), transparent 72%)}
+.page-content{position:relative;z-index:1}
+/* glass bar, same ramp mechanic as the landing page */
+
+/* ---------- liquid glass ----------
+   Two backdrop-filter declarations per selector, as on the landing page: the
+   plain frost every engine takes, then refraction through the SVG displacement
+   map above, which Safari and Firefox drop cleanly. */
+[data-glass]{position:relative}
+[data-glass]{backdrop-filter:blur(18px) saturate(1.7);-webkit-backdrop-filter:blur(18px) saturate(1.7)}
+[data-glass]{backdrop-filter:url(#lg-refract) blur(6px) saturate(1.7)}
+[data-glass="pill"]{backdrop-filter:blur(14px) saturate(1.7);-webkit-backdrop-filter:blur(14px) saturate(1.7)}
+[data-glass="pill"]{backdrop-filter:url(#lg-refract-sm) blur(5px) saturate(1.7)}
+/* specular rim + chromatic fringe — this, not the blur, is what reads as glass */
+[data-glass]::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:inset 0 1.5px 1px -.5px rgba(255,255,255,.95),inset 1.5px 0 1px -.5px rgba(255,255,255,.6),inset 0 -1.5px 1px -.5px rgba(150,205,255,.5),inset -1.5px 0 1px -.5px rgba(255,205,155,.4);
+  background:linear-gradient(138deg, rgba(255,255,255,.3) 0%, rgba(255,255,255,0) 22%, rgba(255,255,255,0) 78%, rgba(255,255,255,.16) 100%)}
+.glass-fill{background:linear-gradient(152deg, rgba(252,253,252,.78), rgba(252,253,252,.42));border:1px solid rgba(255,255,255,.72)}
+[data-glass="pill"].glass-fill{background:linear-gradient(152deg, rgba(252,253,252,.8), rgba(252,253,252,.44));
+  border-color:rgba(255,255,255,.78);box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,.85)}
+
+/* ---------- motion ----------
+   The page had none: everything simply appeared. Same reveal as the landing
+   page — a small scale plus lift, staggered per group. */
+[data-reveal]{opacity:0;transform:scale(.97) translateY(8px);
+  transition:opacity var(--dur-slower) var(--ease-out),transform var(--dur-slower) var(--ease-out)}
+[data-reveal].in{opacity:1;transform:none}
+[data-lift]{transition:transform var(--dur-base) var(--ease-standard),box-shadow var(--dur-base) var(--ease-standard),border-color var(--dur-base) var(--ease-standard)}
+[data-lift]:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--border)}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  [data-reveal]{opacity:1;transform:none;transition:none}
+  *{animation:none!important}
+}
+
+header{--nav-solid:0;position:sticky;top:0;z-index:50;
+  background-color:rgb(252 253 252 / calc(34% + 50% * var(--nav-solid)));
+  background-image:linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0) 62%);
+  border-bottom:1px solid rgb(255 255 255 / calc(52% * var(--nav-solid)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 6px 20px -14px rgb(24 30 28 / calc(38% * var(--nav-solid)))}
+header{backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8)}
+header::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;pointer-events:none;opacity:var(--nav-solid);
+  background:linear-gradient(90deg, rgba(150,205,255,.6), rgba(255,255,255,.9) 28%, rgba(255,255,255,.9) 72%, rgba(255,205,155,.55))}
 a{color:var(--blue);text-decoration:none}
 a:hover{text-decoration:underline}
 .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
 svg{display:block}
 
 /* header */
-header{position:sticky;top:0;z-index:50;background:rgba(247,243,234,.82);backdrop-filter:saturate(160%) blur(10px);border-bottom:1px solid transparent;transition:border-color .3s}
+/* (the original cream bar lived here; superseded by the glass rules above —
+   it was winning on source order and putting back the old blur + cream) */
 header.scrolled{border-color:var(--line)}
 header .wrap{display:flex;align-items:center;gap:14px;height:68px}
 .brand{display:flex;align-items:center;gap:11px;font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:-.01em;line-height:1.6;color:var(--ink)}
-.logo{width:30px;height:30px;flex:none}
-header nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-weight:600;font-size:14.5px}
+.brand-tile{width:30px;height:30px;flex:none;border-radius:var(--radius-md);background:var(--accent);color:var(--text-on-accent);
+  display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:var(--text-base);font-weight:600;letter-spacing:-.02em}
+.brand b{color:var(--accent);font-weight:inherit}
+header nav{margin-left:auto;display:flex;align-items:center;gap:22px;font-weight:var(--weight-medium);font-size:var(--text-base)}
 header nav a{color:var(--ink-2)}
 header .enter{background:var(--blue);color:#fff;padding:8px 16px;border-radius:10px}
 header .enter:hover{background:var(--blue-2);text-decoration:none}
@@ -38,9 +109,9 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 
 /* hero */
 .hero{text-align:center;padding:64px 0 26px}
-.eyebrow{color:var(--blue);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:12px}
-.hero h1{font-family:var(--serif);font-weight:600;font-size:clamp(34px,5vw,54px);line-height:1.05;margin:12px 0 10px}
-.hero p{color:var(--ink-2);font-size:18px;max-width:640px;margin:0 auto}
+.eyebrow{color:var(--blue);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-caps);text-transform:uppercase;font-size:var(--text-xs)}
+.hero h1{font-family:var(--serif);font-weight:var(--weight-bold);font-size:clamp(38px,5vw,48px);line-height:1.05;margin:12px 0 10px}
+.hero p{color:var(--ink-2);font-size:var(--text-md);max-width:640px;margin:0 auto}
 .hero .tocbar{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:22px}
 .hero .tocbar a{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:7px 14px;font-weight:600;font-size:13px;color:var(--ink)}
 .hero .tocbar a:hover{border-color:var(--blue);color:var(--blue);text-decoration:none}
@@ -55,7 +126,7 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .annot .dot:nth-of-type(3),.legend span:nth-child(3) b{background:#3E9266}
 .annot .dot:nth-of-type(4),.legend span:nth-child(4) b{background:#2F8155}
 .annot .dot:nth-of-type(5),.legend span:nth-child(5) b{background:#246E47}
-.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin:16px auto 0;max-width:900px;color:var(--ink-2);font-size:13.5px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin:16px auto 0;max-width:900px;color:var(--ink-2);font-size:var(--text-sm)}
 .legend span{display:inline-flex;align-items:center;gap:8px}
 .legend b{width:20px;height:20px;border-radius:50%;background:#3E9266;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;flex:0 0 auto}
 
@@ -63,10 +134,10 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .feat{padding:18px 0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;padding:34px 0;border-top:1px solid var(--line)}
 .row.rev .copy{order:2}
-.copy h2{font-family:var(--serif);font-weight:600;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:8px 0 8px}
-.copy .lead{color:var(--ink-2);font-size:16.5px;margin:0 0 14px;max-width:460px}
+.copy h2{font-family:var(--serif);font-weight:var(--weight-regular);font-size:clamp(24px,3vw,30px);line-height:1.1;margin:8px 0 8px}
+.copy .lead{color:var(--ink-2);font-size:var(--text-md);margin:0 0 14px;max-width:460px}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
-.chips span{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 11px;font-size:12.5px;font-weight:600;color:var(--ink)}
+.chips span{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 11px;font-size:var(--text-xs);font-weight:600;color:var(--ink)}
 .shot{border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh);overflow:hidden;line-height:0;background:var(--card)}
 .shot img{width:100%;display:block}
 /* panels: modest, centered in their column — small crops smaller still */
@@ -74,38 +145,77 @@ header .enter:hover{background:var(--blue-2);text-decoration:none}
 .row .shot.sm{max-width:330px}
 .shot.tall{max-height:430px;position:relative}
 .shot.tall::after{content:"";position:absolute;left:0;right:0;bottom:0;height:62px;background:linear-gradient(to bottom,transparent,var(--card))}
+/* 03-toolbar is a wide, short strip. Squeezed into one 554px grid column it
+   rendered at roughly half life size; given the whole row it sits near 1:1. */
+#annotate{grid-template-columns:1fr}
+#annotate .shot{max-width:830px;margin-inline:auto}
 .shot.pad{padding:12px;background:var(--paper)}
 .shot.pad img{border-radius:9px;border:1px solid var(--line)}
 /* bands: full-app / full-screen screenshots, shown large */
 .band{border-top:1px solid var(--line);padding:46px 0 36px;text-align:center}
-.band h2{font-family:var(--serif);font-weight:600;font-size:clamp(24px,3vw,32px);line-height:1.1;margin:8px 0 8px}
-.band .lead{color:var(--ink-2);font-size:16.5px;max-width:620px;margin:0 auto 6px}
+.band h2{font-family:var(--serif);font-weight:var(--weight-regular);font-size:clamp(24px,3vw,30px);line-height:1.1;margin:8px 0 8px}
+.band .lead{color:var(--ink-2);font-size:var(--text-md);max-width:620px;margin:0 auto 6px}
 .band .chips{justify-content:center;margin:12px auto 22px;max-width:680px}
 .band .shot{max-width:1180px;margin:0 auto;text-align:left}
 
 /* everything-else grid */
-.all{background:var(--card);border-top:1px solid var(--line)}
+/* was an opaque --card slab: against the new paper that step read as a
+   hard band across the page, and it blocked the ambient wash behind it */
+.all{background:transparent;border-top:1px solid var(--line)}
 .all .wrap{padding:52px 24px 60px}
-.all h2{font-family:var(--serif);font-weight:600;font-size:30px;text-align:center;margin:0 0 6px}
+.all h2{font-family:var(--serif);font-weight:var(--weight-regular);font-size:var(--text-2xl);text-align:center;margin:0 0 6px}
 .all .sub{text-align:center;color:var(--ink-2);margin:0 0 30px}
 .cols{columns:3;column-gap:34px}
 @media(max-width:900px){.cols{columns:2}}
 @media(max-width:560px){.cols{columns:1}}
 .cat{break-inside:avoid;margin-bottom:22px}
-.cat h3{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);margin:0 0 8px}
+.cat h3{font-size:var(--text-xs);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-caps);text-transform:uppercase;color:var(--blue);margin:0 0 8px}
 .cat ul{list-style:none;margin:0;padding:0}
-.cat li{font-size:14px;color:var(--ink);padding:3px 0 3px 16px;position:relative;line-height:1.35}
+.cat li{font-size:var(--text-base);color:var(--ink);padding:3px 0 3px 16px;position:relative;line-height:1.35}
 .cat li::before{content:"";position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;background:var(--blue)}
 .cat li b{font-weight:600}
 .cat li em{font-style:normal;color:var(--ink-2)}
 
 /* cta + footer */
-.cta{text-align:center;padding:58px 24px}
-.cta h2{font-family:var(--serif);font-weight:600;font-size:32px;margin:0 0 16px}
-.btn{display:inline-block;background:var(--blue);color:#fff;font-weight:700;padding:12px 26px;border-radius:12px;font-size:16px}
+/* Closing CTA — the same dark glass panel the landing page ends on, so both
+   pages land the same way instead of this one trailing off into bare text. */
+.cta{position:relative;text-align:center;padding:34px 24px 76px}
+.wash--cta{position:absolute;z-index:0;pointer-events:none;
+  top:18px;bottom:36px;left:50%;transform:translateX(-50%);
+  width:min(calc(100% - 88px), calc(1240px - 48px));
+  mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
+  -webkit-mask-image:radial-gradient(72% 72% at 50% 50%, #000 55%, transparent 100%);
+  background:
+    radial-gradient(44% 56% at 18% 26%, color-mix(in oklch, var(--accent) 24%, transparent), transparent 70%),
+    radial-gradient(40% 52% at 82% 32%, color-mix(in oklch, var(--clay-500) 22%, transparent), transparent 72%),
+    radial-gradient(34% 40% at 60% 74%, color-mix(in oklch, var(--amber-400) 8%, transparent), transparent 72%)}
+.ctapanel{position:relative;z-index:1;overflow:hidden;text-align:left;
+  background:linear-gradient(152deg, color-mix(in oklch, var(--teal-800) 97%, transparent), color-mix(in oklch, var(--teal-800) 87%, transparent));
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--radius-2xl);
+  box-shadow:var(--shadow-xl),inset 0 1px 0 rgba(255,255,255,.26);
+  padding:56px 56px;display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.cta-orb{position:absolute;border-radius:50%;pointer-events:none}
+.cta-orb--1{right:-120px;top:-120px;width:380px;height:380px;background:rgba(255,255,255,.05)}
+.cta-orb--2{right:40px;bottom:-140px;width:260px;height:260px;background:rgba(255,255,255,.035)}
+.cta h2{position:relative;font-family:var(--serif);font-weight:var(--weight-regular);color:#FCFDFC;
+  font-size:clamp(24px,3.4vw,38px);line-height:1.12;letter-spacing:-.015em;margin:0}
+.cta p{position:relative;margin:0 0 26px;font-size:var(--text-md);line-height:1.65;color:var(--teal-200);max-width:26rem}
+.cta-actions{position:relative;display:flex;gap:12px;flex-wrap:wrap}
+.marked{position:relative;display:inline-block}
+.swash{position:absolute;left:0;bottom:-.03em;width:100%;height:.14em;overflow:visible}
+.swash path{stroke-width:5;stroke-linecap:round;fill:none;opacity:.92;stroke-dasharray:330;stroke-dashoffset:330}
+[data-reveal].in .swash path{animation:swash-draw .9s var(--ease-out) forwards}
+@keyframes swash-draw{to{stroke-dashoffset:0}}
+@media (max-width:900px){.ctapanel{grid-template-columns:1fr;gap:26px;padding:40px 32px}}
+.btn{display:inline-block;background:var(--blue);color:#fff;font-weight:var(--weight-semibold);padding:12px 26px;border-radius:12px;font-size:var(--text-base)}
 .btn:hover{background:var(--blue-2);text-decoration:none}
 .btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line);margin-left:8px}
-footer{border-top:1px solid var(--line);color:var(--ink-2);font-size:13.5px}
+.btn.onDark{background:#FCFDFC;color:var(--teal-800);box-shadow:var(--shadow-md)}
+.btn.onDark:hover{background:var(--teal-100);color:var(--teal-900)}
+.btn.onDarkGhost{background:transparent;color:#FCFDFC;border:1px solid rgba(255,255,255,.34);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.btn.onDarkGhost:hover{background:rgba(255,255,255,.1);color:#FCFDFC}
+footer{border-top:1px solid var(--line);color:var(--ink-2);font-size:var(--text-sm)}
 footer .wrap{display:flex;flex-wrap:wrap;gap:14px;align-items:center;height:auto;padding:22px 24px}
 footer nav{margin-left:auto;display:flex;gap:18px}
 @media(max-width:820px){.row,.row.rev .copy{grid-template-columns:1fr;order:0}.row{gap:22px}}
@@ -113,10 +223,29 @@ footer nav{margin-left:auto;display:flex;gap:18px}
 </head>
 <body>
 
+<!-- Displacement maps for the liquid-glass surfaces. Chrome uses these via
+     backdrop-filter:url(); other engines fall back to a plain frost. -->
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;pointer-events:none">
+  <filter id="lg-refract" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feImage result="mx" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='400'%20height='300'%3E%3ClinearGradient%20id='x'%20x1='0'%20y1='0'%20x2='1'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='rgb(255,128,128)'/%3E%3Cstop%20offset='.17'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.83'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(0,128,128)'/%3E%3C/linearGradient%3E%3Crect%20width='400'%20height='300'%20fill='url(%23x)'/%3E%3C/svg%3E"></feImage>
+    <feImage result="my" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='400'%20height='300'%3E%3ClinearGradient%20id='y'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='rgb(128,255,128)'/%3E%3Cstop%20offset='.17'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.83'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(128,0,128)'/%3E%3C/linearGradient%3E%3Crect%20width='400'%20height='300'%20fill='url(%23y)'/%3E%3C/svg%3E"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="mx" scale="26" xChannelSelector="R" yChannelSelector="B" result="dx"></feDisplacementMap>
+    <feDisplacementMap in="dx" in2="my" scale="26" xChannelSelector="B" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+  <filter id="lg-refract-sm" x="0%" y="0%" width="100%" height="100%" color-interpolation-filters="sRGB">
+    <feImage result="mx" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='60'%3E%3ClinearGradient%20id='x'%20x1='0'%20y1='0'%20x2='1'%20y2='0'%3E%3Cstop%20offset='0'%20stop-color='rgb(255,128,128)'/%3E%3Cstop%20offset='.22'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.78'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(0,128,128)'/%3E%3C/linearGradient%3E%3Crect%20width='200'%20height='60'%20fill='url(%23x)'/%3E%3C/svg%3E"></feImage>
+    <feImage result="my" preserveAspectRatio="none" x="0%" y="0%" width="100%" height="100%" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='60'%3E%3ClinearGradient%20id='y'%20x1='0'%20y1='0'%20x2='0'%20y2='1'%3E%3Cstop%20offset='0'%20stop-color='rgb(128,255,128)'/%3E%3Cstop%20offset='.3'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='.7'%20stop-color='rgb(128,128,128)'/%3E%3Cstop%20offset='1'%20stop-color='rgb(128,0,128)'/%3E%3C/linearGradient%3E%3Crect%20width='200'%20height='60'%20fill='url(%23y)'/%3E%3C/svg%3E"></feImage>
+    <feDisplacementMap in="SourceGraphic" in2="mx" scale="11" xChannelSelector="R" yChannelSelector="B" result="dx"></feDisplacementMap>
+    <feDisplacementMap in="dx" in2="my" scale="11" xChannelSelector="B" yChannelSelector="G"></feDisplacementMap>
+  </filter>
+</svg>
+<div class="wash--page" aria-hidden="true"></div>
+<div class="page-content">
+
 <header><div class="wrap">
-  <a class="brand" href="/"><svg class="logo" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="#2555F5"/><path d="M16 2.5 27.5 9v14L16 29.5 4.5 23V9z" fill="url(#g)"/><defs><linearGradient id="g" x1="4" y1="3" x2="28" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#3b6bff"/><stop offset="1" stop-color="#1636c9"/></linearGradient></defs><path d="M12 10.5h5.2c2.3 0 3.8 1.4 3.8 3.5s-1.5 3.6-3.8 3.6H14.5V22" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>PairedX</a>
+  <a class="brand" href="/"><span class="brand-tile" aria-hidden="true">Px</span><span>Paired<b>X</b></span></a>
   <nav>
-    <a class="hide-sm" href="/#features">Home</a>
+    <a class="hide-sm" href="/">Home</a>
     <a class="hide-sm" href="https://github.com/trojanuary/pair">GitHub</a>
     <a class="enter" href="/app">Open app</a>
   </nav>
@@ -127,7 +256,7 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   <h1>The whole feature set,<br>at a glance.</h1>
   <p>A source-linked AI reading workspace — every highlight, note, screenshot, and answer stays pinned to the exact spot it came from. Private, portable, yours.</p>
   <div class="tocbar">
-    <a href="#annotate">Annotate</a><a href="#linked">Source-linked</a><a href="#ai">Ask AI</a><a href="#agent">Agent</a><a href="#notes">Notes</a><a href="#library">Library</a><a href="#share">Share &amp; export</a><a href="#byo">Your model</a><a href="#all">Everything else</a>
+    <a href="#annotate">Annotate</a><a href="#linked">Source-linked</a><a href="#ai">Ask AI</a><a href="#agent">Agent</a><a href="#notes">Notes</a><a href="#share">Share &amp; export</a><a href="#byo">Your model</a><a href="#all">Everything else</a>
   </div>
 
   <div class="annot">
@@ -153,18 +282,9 @@ footer nav{margin-left:auto;display:flex;gap:18px}
     <div class="copy">
       <div class="eyebrow">Read &amp; annotate</div>
       <h2>Highlight text or box a figure.</h2>
-      <p class="lead">Select text for a quick <b>Highlight · Note · Ask&nbsp;AI</b> popover, drop a point comment anywhere, or screenshot a figure/equation to ask about it directly.</p>
       <div class="chips"><span>Highlight</span><span>Comment</span><span>Screenshot a region</span><span>Continuous or single page</span><span>Find in document</span></div>
     </div>
     <div class="shot pad"><img src="docs/screenshots/03-toolbar.png" alt="The reader toolbar: select, highlight, comment, screenshot tools"></div>
-  </div>
-
-  <div class="band" id="ocr">
-    <div class="eyebrow">Scanned PDFs</div>
-    <h2>Scanned? It reads the page for you — on your device.</h2>
-    <p class="lead">Open an image-only PDF and PairedX notices there's no selectable text, then offers one-tap OCR that runs <b>entirely in your browser</b> — your file is never uploaded. It rebuilds a real text layer, so search, highlights, and the AI all work like a normal PDF.</p>
-    <div class="chips"><span>Auto-detected</span><span>On-device — nothing uploaded</span><span>Real selectable text</span><span>Highlightable &amp; searchable</span><span>Cached — runs once</span></div>
-    <div class="shot"><img src="docs/screenshots/feat-ocr-banner.jpg" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR"></div>
   </div>
 
   <div class="band" id="linked">
@@ -215,16 +335,6 @@ footer nav{margin-left:auto;display:flex;gap:18px}
     <div class="shot tall sm"><img src="docs/screenshots/feat-show-on-card.jpg" alt="A collapsed card showing the full AI answer, tagged AI"></div>
   </div>
 
-  <div class="row" id="library">
-    <div class="copy">
-      <div class="eyebrow">Your library</div>
-      <h2>A real multi-document library.</h2>
-      <p class="lead">Home, Recents, Starred, and Trash. Star, trash, restore, or delete — the same PDF opened again is recognized by content (SHA-256) so its notes just re-attach.</p>
-      <div class="chips"><span>Home / Recents / Starred / Trash</span><span>Content-addressed</span><span>Notes auto-attach</span></div>
-    </div>
-    <div class="shot tall sm"><img src="docs/screenshots/feat-library.jpg" alt="The library sidebar with documents and star/trash actions"></div>
-  </div>
-
   <div class="band" id="share">
     <div class="eyebrow">Share &amp; export</div>
     <h2>Send a whole annotated paper.</h2>
@@ -261,6 +371,14 @@ footer nav{margin-left:auto;display:flex;gap:18px}
       <div class="chips"><span>Browser-only by default</span><span>Folder sync</span><span>No cloud upload</span><span>No login</span></div>
     </div>
     <div class="shot pad"><img src="docs/screenshots/feat-settings-storage.jpg" alt="Settings — Storage: browser-only notes with optional folder sync"></div>
+  </div>
+
+  <div class="band" id="ocr">
+    <div class="eyebrow">Scanned PDFs</div>
+    <h2>Scanned? It reads the page for you — on your device.</h2>
+    <p class="lead">Open an image-only PDF and PairedX notices there's no selectable text, then offers one-tap OCR that runs <b>entirely in your browser</b> — your file is never uploaded. It rebuilds a real text layer, so search, highlights, and the AI all work like a normal PDF.</p>
+    <div class="chips"><span>Auto-detected</span><span>On-device — nothing uploaded</span><span>Real selectable text</span><span>Highlightable &amp; searchable</span><span>Cached — runs once</span></div>
+    <div class="shot"><img src="docs/screenshots/feat-ocr-banner.jpg" alt="PairedX detecting a scanned PDF and offering one-tap on-device OCR"></div>
   </div>
 
 </div></section>
@@ -365,20 +483,69 @@ footer nav{margin-left:auto;display:flex;gap:18px}
   </div>
 </div></section>
 
-<section class="cta"><div class="wrap">
-  <h2>Try it — no signup, no install.</h2>
-  <a class="btn" href="/app">Open the app</a><a class="btn ghost" href="https://github.com/trojanuary/pair">View on GitHub</a>
+<section class="cta"><div class="wash--cta" aria-hidden="true"></div><div class="wrap">
+  <div class="ctapanel" data-glass="dark">
+    <div class="cta-orb cta-orb--1" aria-hidden="true"></div>
+    <div class="cta-orb cta-orb--2" aria-hidden="true"></div>
+    <h2>Try it — no signup, <span class="marked">no install.<svg class="swash" viewBox="0 0 300 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 62 2, 112 13, 168 6 S 256 2, 297 9" stroke="var(--amber-400)"/></svg></span></h2>
+    <p>Open a PDF and start annotating — it runs entirely in your browser.</p>
+    <div class="cta-actions">
+      <a class="btn onDark" href="/app">Open the app</a><a class="btn onDarkGhost" href="https://github.com/trojanuary/pair">View on GitHub</a>
+    </div>
+  </div>
 </div></section>
 
 <footer><div class="wrap">
   <span>© 2026 PairedX.com · AGPL-3.0</span>
-  <nav><a href="/#features">Home</a><a href="/app">App</a><a href="https://github.com/trojanuary/pair">GitHub</a><a href="/#privacy">Privacy</a></nav>
+  <nav><a href="/">Home</a><a href="/app">App</a><a href="https://github.com/trojanuary/pair">GitHub</a><a href="/#privacy">Privacy</a></nav>
 </div></footer>
+
+</div>
 
 <script>
   // match the landing: header border only appears once you scroll (no line at the top)
   const _h=document.querySelector('header');
   addEventListener('scroll',()=>_h.classList.toggle('scrolled',scrollY>4),{passive:true});
+</script>
+<script>
+(function(){
+  // Ramp the bar's --nav-solid across the first 140px of scroll, matching the
+  // landing page: interpolating a background-image gradient is impossible, so
+  // every state-dependent value derives from this one property via calc().
+  var nav=document.querySelector('header'), last=-1;
+  var onScroll=function(){
+    var t=Math.min(1, Math.max(0, window.scrollY/140));
+    t=Math.round(t*100)/100;
+    if(t!==last){ last=t; nav.style.setProperty('--nav-solid', t); }
+  };
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+})();
+</script>
+<script>
+(function(){
+  // The page's markup predates the design system, so rather than hand-tag
+  // every block, opt the structural ones in here.
+  // Both pill families are unclassed: .tocbar's jump links are bare <a>s and
+  // the per-feature chips are bare <span>s, so both need descendant selectors.
+  var PILLS='.tocbar a, .chips > span, .chip';
+  document.querySelectorAll(PILLS).forEach(function(el){
+    el.setAttribute('data-glass','pill'); el.classList.add('glass-fill');
+  });
+  document.querySelectorAll('.shot').forEach(function(el){
+    el.setAttribute('data-glass',''); el.setAttribute('data-lift','');
+  });
+  var REVEAL='.row, .cat, .shot, .band > *, .legend, .ctapanel, .annot';
+  var all=[].slice.call(document.querySelectorAll(REVEAL));
+  all.forEach(function(e){ e.setAttribute('data-reveal',''); });
+  var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  var revealAll=function(){ all.forEach(function(e){ e.style.transitionDelay='0ms'; e.classList.add('in'); }); };
+  if(!('IntersectionObserver' in window) || reduce){ revealAll(); return; }
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+  },{threshold:.06,rootMargin:'0px 0px -8% 0px'});
+  all.forEach(function(e,i){ e.style.transitionDelay=(Math.min(i,4)*60)+'ms'; io.observe(e); });
+  setTimeout(revealAll, 2200);   // safety net: never leave content hidden
+})();
 </script>
 </body>
 </html>

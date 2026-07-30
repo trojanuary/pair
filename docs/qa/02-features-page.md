@@ -470,9 +470,9 @@
 
 - **Pre:** Navigate to `#annotate`.
 - **Steps:**
-  1. Read eyebrow, heading and lead.
-- **Expect:** Eyebrow `"Read & annotate"`; heading `"Highlight text or box a figure."`; lead `"Select text for a quick Highlight · Note · Ask AI popover, drop a point comment anywhere, or screenshot a figure/equation to ask about it directly."` with "Highlight · Note · Ask AI" bold and a non-breaking space inside "Ask AI".
-- **Watch:** The `&nbsp;` in "Ask&nbsp;AI" is lost and "Ask" / "AI" break across two lines mid-phrase.
+  1. Read eyebrow and heading.
+- **Expect:** Eyebrow `"Read & annotate"`; heading `"Highlight text or box a figure."`. This row has **no** lead paragraph — the chip row follows the heading directly.
+- **Watch:** A lead paragraph reappearing here, or the chips crowding the heading now that nothing sits between them.
 
 ### FEAT-044 - Chip row
 **P1** * Copy * `features.html:157`

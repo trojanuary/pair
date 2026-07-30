@@ -42,9 +42,9 @@ const SEED_VERSION = 3;   // bumped when the bundled sample changes, so existing
 const PAIR_BUNDLE = (typeof window !== 'undefined' && window.__PAIR_BUNDLE__) || null;
 const READONLY = !!(PAIR_BUNDLE && PAIR_BUNDLE.readOnly);
 const ACTORS = {
-  you:   { name: 'You',            initials: 'YO', color: '#2563EB', type: 'human' },
-  sara:  { name: 'Sara Davis',     initials: 'SD', color: '#059669', type: 'human' },
-  bonnie:{ name: 'Bonnie Kearney', initials: 'BK', color: '#2563EB', type: 'human' },
+  you:   { name: 'You',            initials: 'YO', color: '#547089', type: 'human' },
+  sara:  { name: 'Sara Davis',     initials: 'SD', color: '#488048', type: 'human' },
+  bonnie:{ name: 'Bonnie Kearney', initials: 'BK', color: '#7B6A8D', type: 'human' },
 };
 const PROVIDER_LABEL = { openrouter: 'OpenRouter', compat: 'OpenAI-compatible' };
 const DEFAULT_MODELS = {
@@ -1077,7 +1077,11 @@ async function captureRegion(l, t, w, h) {
   });
   setTool('cursor');
   openRightPanel(ann.id);           // reveal the panel so the captured note is visible
-  selectAnnotation(ann.id, true); render(); drawPins(); focusComposer();
+  // drawHighlights too, not just the pin: the captured region persists as a
+  // dashed .figbox, and without this the outline only appeared the next time
+  // something else forced a redraw (a zoom, a page change). From the user's
+  // side the box simply vanished the moment the drag ended.
+  selectAnnotation(ann.id, true); render(); drawHighlights(); drawPins(); focusComposer();
   toast('Region captured — ask the AI about it below.');
 }
 
@@ -1113,19 +1117,107 @@ function drawHighlights() {
     });
   });
 }
+// A pin can be nudged off its anchor when it covers something you want to read.
+// The offset is stored on the annotation as a fraction of the page box — not as
+// pixels — so it holds through zoom, window resize and re-render, and travels in
+// the .notes.json like any other field. Capped so a pin stays a nudge from its
+// own highlight rather than wandering off and losing the association.
+const PIN_NUDGE_MAX = 0.12;
+const pinOffset = a => [
+  clamp(Number(a.pinDx) || 0, -PIN_NUDGE_MAX, PIN_NUDGE_MAX),
+  clamp(Number(a.pinDy) || 0, -PIN_NUDGE_MAX, PIN_NUDGE_MAX)
+];
+const pinLeft = (rc, w, dx) => clamp((rc.x + rc.w + dx) * w.vp.width, 0, w.vp.width - 25);
+const pinTop = (rc, w, dy) => clamp((rc.y + dy) * w.vp.height, 0, w.vp.height - 25);
+function placePin(p, rc, w, dx, dy) {
+  // keep the bead on the page even when the anchor sits at an edge
+  p.style.left = pinLeft(rc, w, dx) + 'px';
+  p.style.top = pinTop(rc, w, dy) + 'px';
+  // A moved pin would otherwise read as unattached, so run a hairline back to
+  // where it belongs. Both ends carry .pin's translate(6px,-4px), so the offsets
+  // below just put the line through the bead's centre in the same space.
+  const t = p._tether; if (!t) return;
+  const x1 = pinLeft(rc, w, 0) + 18.5, y1 = pinTop(rc, w, 0) + 8.5;
+  const x2 = pinLeft(rc, w, dx) + 18.5, y2 = pinTop(rc, w, dy) + 8.5;
+  t.style.left = x1 + 'px'; t.style.top = y1 + 'px';
+  t.style.width = Math.hypot(x2 - x1, y2 - y1) + 'px';
+  t.style.transform = 'rotate(' + Math.atan2(y2 - y1, x2 - x1) + 'rad)';
+}
 function drawPins() {
   pageWrappers().forEach(w => {
     const pins = w.pins; if (!pins) return; pins.innerHTML = ''; pins.style.width = w.vp.width + 'px'; pins.style.height = w.vp.height + 'px';
     state.annotations.filter(a => inActiveDoc(a) && a.page === w.page && a.rects && a.rects.length).forEach(a => {
       const rc = a.rects[0];
-      const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}" data-ann="${a.id}">${a.anchor}</div>`);
-      p.style.left = (rc.x + rc.w) * w.vp.width + 'px';
-      p.style.top = rc.y * w.vp.height + 'px';
-      p.onclick = () => { openRightPanel(a.id); selectAnnotation(a.id, true, false); };   // clicking a note's number reveals the panel + scrolls its card in — but does NOT move the reader (the pin is already visible)
+      const [dx, dy] = pinOffset(a);
+      const p = el(`<div class="pin ${a.source_type === 'screenshot' ? 'shot' : ''} ${a.id === state.ui.activeId ? 'sel' : ''}${dx || dy ? ' moved' : ''}" data-ann="${a.id}" title="Drag to move · double-click to put it back">${a.anchor}</div>`);
+      p._tether = el('<div class="pin-tether"></div>');
+      p._tether.hidden = !(dx || dy);
+      pins.appendChild(p._tether);
+      placePin(p, rc, w, dx, dy);
+      attachPinDrag(p, a, rc, w);
       pins.appendChild(p);
     });
   });
   drawConnector();
+}
+// Drag-to-nudge. Click still selects: a press only becomes a drag once it passes
+// a small threshold, and the click that the browser fires after the drag is
+// swallowed. Pointer capture keeps the move events coming even when the cursor
+// outruns the 25px bead.
+function attachPinDrag(p, a, rc, w) {
+  const DRAG_MIN = 3;
+  let x0 = 0, y0 = 0, dx0 = 0, dy0 = 0, down = false, moved = false;
+
+  p.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0) return;
+    down = true; moved = false;
+    x0 = ev.clientX; y0 = ev.clientY;
+    [dx0, dy0] = pinOffset(a);
+    try { p.setPointerCapture(ev.pointerId); } catch (e) {}
+    // NB: no preventDefault here — it would suppress the compatibility click
+    // and break selecting a note by its pin. .pin carries user-select:none and
+    // touch-action:none instead.
+  });
+
+  p.addEventListener('pointermove', ev => {
+    if (!down) return;
+    const mx = ev.clientX - x0, my = ev.clientY - y0;
+    if (!moved && Math.hypot(mx, my) < DRAG_MIN) return;
+    if (!moved) { moved = true; p.classList.add('dragging'); if (p._tether) p._tether.hidden = false; }
+    a.pinDx = clamp(dx0 + mx / w.vp.width, -PIN_NUDGE_MAX, PIN_NUDGE_MAX);
+    a.pinDy = clamp(dy0 + my / w.vp.height, -PIN_NUDGE_MAX, PIN_NUDGE_MAX);
+    placePin(p, rc, w, a.pinDx, a.pinDy);
+    drawConnector();                       // the thread tracks the bead as it moves
+  });
+
+  const finish = ev => {
+    if (!down) return;
+    down = false;
+    p.classList.remove('dragging');
+    try { p.releasePointerCapture(ev.pointerId); } catch (e) {}
+    if (!moved) return;
+    p.classList.add('moved');
+    a.updated_at = nowISO(); save();
+    p._ateClick = true;                    // cleared by the click handler below
+  };
+  p.addEventListener('pointerup', finish);
+  p.addEventListener('pointercancel', finish);
+
+  // clicking a note's number reveals the panel + scrolls its card in — but does
+  // NOT move the reader (the pin is already visible)
+  p.addEventListener('click', ev => {
+    if (p._ateClick) { p._ateClick = false; ev.stopPropagation(); return; }
+    openRightPanel(a.id); selectAnnotation(a.id, true, false);
+  });
+
+  p.addEventListener('dblclick', ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    if (!a.pinDx && !a.pinDy) return;
+    delete a.pinDx; delete a.pinDy;
+    a.updated_at = nowISO(); save();
+    drawPins();
+    toast('Pin put back');
+  });
 }
 // Open the notes panel if it's collapsed (used when a note/answer/screenshot/comment is created, so
 // the new card is visible and the connector has something to point at). Highlighting doesn't call this.
@@ -1157,7 +1249,29 @@ function setPanel(side, open) {
   state.ui[PANEL_KEY[side]] = !open;
   app.classList.toggle('collapse-' + side, !open);
   save();
-  requestAnimationFrame(() => { if (viewport) drawConnector(); });
+  trackConnector();
+}
+/* #app animates grid-template-columns, so the panel keeps moving for ~180ms
+   after the class flips. A single rAF measures it one frame in — the line
+   freezes pointing at where the card used to be, until some later event
+   (a scroll) happens to redraw it. Track it across the whole transition
+   instead, which also lets the line follow the panel rather than jump. */
+let _connTrack = 0;
+function trackConnector(ms = 260) {
+  if (!viewport) return;
+  const token = ++_connTrack;
+  const start = performance.now();
+  const draw = () => { if (token === _connTrack) { try { drawConnector(); } catch (e) {} } };
+  const step = () => {
+    if (token !== _connTrack) return;          // a newer toggle owns the loop
+    draw();
+    if (performance.now() - start < ms) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+  // rAF is throttled to nothing in a background/hidden tab, which would leave
+  // the line stranded at its pre-transition position. These land it anyway.
+  setTimeout(draw, 210);
+  setTimeout(draw, ms + 40);
 }
 function drawConnector() {
   const svg = $('#connectors'); if (!svg) return; while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -1177,9 +1291,22 @@ function drawConnector() {
   const y2 = Math.max(lb.top + 6, Math.min(lb.bottom - 6, cr.top + 22));   // anchor clamped into the visible band
   const mx = (x1 + x2) / 2;
   const NS = 'http://www.w3.org/2000/svg';
-  const path = document.createElementNS(NS, 'path');
-  path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
-  svg.appendChild(path);
+  // Drawn as stacked strokes so the thread reads as glass rather than as a line:
+  // a blurred white glow, a soft light core, the dashed clay hairline, then a
+  // specular sliver riding on top. Only the hairline is dashed — dashing the
+  // glow as well would make it flicker rather than glow.
+  const d = `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  for (const cls of ['glow', 'core', 'dash', 'spec']) {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', cls);
+    svg.appendChild(path);
+  }
+  // the bead where the thread leaves the pin
+  const dot = document.createElementNS(NS, 'circle');
+  dot.setAttribute('cx', x1); dot.setAttribute('cy', y1); dot.setAttribute('r', 3.6);
+  dot.setAttribute('class', 'endcap');
+  svg.appendChild(dot);
 }
 
 /* ---------- selection / navigation of notes ---------- */
@@ -1715,7 +1842,7 @@ function actorAvatar(m) {
     const p = m.provider, cls = p === 'openrouter' ? 'openrouter' : p === 'compat' ? 'compat' : p === 'openai' ? 'gpt' : p === 'anthropic' ? 'claude' : p === 'gemini' ? 'gemini' : '';
     return `<div class="avatar ai brand ${cls}" title="${esc(PROVIDER_LABEL[p] || 'AI')}">${providerGlyph(p)}</div>`;
   }
-  const ac = ACTORS[m.actor] || { initials: state.settings.actorInitials || 'YO', color: '#2563EB' };
+  const ac = ACTORS[m.actor] || { initials: state.settings.actorInitials || 'YO', color: '#547089' };
   return `<div class="avatar" style="background:${ac.color}">${esc(ac.initials)}</div>`;
 }
 function actorName(m) { return m.actor === 'ai' ? (PROVIDER_LABEL[m.provider] || 'AI') : (ACTORS[m.actor]?.name || state.settings.actorName || 'You'); }
@@ -1886,7 +2013,6 @@ function compactCard(a) {
   if (!previews && a.selected_text) previews = `<div class="msg clamp">${esc(a.selected_text)}</div>`;
   const wrap = el(`<div class="card compact k-${cardKind(a)} ${a.resolved ? 'isres' : ''}" data-ann="${a.id}">
     ${!a.resolved ? '<span class="unread-dot"></span>' : ''}
-    <span class="cc-when">${when}</span>
     <div class="cc">
       <span class="cc-badge" style="background:${badge}">${a.anchor}</span>
       <div class="cc-main">
@@ -1894,6 +2020,7 @@ function compactCard(a) {
         ${a.source_type === 'screenshot' && a.screenshot ? `<div class="shot-thumb"><img src="${safeImgSrc(a.screenshot)}"></div>` : ''}
         <div class="loc-line">Page ${esc(a.page)}${a.section ? ' · ' + esc(a.section) : ''}${a.resolved ? ' · <span class="resolved-flag">✓ Resolved</span>' : ''}</div>
       </div>
+      <span class="cc-when">${when}</span>
     </div></div>`);
   wrap.addEventListener('click', ev => { if (ev.target.closest('[data-menu],button')) return; if (window.getSelection && String(window.getSelection()).trim()) return; if (state.ui.collapsed) delete state.ui.collapsed[a.id]; selectAnnotation(a.id, true, true); });
   return wrap;
@@ -2771,19 +2898,43 @@ function openSettings(note) {
     <div class="body">
       <div class="settabs"><button type="button" class="settab on" data-tab="ai">AI &amp; Tools</button><button type="button" class="settab" data-tab="templates">Templates</button><button type="button" class="settab" data-tab="storage">Storage</button></div>
       <div class="tabpane" data-pane="ai">
-      ${note ? `<div class="field"><div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;border-radius:9px;padding:10px 12px">${esc(note)}</div></div>` : ''}
-      <div class="hint" style="margin:-2px 0 16px">AI runs through a <b>shared key</b> so you can try it instantly — but that key has a <b>small test quota</b>. For real use, add your <b>own key</b> below: it's stored only in this browser and sent per‑request as an override — <b>never saved on the server</b>. <b>OpenRouter</b> is the recommended default (text, images, and the tool‑using agent); or use any <b>OpenAI‑compatible API</b> (base URL + key + models). Mark one as <b>Default</b>, or type <b>@ai</b> in a note.</div>
-      <div class="field">
-        <div class="lbl-row"><label>OpenRouter <span style="color:var(--green);font-weight:700">· recommended</span></label><button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button></div>
-        <input id="kOpenrouter" type="password" placeholder="API key — sk-or-… (optional; server key used by default)" value="${esc(s.keys.openrouter || '')}"><div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"> · Image: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:190px" id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"> · Router <span style="color:var(--muted)">(fast/cheap)</span>: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mOpenrouterRouter" value="${esc((s.models && s.models.openrouterRouter) || '')}"></div>
+      ${note ? `<div class="field"><div class="set-note">${esc(note)}</div></div>` : ''}
+      <p class="set-lead">AI runs through a <b>shared key</b> so you can try it instantly, on a <b>small test quota</b>. Add your own key below for real use — it stays in this browser and is never saved on our servers.</p>
+
+      <div class="provider ${s.provider === 'openrouter' ? 'on' : ''}">
+        <div class="provider__hd">
+          <div class="provider__name">OpenRouter <span class="provider__rec">recommended</span></div>
+          <button type="button" class="def-radio ${s.provider === 'openrouter' ? 'on' : ''}" data-def="openrouter"><span class="rdot"></span>Default</button>
+        </div>
+        <p class="provider__desc">Text, images, and the tool-using agent.</p>
+        <div class="field"><label for="kOpenrouter">API key</label>
+          <input id="kOpenrouter" type="password" placeholder="sk-or-…  (optional — the server key is used by default)" value="${esc(s.keys.openrouter || '')}"></div>
+        <div class="modelgrid">
+          <div class="field"><label for="mOpenrouter">Text model</label><input id="mOpenrouter" value="${esc((s.models && s.models.openrouter) || '')}"></div>
+          <div class="field"><label for="mOpenrouterImg">Image model</label><input id="mOpenrouterImg" value="${esc((s.models && s.models.openrouterImage) || '')}"></div>
+          <div class="field"><label for="mOpenrouterRouter">Router model <span class="lbl-note">fast &amp; cheap</span></label><input id="mOpenrouterRouter" value="${esc((s.models && s.models.openrouterRouter) || '')}"></div>
+        </div>
       </div>
-      <div class="field">
-        <div class="lbl-row"><label>OpenAI-compatible API</label><button type="button" class="def-radio ${s.provider === 'compat' ? 'on' : ''}" data-def="compat"><span class="rdot"></span>Default</button></div>
-        <div class="hint" style="margin-top:0">Any OpenAI-compatible endpoint (OpenAI, Together, Groq, a local model…). Used for text, images, and the tool-using agent.</div>
-        <input id="cBase" placeholder="Base URL — e.g. https://api.openai.com/v1" value="${esc(s.compatBaseUrl || '')}" style="margin-top:8px">
-        <input id="kCompat" type="password" placeholder="API key" value="${esc((s.keys && s.keys.compat) || '')}" style="margin-top:8px">
-        <div class="hint">Text model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompat" value="${esc((s.models && s.models.compat) || '')}"> · Image model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:150px" id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"> · Router model: <input style="width:auto;display:inline-block;padding:3px 7px;min-width:130px" id="mCompatRouter" value="${esc((s.models && s.models.compatRouter) || '')}"></div>
+
+      <div class="provider ${s.provider === 'compat' ? 'on' : ''}">
+        <div class="provider__hd">
+          <div class="provider__name">OpenAI-compatible API</div>
+          <button type="button" class="def-radio ${s.provider === 'compat' ? 'on' : ''}" data-def="compat"><span class="rdot"></span>Default</button>
+        </div>
+        <p class="provider__desc">Any OpenAI-compatible endpoint — OpenAI, Together, Groq, or a local model.</p>
+        <div class="field"><label for="cBase">Base URL</label>
+          <input id="cBase" placeholder="https://api.openai.com/v1" value="${esc(s.compatBaseUrl || '')}"></div>
+        <div class="field"><label for="kCompat">API key</label>
+          <input id="kCompat" type="password" placeholder="sk-…" value="${esc((s.keys && s.keys.compat) || '')}"></div>
+        <div class="modelgrid">
+          <div class="field"><label for="mCompat">Text model</label><input id="mCompat" value="${esc((s.models && s.models.compat) || '')}"></div>
+          <div class="field"><label for="mCompatImg">Image model</label><input id="mCompatImg" value="${esc((s.models && s.models.compatImage) || '')}"></div>
+          <div class="field"><label for="mCompatRouter">Router model <span class="lbl-note">fast &amp; cheap</span></label><input id="mCompatRouter" value="${esc((s.models && s.models.compatRouter) || '')}"></div>
+        </div>
       </div>
+
+      <p class="set-foot">Mark a provider as <b>Default</b>, or type <b>@ai</b> in a note to pick one per question.</p>
+
       <div class="field"><label>Your identity (actor)</label>
         <div style="display:flex;gap:8px"><input id="actorName" placeholder="Your name" value="${esc(s.actorName)}" style="flex:1"><input id="actorInit" placeholder="IN" maxlength="2" value="${esc(s.actorInitials)}" style="width:70px;text-transform:uppercase"></div></div>
       <div class="field"><label>Tools</label>
@@ -3180,6 +3331,11 @@ function wire() {
   $('#sortSel').onclick = () => { state.ui.sort = state.ui.sort === 'time' ? 'page' : 'time'; $('#sortSel').textContent = state.ui.sort === 'time' ? 'Sorted by time ▾' : 'Sorted by page ▾'; save(); render(); };
   $('#rdScroll').addEventListener('scroll', () => { if (state.ui.continuous) { const p = currentContinuousPage(); if (p !== state.ui.page) { state.ui.page = p; $('#pageInput').value = p; } } requestAnimationFrame(drawConnector); });
   $('#notesList').addEventListener('scroll', () => requestAnimationFrame(drawConnector));   // keep the connector pinned to the card as the notes panel scrolls
+  // final word on the column transition, so the line lands exactly even if the
+  // CSS duration is retuned out from under trackConnector()
+  $('#app').addEventListener('transitionend', (e) => {
+    if (e.propertyName === 'grid-template-columns') requestAnimationFrame(drawConnector);
+  });
   window.addEventListener('resize', () => requestAnimationFrame(drawConnector));
   initCaptureMask(); initPinch(); initKeyboardInset();
 }

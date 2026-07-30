@@ -15,5 +15,29 @@ The PDF (assets/sample-pdf.js) is bundled unmodified. The sample notes that ship
 alongside it (assets/sample-notes.js) are PairedX's own commentary added to
 demonstrate the app; they are not part of, or endorsed by, the paper's authors.
 
-This notice covers only the bundled sample. PairedX itself is licensed
-AGPL-3.0-only — see LICENSE.
+Bundled webfonts
+================
+
+The design system self-hosts its typefaces rather than loading them from a font
+CDN, so that visiting PairedX makes no third-party requests. All three are
+licensed under the SIL Open Font License 1.1 (https://openfontlicense.org):
+
+  Source Serif 4   — Copyright 2014-2023 Adobe (https://github.com/adobe-fonts/source-serif)
+  Public Sans      — Copyright 2015 Impallari Type; USWDS (https://github.com/uswds/public-sans)
+  JetBrains Mono   — Copyright 2020 The JetBrains Mono Project Authors
+                     (https://github.com/JetBrains/JetBrainsMono)
+
+The files in assets/fonts/ are the unmodified latin and latin-ext woff2 subsets
+as distributed by Google Fonts.
+
+Bundled icons
+=============
+
+The inline SVG icon sprite on the marketing pages uses paths from Phosphor
+Icons (regular weight), MIT licensed:
+
+  Copyright (c) 2023 Phosphor Icons
+  https://github.com/phosphor-icons/core
+
+This notice covers only the bundled sample, fonts, and icons. PairedX itself is
+licensed AGPL-3.0-only — see LICENSE.
