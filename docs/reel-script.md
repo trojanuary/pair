@@ -1,9 +1,14 @@
 # PairedX reel — shooting script
 
-How to reproduce `docs/screenshots/pairedx-reel.mp4`. The original is a 105s
-screen recording at 1920×1080; this document is its storyboard, recovered by
-decomposing that file frame by frame, plus everything needed to shoot it again
-against the redesigned app.
+The storyboard of the **first** reel — a 105s screen recording at 1920×1080 —
+recovered by decomposing that file frame by frame, plus everything needed to
+shoot one against the redesigned app.
+
+`docs/screenshots/pairedx-reel.mp4` is now the V2 recording (150s, 60fps), shot
+by hand rather than from this script, so the chapter list in §3 no longer
+matches the shipped video beat for beat. It is kept because §4–§7 — the capture
+geometry, the screencapture/ffmpeg recipe, and the eight ways the capture goes
+wrong — apply to any future take.
 
 ---
 
